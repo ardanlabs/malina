@@ -8,6 +8,43 @@ import (
 	"unsafe"
 )
 
+// LoadPNG decodes a PNG file from disk into an SDImage with 3 channels (RGB).
+// The alpha channel of the source PNG, if any, is discarded.
+func LoadPNG(filename string) (*SDImage, error) {
+	f, err := os.Open(filename)
+	if err != nil {
+		return nil, fmt.Errorf("LoadPNG: %w", err)
+	}
+	defer f.Close()
+
+	img, err := png.Decode(f)
+	if err != nil {
+		return nil, fmt.Errorf("LoadPNG: decode %s: %w", filename, err)
+	}
+
+	b := img.Bounds()
+	w, h := b.Dx(), b.Dy()
+
+	out := SDImage{
+		Width:   uint32(w),
+		Height:  uint32(h),
+		Channel: 3,
+		Data:    make([]byte, w*h*3),
+	}
+
+	for y := range h {
+		for x := range w {
+			r, g, blue, _ := img.At(x+b.Min.X, y+b.Min.Y).RGBA()
+			i := (y*w + x) * 3
+			out.Data[i+0] = byte(r >> 8)
+			out.Data[i+1] = byte(g >> 8)
+			out.Data[i+2] = byte(blue >> 8)
+		}
+	}
+
+	return &out, nil
+}
+
 // cImage mirrors struct sd_image_t.
 //
 // Data is held as *byte (rather than uintptr) so the unsafe.Slice in

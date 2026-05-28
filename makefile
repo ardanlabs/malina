@@ -7,10 +7,24 @@ MODELS_DIR    ?= $(HOME)/models
 clean-stable-diffusion.cpp:
 	rm -rf $(MALINA_LIB)/*
 
-# make download-stable-diffusion.cpp                 (latest version)
-# make download-stable-diffusion.cpp VERSION=v0.9.0  (pinned version)
+# Install stable-diffusion.cpp shared libraries into $(MALINA_LIB).
+#
+# leejet/stable-diffusion.cpp publishes two flavors of GitHub Releases:
+#   - semver tags such as v0.9.0 (stable releases)
+#   - rolling master builds tagged master-<N>-<shortsha>, auto-published by
+#     CI for every commit on master. These are real Releases with binaries
+#     attached, which is why "master-N-shortsha" can be queried and
+#     downloaded just like a versioned tag.
+#
+# This target always passes -u (upgrade) so an existing install in
+# $(MALINA_LIB) is replaced rather than silently skipped.
+#
+#   make download-stable-diffusion.cpp                          # malina-pinned version (see pkg/download.DefaultSDVersion)
+#   make download-stable-diffusion.cpp VERSION=latest           # whatever leejet/stable-diffusion.cpp /releases/latest returns
+#   make download-stable-diffusion.cpp VERSION=master-656-0e4ee04
+#   make download-stable-diffusion.cpp VERSION=v0.9.0
 download-stable-diffusion.cpp:
-	go run . install -lib $(MALINA_LIB) $(if $(VERSION),-v $(VERSION))
+	go run . install -lib $(MALINA_LIB) -u $(if $(VERSION),-v $(VERSION))
 
 install:
 	go install .
@@ -74,3 +88,13 @@ example-flux2:
 	export MALINA_LIB=$(MALINA_LIB) && \
 	export MALINA_FLUX2_DIR=$(MODELS_DIR)/flux2-klein-9b && \
 	go run ./examples/flux2 "An orange cat on palm beach playing with oranges."
+
+# example-sd-encode demonstrates encoding a directory of PNG frames into a
+# Motion-JPEG AVI. No model is loaded; this is a pure-Go encoder. Override
+# FRAMES_DIR / FPS / OUT to point at your own frames.
+FRAMES_DIR ?= samples/frames
+FPS        ?= 24
+SECS       ?= 1
+OUT        ?= output.avi
+example-sd-encode:
+	go run ./examples/sd-encode -i $(FRAMES_DIR) -fps $(FPS) -secs $(SECS) -o $(OUT)

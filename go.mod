@@ -4,8 +4,10 @@ go 1.26.0
 
 require (
 	github.com/hashicorp/go-getter v1.8.6
+	github.com/icza/mjpeg v0.0.0-20230330134156-38318e5ab8f4
 	github.com/jupiterrider/ffi v0.7.0
 	github.com/urfave/cli/v2 v2.27.7
+	golang.org/x/image v0.41.0
 	golang.org/x/sys v0.45.0
 )
 
@@ -78,7 +80,7 @@ require (
 	golang.org/x/net v0.52.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
-	golang.org/x/text v0.35.0 // indirect
+	golang.org/x/text v0.37.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 	google.golang.org/api v0.271.0 // indirect
 	google.golang.org/genproto v0.0.0-20260128011058-8636f8732409 // indirect
