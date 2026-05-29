@@ -235,9 +235,9 @@ example-hello:
 # Override IMG2IMG_IN / IMG2IMG_PROMPT / IMG2IMG_STRENGTH to point at your
 # own source image and steer the result. Strength runs 0..1; lower values
 # preserve more of the source.
-IMG2IMG_IN       ?= hello.png
+IMG2IMG_IN       ?= samples/frames/image1.jpg
 IMG2IMG_OUT      ?= img2img.png
-IMG2IMG_PROMPT   ?= an oil painting of a cat in the style of Van Gogh
+IMG2IMG_PROMPT   ?= produce an oil painting of the fields you see in the provided image.
 IMG2IMG_STRENGTH ?= 0.6
 example-img2img:
 	export MALINA_LIB=$(MALINA_LIB) && \

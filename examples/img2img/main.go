@@ -1,6 +1,7 @@
 // img2img demonstrates image-to-image generation: load a stable-diffusion
-// model, encode a source PNG as the starting latent, then denoise it
-// using the supplied text prompt and save the result as PNG.
+// model, encode a source image (PNG or JPEG) as the starting latent,
+// then denoise it using the supplied text prompt and save the result as
+// PNG.
 //
 // Run it from the repo root with:
 //
@@ -30,7 +31,7 @@ import (
 
 func main() {
 	var (
-		inPath   = flag.String("in", "", "path to the source PNG (required)")
+		inPath   = flag.String("in", "", "path to the source image (PNG or JPEG, required)")
 		outPath  = flag.String("out", "img2img.png", "output PNG path")
 		prompt   = flag.String("prompt", "a watercolor painting", "text prompt that steers the denoising")
 		strength = flag.Float64("strength", 0.6, "img2img noise strength (0..1); lower preserves more of the source")
@@ -62,9 +63,9 @@ func main() {
 	}
 
 	fmt.Println("loading source image from", *inPath, "...")
-	src, err := sd.LoadPNG(*inPath)
+	src, err := sd.LoadImage(*inPath)
 	if err != nil {
-		log.Fatalf("sd.LoadPNG: %v", err)
+		log.Fatalf("sd.LoadImage: %v", err)
 	}
 	fmt.Printf("source image: %dx%d (%d channels)\n", src.Width, src.Height, src.Channel)
 

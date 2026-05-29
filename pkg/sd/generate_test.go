@@ -2,6 +2,9 @@ package sd
 
 import (
 	"bytes"
+	"image"
+	"image/jpeg"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -147,6 +150,84 @@ func TestGenerateImageImg2ImgSmoke(t *testing.T) {
 	}
 	if img.Channel != 3 {
 		t.Errorf("Channel: got %d, want 3", img.Channel)
+	}
+	want := int(img.Width) * int(img.Height) * int(img.Channel)
+	if len(img.Data) != want {
+		t.Fatalf("Data length: got %d, want %d", len(img.Data), want)
+	}
+}
+
+// TestGenerateImageImg2ImgFromJPEGSmoke walks the full path the
+// example-img2img makefile target takes: write a JPEG to disk, load it
+// with sd.LoadImage (which routes by extension), feed it to
+// GenerateImage as InitImage, and assert the output has the requested
+// shape. This is the regression test for the "make example-img2img with
+// a .jpg input" failure mode.
+//
+// Requires MALINA_LIB and MALINA_TEST_MODEL. Skipped otherwise.
+func TestGenerateImageImg2ImgFromJPEGSmoke(t *testing.T) {
+	testSetup(t)
+	modelPath := testEnvModelFile(t, "MALINA_TEST_MODEL")
+
+	// Encode a neutral-grey 128x128 source as JPEG to a tempdir, then
+	// load it back through sd.LoadImage so the extension-dispatch and
+	// JPEG decode paths run before the FFI call.
+	const dim = 128
+	rgba := image.NewRGBA(image.Rect(0, 0, dim, dim))
+	for i := range rgba.Pix {
+		if i%4 == 3 {
+			rgba.Pix[i] = 255
+		} else {
+			rgba.Pix[i] = 128
+		}
+	}
+	jpegPath := filepath.Join(t.TempDir(), "src.jpg")
+	f, err := os.Create(jpegPath)
+	if err != nil {
+		t.Fatalf("Create jpeg: %v", err)
+	}
+	if err := jpeg.Encode(f, rgba, &jpeg.Options{Quality: 95}); err != nil {
+		f.Close()
+		t.Fatalf("jpeg.Encode: %v", err)
+	}
+	f.Close()
+
+	initImg, err := LoadImage(jpegPath)
+	if err != nil {
+		t.Fatalf("LoadImage(%s): %v", jpegPath, err)
+	}
+	if initImg.Channel != 3 || initImg.Width != dim || initImg.Height != dim {
+		t.Fatalf("loaded source: got %dx%dx%d, want %dx%dx3", initImg.Width, initImg.Height, initImg.Channel, dim, dim)
+	}
+
+	cparams := ContextParamsInit()
+	cparams.ModelPath = modelPath
+	cparams.VAEDecodeOnly = false
+
+	ctx, err := NewContext(cparams)
+	if err != nil {
+		t.Fatalf("NewContext: %v", err)
+	}
+	defer FreeContext(ctx)
+
+	params := ImgGenParamsInit()
+	params.Prompt = "a dog"
+	params.Width = dim
+	params.Height = dim
+	params.Steps = 4
+	params.Seed = 43
+	params.Strength = 0.75
+	params.InitImage = initImg
+
+	img, err := GenerateImage(ctx, params)
+	if err != nil {
+		t.Fatalf("GenerateImage (img2img from JPEG): %v", err)
+	}
+	if img == nil {
+		t.Fatal("GenerateImage returned nil image with nil error")
+	}
+	if img.Width != uint32(params.Width) || img.Height != uint32(params.Height) || img.Channel != 3 {
+		t.Errorf("output dims: got %dx%dx%d, want %dx%dx3", img.Width, img.Height, img.Channel, params.Width, params.Height)
 	}
 	want := int(img.Width) * int(img.Height) * int(img.Channel)
 	if len(img.Data) != want {

@@ -3,23 +3,54 @@ package sd
 import (
 	"fmt"
 	imgpkg "image"
+	"image/jpeg"
 	"image/png"
+	"io"
 	"os"
+	"path/filepath"
+	"strings"
 	"unsafe"
 )
+
+// LoadImage decodes a PNG or JPEG file from disk into an SDImage with 3
+// channels (RGB). The decoder is selected from the filename extension
+// (.png / .jpg / .jpeg, case-insensitive). The alpha channel of the
+// source image, if any, is discarded.
+func LoadImage(filename string) (*SDImage, error) {
+	switch ext := strings.ToLower(filepath.Ext(filename)); ext {
+	case ".png":
+		return LoadPNG(filename)
+	case ".jpg", ".jpeg":
+		return LoadJPEG(filename)
+	default:
+		return nil, fmt.Errorf("LoadImage: unsupported extension %q (want .png, .jpg, .jpeg)", ext)
+	}
+}
 
 // LoadPNG decodes a PNG file from disk into an SDImage with 3 channels (RGB).
 // The alpha channel of the source PNG, if any, is discarded.
 func LoadPNG(filename string) (*SDImage, error) {
+	return loadImageWith(filename, "LoadPNG", png.Decode)
+}
+
+// LoadJPEG decodes a JPEG file from disk into an SDImage with 3 channels (RGB).
+func LoadJPEG(filename string) (*SDImage, error) {
+	return loadImageWith(filename, "LoadJPEG", jpeg.Decode)
+}
+
+// loadImageWith opens filename, runs decode on it, and converts the
+// resulting image.Image to a 3-channel RGB SDImage. fnName labels error
+// messages so callers see "LoadPNG: ..." vs "LoadJPEG: ..." consistently.
+func loadImageWith(filename string, fnName string, decode func(io.Reader) (imgpkg.Image, error)) (*SDImage, error) {
 	f, err := os.Open(filename)
 	if err != nil {
-		return nil, fmt.Errorf("LoadPNG: %w", err)
+		return nil, fmt.Errorf("%s: %w", fnName, err)
 	}
 	defer f.Close()
 
-	img, err := png.Decode(f)
+	img, err := decode(f)
 	if err != nil {
-		return nil, fmt.Errorf("LoadPNG: decode %s: %w", filename, err)
+		return nil, fmt.Errorf("%s: decode %s: %w", fnName, filename, err)
 	}
 
 	b := img.Bounds()

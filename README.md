@@ -160,6 +160,13 @@ $ make example-system
 $ make example-hello
 ```
 
+[IMG2IMG](examples/img2img/main.go) — image-to-image: load a source PNG or JPEG, hand it to stable-diffusion as the starting latent, and let the prompt repaint it. The default chain consumes `hello.png` written by the previous example.
+
+```shell
+$ make example-hello       # writes hello.png
+$ make example-img2img     # writes img2img.png in oil-painting style
+```
+
 [FLUX2](examples/flux2/main.go) — multi-file FLUX.2 [klein] 9B pipeline using a quantized diffusion model + VAE + Qwen3 LLM text encoder. The example reads the bundle's `manifest.json` to resolve each file's on-disk path.
 
 ```shell
