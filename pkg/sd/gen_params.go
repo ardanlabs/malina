@@ -195,8 +195,22 @@ type ImgGenParams struct {
 	// BatchCount is the number of images to generate per call. Default 1.
 	BatchCount int32
 
-	// Strength is the noise strength for img2img. Default 0.75.
+	// Strength is the noise strength for img2img. Default 0.75. Only takes
+	// effect when InitImage is set: lower values preserve more of the
+	// source image, 1.0 destroys it entirely.
 	Strength float32
+
+	// InitImage switches the generator into image-to-image mode: the image
+	// is VAE-encoded as the starting latent and the prompt steers the
+	// denoising. When nil (the default), GenerateImage runs text-to-image
+	// from random noise. Must be 3-channel RGB; the C library bilinearly
+	// resizes the pixels to (Width, Height) automatically.
+	//
+	// The Context this is passed to must have been created with
+	// ContextParams.VAEDecodeOnly = false; otherwise stable-diffusion.cpp
+	// aborts the process because the VAE encoder weights were skipped at
+	// load time.
+	InitImage *SDImage
 }
 
 var (
@@ -288,6 +302,12 @@ func GenerateImage(ctx Context, params ImgGenParams) (*SDImage, error) {
 	}
 	raw.NegativePrompt = np
 
+	if params.InitImage != nil {
+		if err := bindCImage(&raw.InitImage, params.InitImage, "InitImage"); err != nil {
+			return nil, err
+		}
+	}
+
 	clearLastLog()
 
 	rawPtr := &raw
@@ -298,6 +318,7 @@ func GenerateImage(ctx Context, params ImgGenParams) (*SDImage, error) {
 		unsafe.Pointer(&rawPtr),
 	)
 	runtime.KeepAlive(refs.keep)
+	runtime.KeepAlive(params.InitImage)
 	runtime.KeepAlive(&raw)
 
 	if resultPtr == nil {

@@ -30,7 +30,10 @@ func TestGenerateImageSD15Smoke(t *testing.T) {
 	cparams := ContextParamsInit()
 	cparams.ModelPath = modelPath
 
-	assertGenerateSmoke(t, cparams, ImgGenParamsInit())
+	params := ImgGenParamsInit()
+	params.Steps = 1
+
+	assertGenerateSmoke(t, cparams, params)
 }
 
 // TestGenerateImageSDXLSmoke mirrors the sd-1.5 test against the sdxl-
@@ -48,7 +51,10 @@ func TestGenerateImageSDXLSmoke(t *testing.T) {
 	cparams := ContextParamsInit()
 	cparams.ModelPath = modelPath
 
-	assertGenerateSmoke(t, cparams, ImgGenParamsInit())
+	params := ImgGenParamsInit()
+	params.Steps = 1
+
+	assertGenerateSmoke(t, cparams, params)
 }
 
 // TestGenerateImageFlux2Smoke exercises the multi-file FLUX.2 [klein] 9B
@@ -82,6 +88,70 @@ func TestGenerateImageFlux2Smoke(t *testing.T) {
 	params.Steps = 4
 
 	assertGenerateSmoke(t, cparams, params)
+}
+
+// TestGenerateImageImg2ImgSmoke exercises the InitImage path end-to-end:
+// hand the C library a synthesized 128x128 RGB image as InitImage with a
+// text prompt, and assert the returned buffer has the requested shape.
+// The point is to verify the cImage binding survives the FFI call and
+// stable-diffusion.cpp's IMG2IMG branch runs to completion; the produced
+// pixels are not validated for content quality.
+//
+// VAEDecodeOnly is flipped off on the context — img2img needs the VAE
+// encoder, which the C library skips by default to save memory.
+//
+// Requires MALINA_LIB and MALINA_TEST_MODEL. Skipped otherwise.
+func TestGenerateImageImg2ImgSmoke(t *testing.T) {
+	testSetup(t)
+	modelPath := testEnvModelFile(t, "MALINA_TEST_MODEL")
+
+	cparams := ContextParamsInit()
+	cparams.ModelPath = modelPath
+	cparams.VAEDecodeOnly = false
+
+	ctx, err := NewContext(cparams)
+	if err != nil {
+		t.Fatalf("NewContext: %v", err)
+	}
+	defer FreeContext(ctx)
+
+	const dim = 128
+	initImg := &SDImage{
+		Width:   dim,
+		Height:  dim,
+		Channel: 3,
+		Data:    make([]byte, dim*dim*3),
+	}
+	for i := range initImg.Data {
+		initImg.Data[i] = 128 // neutral grey
+	}
+
+	params := ImgGenParamsInit()
+	params.Prompt = "a dog"
+	params.Width = dim
+	params.Height = dim
+	params.Steps = 4
+	params.Seed = 43
+	params.Strength = 0.75
+	params.InitImage = initImg
+
+	img, err := GenerateImage(ctx, params)
+	if err != nil {
+		t.Fatalf("GenerateImage (img2img): %v", err)
+	}
+	if img == nil {
+		t.Fatal("GenerateImage (img2img) returned nil image with nil error")
+	}
+	if img.Width != uint32(params.Width) || img.Height != uint32(params.Height) {
+		t.Errorf("dims: got %dx%d, want %dx%d", img.Width, img.Height, params.Width, params.Height)
+	}
+	if img.Channel != 3 {
+		t.Errorf("Channel: got %d, want 3", img.Channel)
+	}
+	want := int(img.Width) * int(img.Height) * int(img.Channel)
+	if len(img.Data) != want {
+		t.Fatalf("Data length: got %d, want %d", len(img.Data), want)
+	}
 }
 
 // assertGenerateSmoke is the shared end-to-end body the per-bundle smoke

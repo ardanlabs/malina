@@ -120,6 +120,29 @@ func (img *SDImage) SavePNG(filename string) error {
 	return nil
 }
 
+// bindCImage populates dst so the C library can read src's pixel buffer
+// in place. The caller MUST keep src reachable across the FFI call (via
+// runtime.KeepAlive) so the Go GC does not collect the backing array.
+// field names the destination so validation errors are self-describing.
+func bindCImage(dst *cImage, src *SDImage, field string) error {
+	if src.Width == 0 || src.Height == 0 {
+		return fmt.Errorf("%s: zero dimension (%dx%d)", field, src.Width, src.Height)
+	}
+	if src.Channel != 3 {
+		return fmt.Errorf("%s: channel count %d, want 3 (RGB)", field, src.Channel)
+	}
+	want := int(src.Width) * int(src.Height) * int(src.Channel)
+	if len(src.Data) != want {
+		return fmt.Errorf("%s: data length %d, want %d for %dx%dx%d", field, len(src.Data), want, src.Width, src.Height, src.Channel)
+	}
+
+	dst.Width = src.Width
+	dst.Height = src.Height
+	dst.Channel = src.Channel
+	dst.Data = &src.Data[0]
+	return nil
+}
+
 // sdImageFromC copies the raw pixel buffer out of the C heap into a Go slice
 // so it survives independently of the C-side allocation.
 func sdImageFromC(c *cImage) *SDImage {
