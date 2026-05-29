@@ -1,0 +1,84 @@
+name: macOS
+
+# Disabled on PR/push until upstream leejet/stable-diffusion.cpp ships a
+# Metal kernel for the GGML_OP_NORM op that the current pinned build
+# (master-656-0e4ee04) emits in the CLIP path. On the GitHub-hosted M1
+# runner the ggml graph optimizer does not fuse NORM away, so dispatch
+# hits a missing case in ggml_metal_op_encode_impl and aborts inside
+# CLIPTextModelRunner::compute. Newer Apple Silicon (M2+) fuses the op
+# and runs fine, so local verification on developer hardware is the
+# interim signal. Restore the pull_request + push triggers below once
+# the pinned DefaultSDVersion is bumped to a build that includes the
+# upstream Metal NORM kernel.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# macOS Apple Silicon. leejet's Darwin asset ships libstable-diffusion as
+# a Metal-capable dylib alongside its ggml siblings. No DYLD_LIBRARY_PATH
+# is needed — the dylib's RUNPATH resolves sibling libraries from the same
+# directory.
+
+jobs:
+  test:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Install malina command
+        run: go install .
+
+      - name: Install stable-diffusion.cpp libraries
+        # No -v: `malina install` falls back to download.DefaultSDVersion
+        # baked into pkg/download. CI never silently tracks leejet's latest
+        # tag — bumping that constant in code is the rollover.
+        run: malina install -lib $GITHUB_WORKSPACE/lib
+
+      - name: Set MALINA_LIB
+        run: echo "MALINA_LIB=$GITHUB_WORKSPACE/lib" >> "$GITHUB_ENV"
+
+      - name: Build examples
+        run: |
+          set -e
+          for dir in ./examples/*/; do
+            if [ -f "$dir/main.go" ]; then
+              echo "Building $dir..."
+              go build -o /dev/null "$dir"
+            fi
+          done
+
+      - name: Cache test models
+        id: cache-models
+        uses: actions/cache@v5
+        with:
+          path: models
+          key: ${{ runner.os }}-malina-models-sd-1.5-v1
+
+      - name: Download test models
+        if: steps.cache-models.outputs.cache-hit != 'true'
+        run: |
+          set -e
+          mkdir -p ./models
+          malina model pull -y -o $GITHUB_WORKSPACE/models sd-1.5
+
+      - name: Run unit tests
+        run: |
+          export MALINA_TEST_MODEL=$GITHUB_WORKSPACE/models/sd-1.5/v1-5-pruned-emaonly.safetensors
+          go test -count=1 ./...
+
+      - name: Run hello example
+        run: |
+          export MALINA_TEST_MODEL=$GITHUB_WORKSPACE/models/sd-1.5/v1-5-pruned-emaonly.safetensors
+          go run ./examples/hello "a lovely cat"
+
+      - name: Run sd-encode example
+        run: go run ./examples/sd-encode -i samples/frames -fps 24 -secs 1 -o /tmp/out.avi
