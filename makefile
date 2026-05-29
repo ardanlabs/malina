@@ -225,6 +225,29 @@ example-hello:
 	export MALINA_TEST_MODEL=$(MODELS_DIR)/sd-1.5/v1-5-pruned-emaonly.safetensors && \
 	go run ./examples/hello "a lovely cat"
 
+# example-img2img requires the sd-1.5 bundle and a source PNG. By default
+# it consumes hello.png produced by `make example-hello`, so the natural
+# flow is:
+#
+#   make example-hello                       # writes hello.png
+#   make example-img2img                     # rewrites hello.png in oil-painting style
+#
+# Override IMG2IMG_IN / IMG2IMG_PROMPT / IMG2IMG_STRENGTH to point at your
+# own source image and steer the result. Strength runs 0..1; lower values
+# preserve more of the source.
+IMG2IMG_IN       ?= hello.png
+IMG2IMG_OUT      ?= img2img.png
+IMG2IMG_PROMPT   ?= an oil painting of a cat in the style of Van Gogh
+IMG2IMG_STRENGTH ?= 0.6
+example-img2img:
+	export MALINA_LIB=$(MALINA_LIB) && \
+	export MALINA_TEST_MODEL=$(MODELS_DIR)/sd-1.5/v1-5-pruned-emaonly.safetensors && \
+	go run ./examples/img2img \
+	    -in $(IMG2IMG_IN) \
+	    -out $(IMG2IMG_OUT) \
+	    -prompt "$(IMG2IMG_PROMPT)" \
+	    -strength $(IMG2IMG_STRENGTH)
+
 # example-flux2 requires the flux2-klein-9b bundle (make pull-flux2-klein-9b).
 # The example reads $(MODELS_DIR)/flux2-klein-9b/manifest.json for paths.
 example-flux2:
