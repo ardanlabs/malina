@@ -43,8 +43,15 @@ func loadSystemFuncs(lib ffi.Lib) error {
 		return loadError("sd_get_num_physical_cores", err)
 	}
 
-	if ggmlBackendDevCountFunc, err = lib.Prep("ggml_backend_dev_count", &ffi.TypeUint64); err != nil {
-		return loadError("ggml_backend_dev_count", err)
+	// Optional. leejet's official Windows zip ships a single stable-diffusion.dll
+	// with ggml statically linked but NOT re-exported (GGML_API expands to nothing
+	// on a non-GGML_SHARED PE/COFF build), so GetProcAddress returns
+	// ERROR_PROC_NOT_FOUND for every ggml_* symbol. On Mach-O / ELF the same
+	// static link still exports the symbols by default visibility. Treat both
+	// ggml_* preps as best-effort and let GGMLBackendDeviceCount report -1
+	// when the symbol is unavailable.
+	if fn, perr := lib.Prep("ggml_backend_dev_count", &ffi.TypeUint64); perr == nil {
+		ggmlBackendDevCountFunc = fn
 	}
 
 	// Optional: only present when libstable-diffusion was built with
@@ -91,7 +98,15 @@ func NumPhysicalCores() int32 {
 // registered in the process-wide registry. Callers use this as a sentinel to
 // decide whether to call Init when running alongside other ggml-based
 // libraries in the same process.
+//
+// Returns -1 when the underlying ggml_backend_dev_count symbol is not exported
+// by the loaded libstable-diffusion (e.g. leejet's Windows DLL statically
+// links ggml without re-exporting its API). In that case, callers cannot use
+// this to detect a populated registry; assume Init is safe to call.
 func GGMLBackendDeviceCount() int {
+	if ggmlBackendDevCountFunc == (ffi.Fun{}) {
+		return -1
+	}
 	var result ffi.Arg
 	ggmlBackendDevCountFunc.Call(unsafe.Pointer(&result))
 	return int(result)

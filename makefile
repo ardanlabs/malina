@@ -103,6 +103,114 @@ deps-upgrade:
 	go get -u -v ./...
 	go mod tidy
 
+# ==============================================================================
+# Benchmarks and profiles
+#
+# Each bundle has its own benchmark in pkg/sd/benchmark_test.go that runs a
+# single text-to-image generation per iteration against a real checkpoint.
+# Model loading happens once outside the timed loop and a warm-up iteration
+# is dropped so Metal/CUDA JIT does not pollute the steady-state measurement.
+# See BENCHMARKS.md for the methodology and recorded numbers.
+#
+# BENCHTIME controls iteration count for the bench targets (default 1x);
+# PROFILE_BENCHTIME mirrors it for the profile targets. Use 1x as the
+# default because (a) a single SD/SDXL/FLUX inference is on the order of
+# tens of seconds on Metal, and (b) Go's testing framework runs the bench
+# body twice when N>1 (once with N=1, then with N=Nrequested — see
+# testing/benchmark.go:340), which doubles the model-load cost. Override
+# BENCHTIME=Nx to get repeated samples (e.g. for benchstat variance), at
+# the cost of one extra model load + warmup pass.
+
+BENCHTIME              ?= 1x
+PROFILE_BENCHTIME      ?= 1x
+MALINA_BENCH_MODEL      ?= $(MODELS_DIR)/sd-1.5/v1-5-pruned-emaonly.safetensors
+MALINA_BENCH_SDXL_MODEL ?= $(MODELS_DIR)/sdxl-base-1.0/sd_xl_base_1.0.safetensors
+MALINA_BENCH_FLUX2_DIR  ?= $(MODELS_DIR)/flux2-klein-9b
+
+# make bench-sd-1.5 runs BenchmarkGenerateImageSD15 against MALINA_BENCH_MODEL.
+# Override with `make bench-sd-1.5 MALINA_BENCH_MODEL=...` to benchmark a
+# different SD 1.5 checkpoint; pass BENCHTIME=Nx to control iteration count.
+bench-sd-1.5:
+	export MALINA_LIB=$(abspath $(MALINA_LIB)) && \
+	export MALINA_BENCH_MODEL=$(abspath $(MALINA_BENCH_MODEL)) && \
+	go test -bench=BenchmarkGenerateImageSD15 -benchtime=$(BENCHTIME) -benchmem -run='^$$' ./pkg/sd/
+
+# make bench-sdxl runs BenchmarkGenerateImageSDXL against MALINA_BENCH_SDXL_MODEL.
+bench-sdxl:
+	export MALINA_LIB=$(abspath $(MALINA_LIB)) && \
+	export MALINA_BENCH_SDXL_MODEL=$(abspath $(MALINA_BENCH_SDXL_MODEL)) && \
+	go test -bench=BenchmarkGenerateImageSDXL -benchtime=$(BENCHTIME) -benchmem -run='^$$' ./pkg/sd/
+
+# make bench-flux2 runs BenchmarkGenerateImageFlux2 against MALINA_BENCH_FLUX2_DIR.
+bench-flux2:
+	export MALINA_LIB=$(abspath $(MALINA_LIB)) && \
+	export MALINA_BENCH_FLUX2_DIR=$(abspath $(MALINA_BENCH_FLUX2_DIR)) && \
+	go test -bench=BenchmarkGenerateImageFlux2 -benchtime=$(BENCHTIME) -benchmem -run='^$$' ./pkg/sd/
+
+# make bench runs all three per-bundle benchmarks. Each bundle skips (not
+# fails) when its model env points at a missing file, so a partial local
+# layout still produces useful output.
+bench: bench-sd-1.5 bench-sdxl bench-flux2
+
+# make profile-sd-1.5 captures CPU + memory profiles for the SD 1.5 bench
+# and writes them to ./profiles/. The Go-side profile is dominated by
+# purego/ffi trampolines because almost all real work happens inside
+# libstable-diffusion.dylib (which pprof cannot see), but the memory
+# profile is useful for spotting per-call allocations on the marshalling
+# path. Inspect with:
+#
+#   go tool pprof -http=:0 profiles/sd-1.5.cpu.prof
+#   go tool pprof -http=:0 profiles/sd-1.5.mem.prof
+profile-sd-1.5:
+	mkdir -p profiles
+	export MALINA_LIB=$(abspath $(MALINA_LIB)) && \
+	export MALINA_BENCH_MODEL=$(abspath $(MALINA_BENCH_MODEL)) && \
+	go test -bench=BenchmarkGenerateImageSD15 -benchtime=$(PROFILE_BENCHTIME) -run='^$$' \
+	    -cpuprofile=profiles/sd-1.5.cpu.prof \
+	    -memprofile=profiles/sd-1.5.mem.prof \
+	    -benchmem \
+	    -o profiles/sd-1.5.test \
+	    ./pkg/sd/
+	@echo
+	@echo "Profiles written to ./profiles/. Inspect with:"
+	@echo "  go tool pprof -http=:0 profiles/sd-1.5.cpu.prof"
+	@echo "  go tool pprof -http=:0 profiles/sd-1.5.mem.prof"
+
+# make profile-sdxl captures CPU + memory profiles for the SDXL bench.
+profile-sdxl:
+	mkdir -p profiles
+	export MALINA_LIB=$(abspath $(MALINA_LIB)) && \
+	export MALINA_BENCH_SDXL_MODEL=$(abspath $(MALINA_BENCH_SDXL_MODEL)) && \
+	go test -bench=BenchmarkGenerateImageSDXL -benchtime=$(PROFILE_BENCHTIME) -run='^$$' \
+	    -cpuprofile=profiles/sdxl.cpu.prof \
+	    -memprofile=profiles/sdxl.mem.prof \
+	    -benchmem \
+	    -o profiles/sdxl.test \
+	    ./pkg/sd/
+	@echo
+	@echo "Profiles written to ./profiles/. Inspect with:"
+	@echo "  go tool pprof -http=:0 profiles/sdxl.cpu.prof"
+	@echo "  go tool pprof -http=:0 profiles/sdxl.mem.prof"
+
+# make profile-flux2 captures CPU + memory profiles for the FLUX.2 bench.
+profile-flux2:
+	mkdir -p profiles
+	export MALINA_LIB=$(abspath $(MALINA_LIB)) && \
+	export MALINA_BENCH_FLUX2_DIR=$(abspath $(MALINA_BENCH_FLUX2_DIR)) && \
+	go test -bench=BenchmarkGenerateImageFlux2 -benchtime=$(PROFILE_BENCHTIME) -run='^$$' \
+	    -cpuprofile=profiles/flux2.cpu.prof \
+	    -memprofile=profiles/flux2.mem.prof \
+	    -benchmem \
+	    -o profiles/flux2.test \
+	    ./pkg/sd/
+	@echo
+	@echo "Profiles written to ./profiles/. Inspect with:"
+	@echo "  go tool pprof -http=:0 profiles/flux2.cpu.prof"
+	@echo "  go tool pprof -http=:0 profiles/flux2.mem.prof"
+
+# make profile runs all three profilers in sequence.
+profile: profile-sd-1.5 profile-sdxl profile-flux2
+
 # -----------------------------------------------------------------------------
 # Example runners. Each target wires up MALINA_LIB + the model paths the
 # example needs and invokes `go run`.

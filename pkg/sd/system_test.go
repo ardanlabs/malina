@@ -41,7 +41,16 @@ func TestGGMLBackendDeviceCount(t *testing.T) {
 	testSetup(t)
 
 	n := GGMLBackendDeviceCount()
-	// On every supported platform at least the CPU backend registers
+	// -1 means the underlying ggml_backend_dev_count symbol is not exported
+	// by the loaded libstable-diffusion. leejet's official Windows DLL is the
+	// known case: ggml is statically linked but GGML_API expands to nothing
+	// on a non-GGML_SHARED PE/COFF build, so the symbol is unreachable via
+	// GetProcAddress. The CPU backend still self-registers at DLL load —
+	// we just can't observe it through this API on that platform.
+	if n == -1 {
+		t.Skip("ggml_backend_dev_count not exported by this libstable-diffusion build")
+	}
+	// On every other supported platform at least the CPU backend registers
 	// itself via a static constructor at libstable-diffusion load time,
 	// so the device count must be at least 1.
 	if n < 1 {
