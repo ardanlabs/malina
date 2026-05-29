@@ -11,6 +11,25 @@ import (
 
 // Opaque handles. These are pointers in C; in Go we carry them as uintptr
 // so they round-trip through the FFI boundary without retainability issues.
+//
+// # Concurrency
+//
+// A Context is NOT safe for concurrent use. Every call into GenerateImage
+// (and GenerateVideo) mutates state inside the underlying sd_ctx_t —
+// the RNG seed and counter, denoiser shift, LoRA model maps, VAE tiling
+// params, circular-padding flags, and (when free_params_immediately is
+// set) the parameter buffers of the shared sub-models. Upstream
+// stable-diffusion.cpp performs no locking on any of this; two
+// goroutines calling GenerateImage on the same Context is a data race.
+// The upstream HTTP server example (examples/server/runtime.h) serializes
+// access through an explicit std::mutex per context for this reason.
+//
+// To run generation in parallel, allocate one Context per goroutine via
+// NewContext. The model weights are reloaded per Context, so the memory
+// cost scales linearly — plan for it. Independent Contexts on different
+// goroutines do not race on per-context state, but the log/progress/
+// preview callbacks installed via this package are process-globals in
+// upstream and should be configured once at startup.
 type (
 	Context uintptr
 )
@@ -27,12 +46,12 @@ const (
 	SDTypeQ5_1   SDType = 7
 	SDTypeQ8_0   SDType = 8
 	SDTypeQ8_1   SDType = 9
-	SDTypeQ2_K   SDType = 10
-	SDTypeQ3_K   SDType = 11
-	SDTypeQ4_K   SDType = 12
-	SDTypeQ5_K   SDType = 13
-	SDTypeQ6_K   SDType = 14
-	SDTypeQ8_K   SDType = 15
+	SDTypeQ2K    SDType = 10
+	SDTypeQ3K    SDType = 11
+	SDTypeQ4K    SDType = 12
+	SDTypeQ5K    SDType = 13
+	SDTypeQ6K    SDType = 14
+	SDTypeQ8K    SDType = 15
 	SDTypeIQ2XXS SDType = 16
 	SDTypeIQ2XS  SDType = 17
 	SDTypeIQ3XXS SDType = 18

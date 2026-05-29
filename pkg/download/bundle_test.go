@@ -45,15 +45,71 @@ func TestBundleNames(t *testing.T) {
 	}
 }
 
-func TestFluxGated(t *testing.T) {
-	b, ok := BundleByName("flux2-klein-9b")
-	if !ok {
-		t.Fatal("flux2-klein-9b not in catalog")
+// TestBundleShapes pins the structural contract of every bundle in the
+// catalog: gated status, license non-empty, expected file count, and the
+// (role, filename) pair for each file. The example header in
+// examples/hello/main.go (and the FLUX example in examples/flux2/main.go)
+// hard-code these filenames; a typo in the catalog would silently break
+// the examples and CI without this test catching it.
+func TestBundleShapes(t *testing.T) {
+	type wantFile struct {
+		role     FileRole
+		filename string
 	}
-	if !b.Gated {
-		t.Error("flux2-klein-9b: expected Gated = true")
+	tests := []struct {
+		name  string
+		gated bool
+		files []wantFile
+	}{
+		{
+			name:  "sd-1.5",
+			gated: false,
+			files: []wantFile{
+				{RoleModel, "v1-5-pruned-emaonly.safetensors"},
+			},
+		},
+		{
+			name:  "sdxl-base-1.0",
+			gated: false,
+			files: []wantFile{
+				{RoleModel, "sd_xl_base_1.0.safetensors"},
+			},
+		},
+		{
+			name:  "flux2-klein-9b",
+			gated: true,
+			files: []wantFile{
+				{RoleDiffusion, "flux-2-klein-9b-Q4_0.gguf"},
+				{RoleVAE, "ae.safetensors"},
+				{RoleLLM, "Qwen3-8B-Q4_K_M.gguf"},
+			},
+		},
 	}
-	if len(b.Files) != 3 {
-		t.Errorf("flux2-klein-9b: got %d files, want 3", len(b.Files))
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b, ok := BundleByName(tt.name)
+			if !ok {
+				t.Fatalf("%s: not in catalog", tt.name)
+			}
+			if b.License == "" {
+				t.Errorf("%s: License is empty", tt.name)
+			}
+			if b.Gated != tt.gated {
+				t.Errorf("%s: Gated = %v, want %v", tt.name, b.Gated, tt.gated)
+			}
+			if len(b.Files) != len(tt.files) {
+				t.Fatalf("%s: got %d files, want %d", tt.name, len(b.Files), len(tt.files))
+			}
+			for i, want := range tt.files {
+				got := b.Files[i]
+				if got.Role != want.role {
+					t.Errorf("%s: file[%d].Role = %q, want %q", tt.name, i, got.Role, want.role)
+				}
+				if got.Filename != want.filename {
+					t.Errorf("%s: file[%d].Filename = %q, want %q", tt.name, i, got.Filename, want.filename)
+				}
+			}
+		})
 	}
 }

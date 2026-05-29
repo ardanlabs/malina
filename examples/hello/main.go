@@ -1,5 +1,17 @@
 // hello is the smallest possible malina example: load a stable-diffusion
 // model, generate one image from a text prompt, and save it as PNG.
+//
+// Run it from the repo root with:
+//
+//	make download-stable-diffusion.cpp   # one-time: populate ./lib
+//	make pull-sd-1.5                     # one-time: download the SD 1.5 bundle into ~/models
+//	make example-hello
+//
+// The makefile target wires MALINA_LIB to ./lib and MALINA_TEST_MODEL to
+// ~/models/sd-1.5/v1-5-pruned-emaonly.safetensors, then invokes
+// `go run ./examples/hello "a lovely cat"`. Pass a custom prompt by
+// running `go run ./examples/hello "your prompt"` directly after the
+// environment variables are set.
 package main
 
 import (

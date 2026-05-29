@@ -3,7 +3,19 @@
 // a single Motion-JPEG AVI. No model is loaded; this is a pure-Go encoder
 // built on top of pkg/sd's SaveAVI helper.
 //
-//	go run ./examples/sd-encode -i frames/ -o out.avi -fps 24 -secs 1
+// Run it from the repo root with:
+//
+//	make example-sd-encode
+//
+// The makefile target invokes
+// `go run ./examples/sd-encode -i $(FRAMES_DIR) -fps $(FPS) -secs $(SECS) -o $(OUT)`
+// with defaults FRAMES_DIR=samples/frames, FPS=24, SECS=1, OUT=output.avi.
+// Override any of them on the command line, e.g.:
+//
+//	make example-sd-encode FRAMES_DIR=my/frames FPS=30 SECS=2 OUT=clip.avi
+//
+// To exercise the flags that the makefile does not expose (-w, -h, -fit,
+// -trans, -xfade, -quality), invoke `go run ./examples/sd-encode` directly.
 //
 // Files inside -i are sorted lexicographically; name them with a
 // zero-padded index (frame_0001.jpg, frame_0002.jpg, ...) to control order.
@@ -49,9 +61,8 @@ import (
 	"sort"
 	"strings"
 
-	"golang.org/x/image/draw"
-
 	"github.com/ardanlabs/malina/pkg/sd"
+	"golang.org/x/image/draw"
 )
 
 const (
@@ -146,14 +157,8 @@ func main() {
 		log.Fatalf("no frames left to encode (skipped %d)", skipped)
 	}
 
-	holdFrames := round(*holdSecs * float64(*fps))
-	if holdFrames < 1 {
-		holdFrames = 1
-	}
-	transFrames := round(*xfadeSecs * float64(*fps))
-	if transFrames < 0 {
-		transFrames = 0
-	}
+	holdFrames := max(round(*holdSecs*float64(*fps)), 1)
+	transFrames := max(round(*xfadeSecs*float64(*fps)), 0)
 
 	var frames []*sd.SDImage
 	if *transMode == transKenBurns {
@@ -303,7 +308,7 @@ func buildTransitions(fitted []*image.RGBA, holdFrames, transFrames int, mode st
 
 	for i, a := range fitted {
 		aSD := rgbaToSDImage(a)
-		for k := 0; k < holdFrames; k++ {
+		for range holdFrames {
 			out = append(out, aSD)
 		}
 		if i < len(fitted)-1 && transFrames > 0 {
@@ -344,7 +349,7 @@ func transitionFrame(a, b *image.RGBA, t float64, mode string) *sd.SDImage {
 
 	case transWipe:
 		split := int(t*float64(w) + 0.5)
-		for y := 0; y < h; y++ {
+		for y := range h {
 			rowStart := y * dst.Stride
 			copy(dst.Pix[rowStart:rowStart+split*4], b.Pix[rowStart:rowStart+split*4])
 			copy(dst.Pix[rowStart+split*4:rowStart+w*4], a.Pix[rowStart+split*4:rowStart+w*4])
@@ -359,7 +364,7 @@ func transitionFrame(a, b *image.RGBA, t float64, mode string) *sd.SDImage {
 func blend(dst, a, b []byte, t float64) {
 	wa := uint32((1 - t) * 256)
 	wb := uint32(t * 256)
-	for i := 0; i < len(dst); i++ {
+	for i := range dst {
 		dst[i] = byte((uint32(a[i])*wa + uint32(b[i])*wb) >> 8)
 	}
 }
@@ -369,7 +374,7 @@ func fadeToColor(dst, src []byte, c color.RGBA, t float64) {
 	ws := uint32((1 - t) * 256)
 	wc := uint32(t * 256)
 	cb := [4]byte{c.R, c.G, c.B, c.A}
-	for i := 0; i < len(dst); i++ {
+	for i := range dst {
 		dst[i] = byte((uint32(src[i])*ws + uint32(cb[i&3])*wc) >> 8)
 	}
 }
@@ -410,7 +415,7 @@ func buildKenBurns(srcs []image.Image, targetW, targetH, holdFrames int) []*sd.S
 			dirY = -1
 		}
 
-		for k := 0; k < holdFrames; k++ {
+		for k := range holdFrames {
 			var t float64
 			if holdFrames > 1 {
 				t = float64(k) / float64(holdFrames-1)

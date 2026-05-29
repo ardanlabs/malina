@@ -47,12 +47,18 @@ func TestContextParamsInitDefaults(t *testing.T) {
 		{"KeepClipOnCPU", p.KeepClipOnCPU, false},
 		{"KeepControlNetOnCPU", p.KeepControlNetOnCPU, false},
 		{"KeepVAEOnCPU", p.KeepVAEOnCPU, false},
+		{"FlashAttn", p.FlashAttn, false},
 		{"DiffusionFlashAttn", p.DiffusionFlashAttn, false},
+		{"TaePreviewOnly", p.TaePreviewOnly, false},
+		{"DiffusionConvDirect", p.DiffusionConvDirect, false},
+		{"VAEConvDirect", p.VAEConvDirect, false},
 		{"CircularX", p.CircularX, false},
 		{"CircularY", p.CircularY, false},
+		{"ForceSDXLVAEConvScale", p.ForceSDXLVAEConvScale, false},
 		{"ChromaUseDitMask", p.ChromaUseDitMask, true},
 		{"ChromaUseT5Mask", p.ChromaUseT5Mask, false},
 		{"ChromaT5MaskPad", p.ChromaT5MaskPad, int32(1)},
+		{"QwenImageZeroCondT", p.QwenImageZeroCondT, false},
 	}
 
 	for _, c := range cases {

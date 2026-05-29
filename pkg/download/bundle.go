@@ -142,6 +142,9 @@ func (b Bundle) Validate() error {
 	if b.Name == "" {
 		return fmt.Errorf("bundle: missing Name")
 	}
+	if b.License == "" {
+		return fmt.Errorf("bundle %q: missing License", b.Name)
+	}
 	if len(b.Files) == 0 {
 		return fmt.Errorf("bundle %q: no files", b.Name)
 	}

@@ -1,5 +1,13 @@
 // system is the smallest possible malina example: load libstable-diffusion
-// and print the library version and system info.
+// and print the library version and system info. No model is loaded.
+//
+// Run it from the repo root with:
+//
+//	make download-stable-diffusion.cpp   # one-time: populate ./lib
+//	make example-system
+//
+// The makefile target wires MALINA_LIB to ./lib before invoking
+// `go run ./examples/system`.
 package main
 
 import (

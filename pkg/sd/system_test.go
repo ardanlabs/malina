@@ -1,6 +1,8 @@
 package sd
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestVersion(t *testing.T) {
 	testSetup(t)
@@ -47,3 +49,11 @@ func TestGGMLBackendDeviceCount(t *testing.T) {
 	}
 	t.Logf("sd.GGMLBackendDeviceCount = %d", n)
 }
+
+// NOTE: there is intentionally no concurrent-access test for Context.
+// Upstream stable-diffusion.cpp is not safe to call concurrently on the
+// same sd_ctx_t (see the doc comment on Context in sd.go). Callers that
+// want parallel generation must allocate one Context per goroutine; that
+// pattern is exercised by the existing single-instance tests, so a
+// multi-instance test would only burn CI minutes loading N copies of the
+// same model without verifying any new contract.

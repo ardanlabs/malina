@@ -1,6 +1,7 @@
 package loader
 
 import (
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -124,6 +125,47 @@ func TestGetLibraryFilename_CurrentOS(t *testing.T) {
 		if result != expected {
 			t.Errorf("expected '%s', got '%s'", expected, result)
 		}
+	}
+}
+
+// TestLoadLibrary_MissingPath verifies LoadLibrary returns a useful error
+// (and does not panic) when neither path nor MALINA_LIB is supplied.
+func TestLoadLibrary_MissingPath(t *testing.T) {
+	t.Setenv("MALINA_LIB", "")
+
+	_, err := LoadLibrary("", "stable-diffusion")
+	if err == nil {
+		t.Fatal("LoadLibrary(\"\", ...): expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "MALINA_LIB") {
+		t.Errorf("error message %q should mention MALINA_LIB", err)
+	}
+}
+
+// TestLoadLibrary_BadPath verifies LoadLibrary returns an error (and does
+// not panic) when the path is set but no library exists at the expected
+// filename. dlopen / LoadLibrary on every supported OS reports a clear
+// failure here; we just need to confirm the wrapper surfaces it.
+func TestLoadLibrary_BadPath(t *testing.T) {
+	tmp := t.TempDir()
+
+	_, err := LoadLibrary(tmp, "this-library-does-not-exist")
+	if err == nil {
+		t.Fatalf("LoadLibrary(%q, ...): expected error, got nil", tmp)
+	}
+}
+
+// TestLoadLibrary_Success verifies LoadLibrary returns a usable handle for
+// the real libstable-diffusion when MALINA_LIB is set. Skipped otherwise
+// so this file passes in environments without the C library installed.
+func TestLoadLibrary_Success(t *testing.T) {
+	libPath := os.Getenv("MALINA_LIB")
+	if libPath == "" {
+		t.Skip("MALINA_LIB not set; skipping LoadLibrary success test")
+	}
+
+	if _, err := LoadLibrary(libPath, "stable-diffusion"); err != nil {
+		t.Fatalf("LoadLibrary(%q, stable-diffusion): %v", libPath, err)
 	}
 }
 

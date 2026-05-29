@@ -62,14 +62,75 @@ func TestImgGenParamsInitDefaults(t *testing.T) {
 		}
 	}
 
-	// sd_sample_params_init sets eta and flow_shift to INFINITY; verify the
-	// nested defaults round-trip from C to Go intact.
+	// Nested struct defaults round-trip from C to Go. Asserting non-trivial
+	// values across every nested struct (Guidance, SLG, PMParams, VAETiling,
+	// Cache, Hires) is the malina-side analogue of bucky's by-ref/by-value
+	// cross-check in TestWhisperFullParamsSize: it locks down the field
+	// positions inside each padded struct, so if any explicit _padN block
+	// gets out of sync with the C ABI a representative field value here
+	// will drift to whatever happens to live at that offset.
 	raw := defaultCImgGenParams()
-	if !math.IsInf(float64(raw.SampleParams.Eta), 1) {
-		t.Errorf("SampleParams.Eta: got %v, want +Inf", raw.SampleParams.Eta)
+
+	nested := []struct {
+		name string
+		got  any
+		want any
+	}{
+		// SampleParams.Guidance
+		{"Guidance.TxtCfg", raw.SampleParams.Guidance.TxtCfg, float32(7.0)},
+		{"Guidance.DistilledGuidance", raw.SampleParams.Guidance.DistilledGuidance, float32(3.5)},
+
+		// SampleParams.Guidance.SLG (deeply nested struct-in-struct)
+		{"SLG.LayerStart", raw.SampleParams.Guidance.SLG.LayerStart, float32(0.01)},
+		{"SLG.LayerEnd", raw.SampleParams.Guidance.SLG.LayerEnd, float32(0.2)},
+
+		// Top-level control + photo-maker defaults
+		{"ControlStrength", raw.ControlStrength, float32(0.9)},
+		{"PMParams.StyleStrength", raw.PMParams.StyleStrength, float32(20)},
+
+		// VAETilingParams
+		{"VAETilingParams.TargetOverlap", raw.VAETilingParams.TargetOverlap, float32(0.5)},
+
+		// Cache (largest nested struct, most likely to catch padding drift)
+		{"Cache.StartPercent", raw.Cache.StartPercent, float32(0.15)},
+		{"Cache.EndPercent", raw.Cache.EndPercent, float32(0.95)},
+		{"Cache.ErrorDecayRate", raw.Cache.ErrorDecayRate, float32(1)},
+		{"Cache.UseRelativeThreshold", raw.Cache.UseRelativeThreshold, uint8(1)},
+		{"Cache.ResetErrorOnCompute", raw.Cache.ResetErrorOnCompute, uint8(1)},
+		{"Cache.FnComputeBlocks", raw.Cache.FnComputeBlocks, int32(8)},
+		{"Cache.ResidualDiffThreshold", raw.Cache.ResidualDiffThreshold, float32(0.08)},
+		{"Cache.MaxWarmupSteps", raw.Cache.MaxWarmupSteps, int32(8)},
+		{"Cache.MaxCachedSteps", raw.Cache.MaxCachedSteps, int32(-1)},
+		{"Cache.SCMPolicyDynamic", raw.Cache.SCMPolicyDynamic, uint8(1)},
+		{"Cache.SpectrumStopPercent", raw.Cache.SpectrumStopPercent, float32(0.9)},
+
+		// Hires
+		{"Hires.Upscaler", raw.Hires.Upscaler, int32(1)},
+		{"Hires.Scale", raw.Hires.Scale, float32(2)},
+		{"Hires.DenoisingStrength", raw.Hires.DenoisingStrength, float32(0.7)},
+		{"Hires.UpscaleTileSize", raw.Hires.UpscaleTileSize, int32(128)},
 	}
-	if !math.IsInf(float64(raw.SampleParams.FlowShift), 1) {
-		t.Errorf("SampleParams.FlowShift: got %v, want +Inf", raw.SampleParams.FlowShift)
+	for _, c := range nested {
+		if c.got != c.want {
+			t.Errorf("%s: got %v, want %v", c.name, c.got, c.want)
+		}
+	}
+
+	// sd_sample_params_init sets eta, flow_shift, img_cfg, and
+	// cache.reuse_threshold to INFINITY; verify those survive intact.
+	infs := []struct {
+		name string
+		got  float32
+	}{
+		{"SampleParams.Eta", raw.SampleParams.Eta},
+		{"SampleParams.FlowShift", raw.SampleParams.FlowShift},
+		{"Guidance.ImgCfg", raw.SampleParams.Guidance.ImgCfg},
+		{"Cache.ReuseThreshold", raw.Cache.ReuseThreshold},
+	}
+	for _, c := range infs {
+		if !math.IsInf(float64(c.got), 1) {
+			t.Errorf("%s: got %v, want +Inf", c.name, c.got)
+		}
 	}
 }
 
