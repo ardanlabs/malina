@@ -36,7 +36,7 @@ var (
 // installs and CI runs don't depend on the GitHub releases API. Bumping
 // this value is a deliberate, reviewable change that should be paired with
 // re-running the FFI sizeof tests in pkg/sd.
-const DefaultSDVersion = "master-656-0e4ee04"
+const DefaultSDVersion = "master-669-2d40a8b"
 
 // SDRepo is the upstream GitHub repo we fetch prebuilt libraries from.
 const SDRepo = "leejet/stable-diffusion.cpp"

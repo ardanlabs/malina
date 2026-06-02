@@ -113,16 +113,19 @@ deps-upgrade:
 # See BENCHMARKS.md for the methodology and recorded numbers.
 #
 # BENCHTIME controls iteration count for the bench targets (default 1x);
-# PROFILE_BENCHTIME mirrors it for the profile targets. Use 1x as the
-# default because (a) a single SD/SDXL/FLUX inference is on the order of
-# tens of seconds on Metal, and (b) Go's testing framework runs the bench
+# PROFILE_BENCHTIME mirrors it for the profile targets but defaults to
+# 10x so the captured profiles are dominated by steady-state work rather
+# than one-shot setup. benchSetup loads the .dylib once per process and
+# runGenerateBench drops one warm-up GenerateImage before the timed loop,
+# so additional iterations only re-run the steady-state path that we
+# actually want to profile. Note: Go's testing framework runs the bench
 # body twice when N>1 (once with N=1, then with N=Nrequested — see
-# testing/benchmark.go:340), which doubles the model-load cost. Override
-# BENCHTIME=Nx to get repeated samples (e.g. for benchstat variance), at
-# the cost of one extra model load + warmup pass.
+# testing/benchmark.go:340), but with PROFILE_BENCHTIME=Nx that initial
+# N=1 pass is amortized across the larger sample. Override BENCHTIME=Nx
+# on the bench targets to get repeated samples for benchstat variance.
 
-BENCHTIME              ?= 1x
-PROFILE_BENCHTIME      ?= 1x
+BENCHTIME               ?= 1x
+PROFILE_BENCHTIME       ?= 10x
 MALINA_BENCH_MODEL      ?= $(MODELS_DIR)/sd-1.5/v1-5-pruned-emaonly.safetensors
 MALINA_BENCH_SDXL_MODEL ?= $(MODELS_DIR)/sdxl-base-1.0/sd_xl_base_1.0.safetensors
 MALINA_BENCH_FLUX2_DIR  ?= $(MODELS_DIR)/flux2-klein-9b
@@ -147,10 +150,19 @@ bench-flux2:
 	export MALINA_BENCH_FLUX2_DIR=$(abspath $(MALINA_BENCH_FLUX2_DIR)) && \
 	go test -bench=BenchmarkGenerateImageFlux2 -benchtime=$(BENCHTIME) -benchmem -run='^$$' ./pkg/sd/
 
-# make bench runs all three per-bundle benchmarks. Each bundle skips (not
-# fails) when its model env points at a missing file, so a partial local
-# layout still produces useful output.
-bench: bench-sd-1.5 bench-sdxl bench-flux2
+# make bench-img2img-sd-1.5 runs BenchmarkGenerateImageImg2ImgSD15 against
+# MALINA_BENCH_MODEL. The benchmark uses an in-process synthesized 512x512
+# init image (no file I/O) so it has the same env requirements as
+# bench-sd-1.5 — just MALINA_LIB + a model path.
+bench-img2img-sd-1.5:
+	export MALINA_LIB=$(abspath $(MALINA_LIB)) && \
+	export MALINA_BENCH_MODEL=$(abspath $(MALINA_BENCH_MODEL)) && \
+	go test -bench=BenchmarkGenerateImageImg2ImgSD15 -benchtime=$(BENCHTIME) -benchmem -run='^$$' ./pkg/sd/
+
+# make bench runs every per-bundle benchmark. Each one skips (not fails)
+# when its model env points at a missing file, so a partial local layout
+# still produces useful output.
+bench: bench-sd-1.5 bench-sdxl bench-flux2 bench-img2img-sd-1.5
 
 # make profile-sd-1.5 captures CPU + memory profiles for the SD 1.5 bench
 # and writes them to ./profiles/. The Go-side profile is dominated by
@@ -159,8 +171,8 @@ bench: bench-sd-1.5 bench-sdxl bench-flux2
 # profile is useful for spotting per-call allocations on the marshalling
 # path. Inspect with:
 #
-#   go tool pprof -http=:0 profiles/sd-1.5.cpu.prof
-#   go tool pprof -http=:0 profiles/sd-1.5.mem.prof
+#   go tool pprof -text profiles/sd-1.5.cpu.prof
+#   go tool pprof -text profiles/sd-1.5.mem.prof
 profile-sd-1.5:
 	mkdir -p profiles
 	export MALINA_LIB=$(abspath $(MALINA_LIB)) && \
@@ -173,8 +185,8 @@ profile-sd-1.5:
 	    ./pkg/sd/
 	@echo
 	@echo "Profiles written to ./profiles/. Inspect with:"
-	@echo "  go tool pprof -http=:0 profiles/sd-1.5.cpu.prof"
-	@echo "  go tool pprof -http=:0 profiles/sd-1.5.mem.prof"
+	@echo "  go tool pprof -text profiles/sd-1.5.cpu.prof"
+	@echo "  go tool pprof -text profiles/sd-1.5.mem.prof"
 
 # make profile-sdxl captures CPU + memory profiles for the SDXL bench.
 profile-sdxl:
@@ -189,8 +201,28 @@ profile-sdxl:
 	    ./pkg/sd/
 	@echo
 	@echo "Profiles written to ./profiles/. Inspect with:"
-	@echo "  go tool pprof -http=:0 profiles/sdxl.cpu.prof"
-	@echo "  go tool pprof -http=:0 profiles/sdxl.mem.prof"
+	@echo "  go tool pprof -text profiles/sdxl.cpu.prof"
+	@echo "  go tool pprof -text profiles/sdxl.mem.prof"
+
+# make profile-img2img-sd-1.5 captures CPU + memory profiles for the
+# img2img benchmark. Useful for spotting allocations in the InitImage
+# binding path (`bindCImage`, `runtime.KeepAlive`) and confirming the
+# VAE encode pass shows up in the cycles breakdown alongside the
+# diffusion steps that dominate txt2img.
+profile-img2img-sd-1.5:
+	mkdir -p profiles
+	export MALINA_LIB=$(abspath $(MALINA_LIB)) && \
+	export MALINA_BENCH_MODEL=$(abspath $(MALINA_BENCH_MODEL)) && \
+	go test -bench=BenchmarkGenerateImageImg2ImgSD15 -benchtime=$(PROFILE_BENCHTIME) -run='^$$' \
+	    -cpuprofile=profiles/img2img-sd-1.5.cpu.prof \
+	    -memprofile=profiles/img2img-sd-1.5.mem.prof \
+	    -benchmem \
+	    -o profiles/img2img-sd-1.5.test \
+	    ./pkg/sd/
+	@echo
+	@echo "Profiles written to ./profiles/. Inspect with:"
+	@echo "  go tool pprof -text profiles/img2img-sd-1.5.cpu.prof"
+	@echo "  go tool pprof -text profiles/img2img-sd-1.5.mem.prof"
 
 # make profile-flux2 captures CPU + memory profiles for the FLUX.2 bench.
 profile-flux2:
@@ -205,11 +237,63 @@ profile-flux2:
 	    ./pkg/sd/
 	@echo
 	@echo "Profiles written to ./profiles/. Inspect with:"
-	@echo "  go tool pprof -http=:0 profiles/flux2.cpu.prof"
-	@echo "  go tool pprof -http=:0 profiles/flux2.mem.prof"
+	@echo "  go tool pprof -text profiles/flux2.cpu.prof"
+	@echo "  go tool pprof -text profiles/flux2.mem.prof"
 
-# make profile runs all three profilers in sequence.
-profile: profile-sd-1.5 profile-sdxl profile-flux2
+# make profile runs every profiler in sequence.
+profile: profile-sd-1.5 profile-sdxl profile-flux2 profile-img2img-sd-1.5
+
+# -----------------------------------------------------------------------------
+# Text profile reports
+#
+# `make report-<bench>` runs the matching profile target and then dumps the
+# CPU + memory profiles to a single text file at profiles/<bench>.report.txt.
+# Useful for sharing with humans (or LLMs) without standing up the pprof
+# browser. The report contains four sections:
+#
+#   1. CPU profile, top entries by flat time
+#   2. CPU profile, top entries by cumulative time
+#   3. Memory profile, top entries by allocated space
+#   4. Memory profile, top entries by allocated object count
+#
+# Override REPORT_NODES to widen or narrow the entry count (default 60).
+# Pattern targets: report-sd-1.5, report-sdxl, report-flux2,
+# report-img2img-sd-1.5.
+
+REPORT_NODES ?= 60
+
+report-%: profile-%
+	@printf "Writing report to profiles/$*.report.txt ..."
+	@{ \
+	    echo "================================================================"; \
+	    echo "CPU profile — top $(REPORT_NODES) by flat time"; \
+	    echo "================================================================"; \
+	    go tool pprof -text -nodecount=$(REPORT_NODES) \
+	        profiles/$*.test profiles/$*.cpu.prof 2>&1; \
+	    echo; \
+	    echo "================================================================"; \
+	    echo "CPU profile — top $(REPORT_NODES) by cumulative time"; \
+	    echo "================================================================"; \
+	    go tool pprof -text -cum -nodecount=$(REPORT_NODES) \
+	        profiles/$*.test profiles/$*.cpu.prof 2>&1; \
+	    echo; \
+	    echo "================================================================"; \
+	    echo "Memory profile — top $(REPORT_NODES) by allocated space"; \
+	    echo "================================================================"; \
+	    go tool pprof -text -alloc_space -nodecount=$(REPORT_NODES) \
+	        profiles/$*.test profiles/$*.mem.prof 2>&1; \
+	    echo; \
+	    echo "================================================================"; \
+	    echo "Memory profile — top $(REPORT_NODES) by allocated objects"; \
+	    echo "================================================================"; \
+	    go tool pprof -text -alloc_objects -nodecount=$(REPORT_NODES) \
+	        profiles/$*.test profiles/$*.mem.prof 2>&1; \
+	} > profiles/$*.report.txt
+	@echo " done"
+	@echo "Share with: cat profiles/$*.report.txt"
+
+# make report runs every text reporter in sequence.
+report: report-sd-1.5 report-sdxl report-flux2 report-img2img-sd-1.5
 
 # -----------------------------------------------------------------------------
 # Example runners. Each target wires up MALINA_LIB + the model paths the

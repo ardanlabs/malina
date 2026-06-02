@@ -152,6 +152,21 @@ const (
 	LogError LogLevel = 3
 )
 
+// SDVaeFormat mirrors enum sd_vae_format_t. The C library uses this to
+// select the VAE numerical format for image decoding. AUTO is the
+// default written by sd_ctx_params_init and is the right choice for
+// most models — the C library picks the matching format based on the
+// loaded checkpoint.
+type SDVaeFormat int32
+
+const (
+	SDVaeFormatAuto  SDVaeFormat = -1
+	SDVaeFormatFlux  SDVaeFormat = 0
+	SDVaeFormatSD3   SDVaeFormat = 1
+	SDVaeFormatFlux2 SDVaeFormat = 2
+	SDVaeFormatCount SDVaeFormat = 3
+)
+
 // LoraApplyMode mirrors enum lora_apply_mode_t.
 type LoraApplyMode int32
 
@@ -201,6 +216,10 @@ func Load(path string) error {
 	}
 
 	if err := loadGenFuncs(lib); err != nil {
+		return err
+	}
+
+	if err := loadLibcFuncs(); err != nil {
 		return err
 	}
 
