@@ -113,16 +113,19 @@ deps-upgrade:
 # See BENCHMARKS.md for the methodology and recorded numbers.
 #
 # BENCHTIME controls iteration count for the bench targets (default 1x);
-# PROFILE_BENCHTIME mirrors it for the profile targets. Use 1x as the
-# default because (a) a single SD/SDXL/FLUX inference is on the order of
-# tens of seconds on Metal, and (b) Go's testing framework runs the bench
+# PROFILE_BENCHTIME mirrors it for the profile targets but defaults to
+# 10x so the captured profiles are dominated by steady-state work rather
+# than one-shot setup. benchSetup loads the .dylib once per process and
+# runGenerateBench drops one warm-up GenerateImage before the timed loop,
+# so additional iterations only re-run the steady-state path that we
+# actually want to profile. Note: Go's testing framework runs the bench
 # body twice when N>1 (once with N=1, then with N=Nrequested — see
-# testing/benchmark.go:340), which doubles the model-load cost. Override
-# BENCHTIME=Nx to get repeated samples (e.g. for benchstat variance), at
-# the cost of one extra model load + warmup pass.
+# testing/benchmark.go:340), but with PROFILE_BENCHTIME=Nx that initial
+# N=1 pass is amortized across the larger sample. Override BENCHTIME=Nx
+# on the bench targets to get repeated samples for benchstat variance.
 
-BENCHTIME              ?= 1x
-PROFILE_BENCHTIME      ?= 1x
+BENCHTIME               ?= 1x
+PROFILE_BENCHTIME       ?= 10x
 MALINA_BENCH_MODEL      ?= $(MODELS_DIR)/sd-1.5/v1-5-pruned-emaonly.safetensors
 MALINA_BENCH_SDXL_MODEL ?= $(MODELS_DIR)/sdxl-base-1.0/sd_xl_base_1.0.safetensors
 MALINA_BENCH_FLUX2_DIR  ?= $(MODELS_DIR)/flux2-klein-9b
