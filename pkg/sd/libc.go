@@ -80,11 +80,21 @@ func libcCandidates() []string {
 	case "freebsd":
 		return []string{"libc.so.7", "libc.so"}
 	case "windows":
-		// MingW-built stable-diffusion.cpp DLLs (the upstream leejet
-		// releases) link msvcrt. ucrtbase is the modern MSVC CRT used
-		// by MSVC-built binaries. Try msvcrt first because that's
-		// what current upstream uses; ucrtbase is the fallback.
-		return []string{"msvcrt.dll", "ucrtbase.dll"}
+		// Order matters: free MUST be resolved from the same CRT that
+		// allocated the pointer, or Windows corrupts its heap and the
+		// process dies silently (no Go panic, no test FAIL line).
+		//
+		// ucrtbase is first because every modern Windows toolchain
+		// links it: leejet's upstream releases are MSVC builds whose
+		// imports include VCRUNTIME140.dll and the
+		// api-ms-win-crt-*-l1-1-0.dll forwarder set, which all point
+		// at ucrtbase. Modern mingw-w64 (the -ucrt subtarget that's
+		// become default) also links ucrtbase. The legacy msvcrt is
+		// retained as a fallback only for ancient mingw builds; it
+		// loads successfully on every Windows install, so listing it
+		// first would silently win the lookup and produce the heap
+		// mismatch described above.
+		return []string{"ucrtbase.dll", "msvcrt.dll"}
 	default:
 		return []string{"libc.so"}
 	}
