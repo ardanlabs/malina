@@ -73,8 +73,9 @@ type cContextParams struct {
 
 	QwenImageZeroCondT uint8 // 192
 	_                  [3]byte
-	MaxVram            float32 // 196..200
-	_                  [4]byte // 200..208 (align uintptr to 8)
+	VaeFormat          int32   // 196..200 (added in stable-diffusion.cpp master-666)
+	MaxVram            float32 // 200..204
+	_                  [4]byte // 204..208 (stream_layers + alignment pad to 8)
 
 	Backend       uintptr // 208..216
 	ParamsBackend uintptr // 216..224
@@ -149,6 +150,12 @@ type ContextParams struct {
 
 	QwenImageZeroCondT bool
 
+	// VaeFormat selects the VAE numerical format. Defaults to
+	// SDVaeFormatAuto (-1), which lets the C library pick the matching
+	// format based on the loaded model checkpoint. Added in
+	// stable-diffusion.cpp master-666.
+	VaeFormat SDVaeFormat
+
 	// MaxVram caps graph-cut segmented param offload in GiB. 0 disables;
 	// -1 means "auto: free VRAM minus 1 GiB".
 	MaxVram float32
@@ -221,6 +228,7 @@ func ContextParamsInit() ContextParams {
 		ChromaUseT5Mask:       raw.ChromaUseT5Mask != 0,
 		ChromaT5MaskPad:       raw.ChromaT5MaskPad,
 		QwenImageZeroCondT:    raw.QwenImageZeroCondT != 0,
+		VaeFormat:             SDVaeFormat(raw.VaeFormat),
 		MaxVram:               raw.MaxVram,
 	}
 }
@@ -257,6 +265,7 @@ func NewContext(params ContextParams) (Context, error) {
 		ChromaUseT5Mask:       boolToU8(params.ChromaUseT5Mask),
 		ChromaT5MaskPad:       params.ChromaT5MaskPad,
 		QwenImageZeroCondT:    boolToU8(params.QwenImageZeroCondT),
+		VaeFormat:             int32(params.VaeFormat),
 		MaxVram:               params.MaxVram,
 	}
 

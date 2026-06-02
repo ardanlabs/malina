@@ -59,6 +59,7 @@ func TestContextParamsInitDefaults(t *testing.T) {
 		{"ChromaUseT5Mask", p.ChromaUseT5Mask, false},
 		{"ChromaT5MaskPad", p.ChromaT5MaskPad, int32(1)},
 		{"QwenImageZeroCondT", p.QwenImageZeroCondT, false},
+		{"VaeFormat", p.VaeFormat, SDVaeFormatAuto},
 	}
 
 	for _, c := range cases {

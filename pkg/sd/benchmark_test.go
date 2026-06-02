@@ -37,11 +37,10 @@ func BenchmarkGenerateImageSD15(b *testing.B) {
 
 // BenchmarkGenerateImageSDXL mirrors the sd-1.5 benchmark against the
 // sdxl-base-1.0 bundle. SDXL's native resolution is 1024x1024 but the
-// benchmark defaults to 512x512 / 20 steps so a single iteration stays
-// bounded on Apple Silicon Metal (a 1024x1024x20 SDXL inference takes
-// ~30 s per iter on an M-series GPU). Override Width/Height by passing
-// MALINA_BENCH_SDXL_WIDTH / MALINA_BENCH_SDXL_HEIGHT if you want the
-// native resolution.
+// benchmark uses the same 512x512 / 20-step defaults as the sd-1.5
+// benchmark so a single iteration stays bounded on Apple Silicon Metal
+// (a 1024x1024x20 SDXL inference takes ~30 s per iter on an M-series
+// GPU).
 //
 // Requires: MALINA_LIB and one of (MALINA_BENCH_SDXL_MODEL or
 // MALINA_SDXL_TEST_MODEL).
@@ -86,6 +85,45 @@ func BenchmarkGenerateImageFlux2(b *testing.B) {
 	params.Steps = 4
 
 	runGenerateBench(b, cparams, params)
+}
+
+// BenchmarkGenerateImageImg2ImgSD15 measures end-to-end image-to-image
+// throughput against the sd-1.5 bundle. It mirrors the txt2img benchmark
+// but flips ContextParams.VAEDecodeOnly to false (so the VAE encoder is
+// loaded) and feeds a synthesized 512x512 neutral-grey buffer as
+// InitImage. Strength is left at the C library default (0.75) so the
+// full denoising schedule runs and the per-iteration cost includes the
+// VAE encode pass that's unique to img2img.
+//
+// Requires: MALINA_LIB and one of (MALINA_BENCH_MODEL or MALINA_TEST_MODEL).
+func BenchmarkGenerateImageImg2ImgSD15(b *testing.B) {
+	benchSetup(b)
+	modelPath := benchEnvModelFile(b, "MALINA_BENCH_MODEL", "MALINA_TEST_MODEL")
+
+	cparams := benchContextParams()
+	cparams.ModelPath = modelPath
+	cparams.VAEDecodeOnly = false
+
+	params := ImgGenParamsInit()
+	params.InitImage = benchSyntheticImage(int(params.Width), int(params.Height))
+
+	runGenerateBench(b, cparams, params)
+}
+
+// benchSyntheticImage returns a 3-channel RGB SDImage with every pixel
+// set to neutral grey. Used as the InitImage for the img2img benchmark
+// so the bench has no file I/O dependency.
+func benchSyntheticImage(width, height int) *SDImage {
+	img := SDImage{
+		Width:   uint32(width),
+		Height:  uint32(height),
+		Channel: 3,
+		Data:    make([]byte, width*height*3),
+	}
+	for i := range img.Data {
+		img.Data[i] = 128
+	}
+	return &img
 }
 
 // runGenerateBench is the shared body the per-bundle benchmarks delegate

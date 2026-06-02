@@ -264,12 +264,9 @@ func defaultCImgGenParams() cImgGenParams {
 // GenerateImage runs the diffusion pipeline configured by ctx and params and
 // returns a single decoded image. The returned SDImage owns its pixel data
 // (copied out of the C heap), so it remains valid after the context is
-// freed.
-//
-// Note: the underlying sd_image_t allocated by stable-diffusion.cpp is
-// currently not freed. A small per-call leak (typically ~3 MB for a 1024×1024
-// RGB image) accumulates until process exit. A future milestone will resolve
-// libc's free symbol via purego to drop this leak.
+// freed. The underlying sd_image_t (and its pixel buffer) allocated by
+// stable-diffusion.cpp is released via libc free before this function
+// returns, so repeated calls do not accumulate C-heap memory.
 func GenerateImage(ctx Context, params ImgGenParams) (*SDImage, error) {
 	if ctx == 0 {
 		return nil, errors.New("GenerateImage: nil context")
@@ -327,5 +324,17 @@ func GenerateImage(ctx Context, params ImgGenParams) (*SDImage, error) {
 		}
 		return nil, errors.New("generate_image returned NULL (no log message captured)")
 	}
-	return sdImageFromC(resultPtr), nil
+
+	// Copy the pixel buffer into a Go-owned slice, then release both
+	// C-heap allocations. Upstream allocates with libc calloc (for the
+	// sd_image_t array) and libc malloc (for each element's pixel
+	// buffer); libc free is the matched deallocator. Two-level free:
+	// pixel buffer first, then the struct itself. When batch support is
+	// surfaced through the Go layer the Data buffers for elements
+	// [1..N-1] must also be freed before the array.
+	out := sdImageFromC(resultPtr)
+	cFree(unsafe.Pointer(resultPtr.Data))
+	cFree(unsafe.Pointer(resultPtr))
+
+	return out, nil
 }
