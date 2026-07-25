@@ -33,7 +33,6 @@ $ go run ./examples/hello "a lovely cat"
 [![stable-diffusion.cpp Release](https://img.shields.io/github/v/release/leejet/stable-diffusion.cpp?label=stable-diffusion.cpp)](https://github.com/leejet/stable-diffusion.cpp/releases)
 
 [![Linux](https://github.com/ardanlabs/malina/actions/workflows/linux.yml/badge.svg)](https://github.com/ardanlabs/malina/actions/workflows/linux.yml)
-[![macOS](https://github.com/ardanlabs/malina/actions/workflows/macos.yml/badge.svg)](https://github.com/ardanlabs/malina/actions/workflows/macos.yml)
 [![Windows](https://github.com/ardanlabs/malina/actions/workflows/windows.yml/badge.svg)](https://github.com/ardanlabs/malina/actions/workflows/windows.yml)
 
 Sometimes there are breaking changes to stable-diffusion.cpp that require an update to malina. Here are the known compatible versions:
@@ -129,11 +128,11 @@ Each bundle drops every required file into `$HOME/models/<bundle>/` along with a
 
 Malina uses the prebuilt stable-diffusion.cpp release artifacts from [leejet/stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp/releases) directly — there is no companion builder repo. The pinned version is captured in [`pkg/download/install.go`](pkg/download/install.go) as `DefaultSDVersion`.
 
-| OS      | CPU          | GPU                | Source                                                        |
-| ------- | ------------ | ------------------ | ------------------------------------------------------------- |
-| Linux   | amd64        | CPU (avx2)         | `sd-master-…-linux-avx2-x64.tar.gz` (upstream)                |
-| macOS   | arm64        | Metal              | `sd-master-…-bin-MacOS-arm64.tar.gz` (upstream)               |
-| Windows | amd64        | CPU, CUDA 12       | `sd-master-…-bin-win-avx2-x64.zip` / `-cuda12-…` (upstream)   |
+| OS      | CPU   | GPU          | Source                                                      |
+| ------- | ----- | ------------ | ----------------------------------------------------------- |
+| Linux   | amd64 | CPU (avx2)   | `sd-master-…-linux-avx2-x64.tar.gz` (upstream)              |
+| macOS   | arm64 | Metal        | `sd-master-…-bin-MacOS-arm64.tar.gz` (upstream)             |
+| Windows | amd64 | CPU, CUDA 12 | `sd-master-…-bin-win-avx2-x64.zip` / `-cuda12-…` (upstream) |
 
 Whenever there is a new release of stable-diffusion.cpp, the FFI struct mirrors in `pkg/sd` and the version constant in `pkg/download` may need a refresh. Bump `DefaultSDVersion`, regenerate any struct-size assertions in `pkg/sd/*_test.go`, and let CI verify.
 
