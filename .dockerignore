@@ -1,0 +1,36 @@
+.git
+.github
+.githooks
+.env
+.env.*
+*.pem
+*.key
+*.token
+
+# Local dependencies and generated output. The BUI source and lockfile remain
+# in the context; its site directory is regenerated in the Node build stage.
+**/node_modules
+cmd/server/api/services/malina/static/site
+dist
+build
+coverage
+
+# Host-specific native libraries, models, and local profiles.
+lib
+models
+profiles
+*.safetensors
+*.gguf
+*.ckpt
+*.pt
+*.pth
+*.onnx
+*.prof
+*.pprof
+
+# Local binaries and editor/OS files.
+malina
+*.out
+.DS_Store
+.idea
+.vscode

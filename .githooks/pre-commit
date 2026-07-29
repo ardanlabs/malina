@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Install with: git config core.hooksPath .githooks
+# This hook regenerates files but deliberately never stages them.
+
+set -euo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root"
+
+make bui-build
+
+if command -v gomod2nix >/dev/null 2>&1 && [[ -d zarf/nix ]]; then
+    gomod2nix generate --dir . --outdir zarf/nix
+fi
+
+if ! whitespace="$(git diff --check)"; then
+    printf '%s\n' "$whitespace" >&2
+    exit 1
+fi

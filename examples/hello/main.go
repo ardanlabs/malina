@@ -15,12 +15,14 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
 	"time"
 
-	"github.com/ardanlabs/malina/pkg/sd"
+	"github.com/ardanlabs/malina/sdk/malina"
+	"github.com/ardanlabs/malina/sdk/malina/model"
 )
 
 func main() {
@@ -39,37 +41,35 @@ func main() {
 		log.Fatal("MALINA_TEST_MODEL must point to a stable-diffusion model file (.gguf or .safetensors)")
 	}
 
-	if err := sd.Load(libPath); err != nil {
-		log.Fatalf("sd.Load: %v", err)
+	if err := malina.Init(malina.WithLibPath(libPath)); err != nil {
+		log.Fatalf("malina.Init: %v", err)
 	}
-	if err := sd.Init(libPath); err != nil {
-		log.Fatalf("sd.Init: %v", err)
-	}
-
-	cparams := sd.ContextParamsInit()
-	cparams.ModelPath = modelPath
 
 	fmt.Println("loading model from", modelPath, "...")
-	ctx, err := sd.NewContext(cparams)
+	engine, err := malina.New(model.WithModelPath(modelPath))
 	if err != nil {
-		log.Fatalf("sd.NewContext: %v", err)
+		log.Fatalf("malina.New: %v", err)
 	}
-	defer sd.FreeContext(ctx)
+	defer func() {
+		if err := engine.Unload(context.Background()); err != nil {
+			log.Printf("malina.Unload: %v", err)
+		}
+	}()
 
-	params := sd.ImgGenParamsInit()
+	params := model.NewGenerateParams()
 	params.Prompt = prompt
 
 	fmt.Println("generating image for prompt:", prompt)
 	start := time.Now()
-	img, err := sd.GenerateImage(ctx, params)
+	img, err := engine.Generate(context.Background(), params)
 	if err != nil {
-		log.Fatalf("sd.GenerateImage: %v", err)
+		log.Fatalf("malina.Generate: %v", err)
 	}
 	elapsed := time.Since(start)
 
 	const outPath = "hello.png"
-	if err := img.SavePNG(outPath); err != nil {
-		log.Fatalf("SavePNG: %v", err)
+	if err := os.WriteFile(outPath, img.PNG, 0o644); err != nil {
+		log.Fatalf("write PNG: %v", err)
 	}
-	fmt.Printf("wrote %s (%dx%d, %d channels) in %s\n", outPath, img.Width, img.Height, img.Channel, elapsed.Round(time.Millisecond))
+	fmt.Printf("wrote %s (%dx%d) in %s\n", outPath, img.Width, img.Height, elapsed.Round(time.Millisecond))
 }

@@ -3,6 +3,25 @@ MAKEFILE_PATH := $(realpath $(lastword $(MAKEFILE_LIST)))
 MAKEFILE_DIR  := $(dir $(MAKEFILE_PATH))
 MALINA_LIB    ?= $(MAKEFILE_DIR)lib
 MODELS_DIR    ?= $(HOME)/models
+BUI_DIR       := $(MAKEFILE_DIR)cmd/server/api/frontends/bui
+BUI_SITE      := cmd/server/api/services/malina/static/site
+
+# Deterministic frontend build. The generated site is committed. bui-check is
+# intended for CI/checkouts where that baseline is tracked; contributors with
+# an untracked in-progress cmd tree can validate with `make bui-build`.
+bui-install:
+	cd $(BUI_DIR) && npm ci
+
+bui-build: bui-install
+	cd $(BUI_DIR) && npm run build
+
+bui-check: bui-build
+	@git diff --exit-code -- $(BUI_SITE)
+	@test -z "$$(git ls-files --others --exclude-standard -- $(BUI_SITE))" || { \
+		echo "untracked generated BUI files:"; \
+		git ls-files --others --exclude-standard -- $(BUI_SITE); \
+		exit 1; \
+	}
 
 # -----------------------------------------------------------------------------
 # Bundle downloads. Each target invokes `malina model pull` which downloads
@@ -10,9 +29,9 @@ MODELS_DIR    ?= $(HOME)/models
 # manifest.json. The flux bundle is license-gated; set HF_TOKEN first.
 
 download-models:
-	go run . model pull -y -o $(MODELS_DIR) sd-1.5
-	go run . model pull -y -o $(MODELS_DIR) sdxl-base-1.0
-	go run . model pull -y -o $(MODELS_DIR) flux2-klein-9b	
+	go run ./cmd/malina model pull -y -o $(MODELS_DIR) sd-1.5
+	go run ./cmd/malina model pull -y -o $(MODELS_DIR) sdxl-base-1.0
+	go run ./cmd/malina model pull -y -o $(MODELS_DIR) flux2-klein-9b
 
 
 clean-stable-diffusion.cpp:
@@ -30,15 +49,15 @@ clean-stable-diffusion.cpp:
 # This target always passes -u (upgrade) so an existing install in
 # $(MALINA_LIB) is replaced rather than silently skipped.
 #
-#   make download-stable-diffusion.cpp                          # malina-pinned version (see pkg/download.DefaultSDVersion)
+#   make download-stable-diffusion.cpp                          # malina-pinned version (see sdk/tools/libs.DefaultSDVersion)
 #   make download-stable-diffusion.cpp VERSION=latest           # whatever leejet/stable-diffusion.cpp /releases/latest returns
 #   make download-stable-diffusion.cpp VERSION=master-656-0e4ee04
 #   make download-stable-diffusion.cpp VERSION=v0.9.0
 download-stable-diffusion.cpp:
-	go run . install -lib $(MALINA_LIB) -u $(if $(VERSION),-v $(VERSION))
+	go run ./cmd/malina libs pull -lib $(MALINA_LIB) -u $(if $(VERSION),-v $(VERSION))
 
 install:
-	go install .
+	go install ./cmd/malina
 
 lint:
 	go vet ./...
@@ -51,14 +70,14 @@ diff:
 	go fix -diff ./...
 
 # make test runs all package tests. MALINA_LIB must point at a directory
-# with libstable-diffusion (see download-stable-diffusion.cpp). The pkg/sd
+# with libstable-diffusion (see download-stable-diffusion.cpp). The sdk/malina/sd
 # end-to-end smoke test additionally requires MALINA_TEST_MODEL to point
 # at a stable-diffusion checkpoint; when unset it is skipped, not failed.
 #
 # Default the per-bundle test env vars to the layout `malina model pull`
 # writes under $(MODELS_DIR). When a contributor has downloaded all three
 # bundles via `make download-models` (or `make pull-test-assets` for just
-# sd-1.5), `make test` exercises every per-bundle smoke test in pkg/sd.
+# sd-1.5), `make test` exercises every per-bundle smoke test in sdk/malina/sd.
 # Each test independently skips (not fails) when its env var is unset or
 # the file/directory is missing, so contributors who only have a subset
 # of the bundles never see false failures.
@@ -76,7 +95,7 @@ test-only:
 # test-race re-runs the suite under the race detector. The FFI helpers are
 # expected to be called from arbitrary goroutines in production callers
 # (kronk, server middlewares), so this catches unsynchronized access to
-# the ffi.Fun trampolines and the sync.Once gate in pkg/sd.
+# the ffi.Fun trampolines and the sync.Once gate in sdk/malina/sd.
 test-race:
 	export MALINA_LIB=$(abspath $(MALINA_LIB)) && \
 	export MALINA_TEST_MODEL=$(abspath $(MALINA_TEST_MODEL)) && \
@@ -88,13 +107,13 @@ test: test-only lint vuln-check diff
 
 # pull-test-assets downloads everything `make test` needs to exercise the
 # end-to-end paths: the stable-diffusion shared libraries and the SD 1.5
-# bundle the pkg/sd smoke test loads. Both halves are idempotent — the
+# bundle the sdk/malina/sd smoke test loads. Both halves are idempotent — the
 # install command skips when libstable-diffusion is already present in
-# $(MALINA_LIB), and pkg/download.GetBundle skips fully-present files and
+# $(MALINA_LIB), and sdk/tools/models.GetBundle skips fully-present files and
 # HTTP-Range-resumes partial ones.
 pull-test-assets:
-	go run . install -lib $(MALINA_LIB)
-	go run . model pull -y -o $(MODELS_DIR) sd-1.5
+	go run ./cmd/malina libs pull -lib $(MALINA_LIB)
+	go run ./cmd/malina model pull -y -o $(MODELS_DIR) sd-1.5
 
 tidy:
 	go mod tidy
@@ -106,7 +125,7 @@ deps-upgrade:
 # ==============================================================================
 # Benchmarks and profiles
 #
-# Each bundle has its own benchmark in pkg/sd/benchmark_test.go that runs a
+# Each bundle has its own benchmark in sdk/malina/sd/benchmark_test.go that runs a
 # single text-to-image generation per iteration against a real checkpoint.
 # Model loading happens once outside the timed loop and a warm-up iteration
 # is dropped so Metal/CUDA JIT does not pollute the steady-state measurement.
@@ -136,19 +155,19 @@ MALINA_BENCH_FLUX2_DIR  ?= $(MODELS_DIR)/flux2-klein-9b
 bench-sd-1.5:
 	export MALINA_LIB=$(abspath $(MALINA_LIB)) && \
 	export MALINA_BENCH_MODEL=$(abspath $(MALINA_BENCH_MODEL)) && \
-	go test -bench=BenchmarkGenerateImageSD15 -benchtime=$(BENCHTIME) -benchmem -run='^$$' ./pkg/sd/
+	go test -bench=BenchmarkGenerateImageSD15 -benchtime=$(BENCHTIME) -benchmem -run='^$$' ./sdk/malina/sd/
 
 # make bench-sdxl runs BenchmarkGenerateImageSDXL against MALINA_BENCH_SDXL_MODEL.
 bench-sdxl:
 	export MALINA_LIB=$(abspath $(MALINA_LIB)) && \
 	export MALINA_BENCH_SDXL_MODEL=$(abspath $(MALINA_BENCH_SDXL_MODEL)) && \
-	go test -bench=BenchmarkGenerateImageSDXL -benchtime=$(BENCHTIME) -benchmem -run='^$$' ./pkg/sd/
+	go test -bench=BenchmarkGenerateImageSDXL -benchtime=$(BENCHTIME) -benchmem -run='^$$' ./sdk/malina/sd/
 
 # make bench-flux2 runs BenchmarkGenerateImageFlux2 against MALINA_BENCH_FLUX2_DIR.
 bench-flux2:
 	export MALINA_LIB=$(abspath $(MALINA_LIB)) && \
 	export MALINA_BENCH_FLUX2_DIR=$(abspath $(MALINA_BENCH_FLUX2_DIR)) && \
-	go test -bench=BenchmarkGenerateImageFlux2 -benchtime=$(BENCHTIME) -benchmem -run='^$$' ./pkg/sd/
+	go test -bench=BenchmarkGenerateImageFlux2 -benchtime=$(BENCHTIME) -benchmem -run='^$$' ./sdk/malina/sd/
 
 # make bench-img2img-sd-1.5 runs BenchmarkGenerateImageImg2ImgSD15 against
 # MALINA_BENCH_MODEL. The benchmark uses an in-process synthesized 512x512
@@ -157,7 +176,7 @@ bench-flux2:
 bench-img2img-sd-1.5:
 	export MALINA_LIB=$(abspath $(MALINA_LIB)) && \
 	export MALINA_BENCH_MODEL=$(abspath $(MALINA_BENCH_MODEL)) && \
-	go test -bench=BenchmarkGenerateImageImg2ImgSD15 -benchtime=$(BENCHTIME) -benchmem -run='^$$' ./pkg/sd/
+	go test -bench=BenchmarkGenerateImageImg2ImgSD15 -benchtime=$(BENCHTIME) -benchmem -run='^$$' ./sdk/malina/sd/
 
 # make bench runs every per-bundle benchmark. Each one skips (not fails)
 # when its model env points at a missing file, so a partial local layout
@@ -182,7 +201,7 @@ profile-sd-1.5:
 	    -memprofile=profiles/sd-1.5.mem.prof \
 	    -benchmem \
 	    -o profiles/sd-1.5.test \
-	    ./pkg/sd/
+	    ./sdk/malina/sd/
 	@echo
 	@echo "Profiles written to ./profiles/. Inspect with:"
 	@echo "  go tool pprof -text profiles/sd-1.5.cpu.prof"
@@ -198,7 +217,7 @@ profile-sdxl:
 	    -memprofile=profiles/sdxl.mem.prof \
 	    -benchmem \
 	    -o profiles/sdxl.test \
-	    ./pkg/sd/
+	    ./sdk/malina/sd/
 	@echo
 	@echo "Profiles written to ./profiles/. Inspect with:"
 	@echo "  go tool pprof -text profiles/sdxl.cpu.prof"
@@ -218,7 +237,7 @@ profile-img2img-sd-1.5:
 	    -memprofile=profiles/img2img-sd-1.5.mem.prof \
 	    -benchmem \
 	    -o profiles/img2img-sd-1.5.test \
-	    ./pkg/sd/
+	    ./sdk/malina/sd/
 	@echo
 	@echo "Profiles written to ./profiles/. Inspect with:"
 	@echo "  go tool pprof -text profiles/img2img-sd-1.5.cpu.prof"
@@ -234,7 +253,7 @@ profile-flux2:
 	    -memprofile=profiles/flux2.mem.prof \
 	    -benchmem \
 	    -o profiles/flux2.test \
-	    ./pkg/sd/
+	    ./sdk/malina/sd/
 	@echo
 	@echo "Profiles written to ./profiles/. Inspect with:"
 	@echo "  go tool pprof -text profiles/flux2.cpu.prof"
@@ -309,17 +328,13 @@ example-hello:
 	export MALINA_TEST_MODEL=$(MODELS_DIR)/sd-1.5/v1-5-pruned-emaonly.safetensors && \
 	go run ./examples/hello "a lovely cat"
 
-# example-img2img requires the sd-1.5 bundle and a source PNG. By default
-# it consumes hello.png produced by `make example-hello`, so the natural
-# flow is:
-#
-#   make example-hello                       # writes hello.png
-#   make example-img2img                     # rewrites hello.png in oil-painting style
+# example-img2img requires the sd-1.5 bundle and a source PNG or JPEG. By
+# default it uses the first image under examples/samples/frames.
 #
 # Override IMG2IMG_IN / IMG2IMG_PROMPT / IMG2IMG_STRENGTH to point at your
 # own source image and steer the result. Strength runs 0..1; lower values
 # preserve more of the source.
-IMG2IMG_IN       ?= samples/frames/image1.jpg
+IMG2IMG_IN       ?= examples/samples/frames/image1.jpg
 IMG2IMG_OUT      ?= img2img.png
 IMG2IMG_PROMPT   ?= produce an oil painting of the fields you see in the provided image.
 IMG2IMG_STRENGTH ?= 0.6
@@ -342,7 +357,7 @@ example-flux2:
 # example-sd-encode demonstrates encoding a directory of PNG frames into a
 # Motion-JPEG AVI. No model is loaded; this is a pure-Go encoder. Override
 # FRAMES_DIR / FPS / OUT to point at your own frames.
-FRAMES_DIR ?= samples/frames
+FRAMES_DIR ?= examples/samples/frames
 FPS        ?= 24
 SECS       ?= 1
 OUT        ?= output.avi

@@ -1,0 +1,99 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    env:
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+
+      - name: Check Go version pin
+        run: ./.github/scripts/check-go-version.sh
+
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: .go-version
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+
+      - name: Check tag matches sdk/malina.Version
+        run: ./.github/scripts/check-version.sh
+
+      - name: Install syft (SBOM generator)
+        uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0
+
+      # Build the exact candidates locally first. Publication is deliberately
+      # skipped until these bytes have passed smoke tests and been attested.
+      - name: Build release candidates
+        uses: goreleaser/goreleaser-action@5daf1e915a5f0af01ddbcd89a43b8061ff4f1a89 # v7
+        with:
+          version: "~> v2"
+          args: release --clean --skip=publish
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Smoke-test archives without native libraries
+        shell: bash
+        run: |
+          set -euo pipefail
+          found=0
+          smoked=0
+          while IFS= read -r -d '' archive; do
+            found=1
+            dir="$(mktemp -d)"
+            case "$archive" in
+              *.tar.gz) tar -xzf "$archive" -C "$dir" ;;
+              *.zip) unzip -q "$archive" -d "$dir" ;;
+            esac
+            binary="$(find "$dir" -type f \( -name malina -o -name malina.exe \) -print -quit)"
+            test -n "$binary"
+            # The runner cannot execute Darwin, Windows, or Linux/arm64.
+            if file "$binary" | grep -q 'ELF 64-bit.*x86-64'; then
+              chmod +x "$binary"
+              "$binary" --version
+              smoked=1
+            fi
+            rm -rf "$dir"
+          done < <(find dist -type f \( -name '*.tar.gz' -o -name '*.zip' \) -print0)
+          test "$found" -eq 1
+          test "$smoked" -eq 1
+
+      - name: Attest release artifacts (SLSA)
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
+        with:
+          subject-path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/checksums.txt
+            dist/*.sbom.json
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            dist/*.tar.gz \
+            dist/*.zip \
+            dist/checksums.txt \
+            dist/*.sbom.json \
+            --verify-tag \
+            --generate-notes \
+            --title "$GITHUB_REF_NAME"

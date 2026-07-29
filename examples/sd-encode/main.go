@@ -1,7 +1,7 @@
 // sd-encode is the smallest possible "images to video" example: read a
 // collection of PNG and/or JPEG frames from a directory and mux them into
 // a single Motion-JPEG AVI. No model is loaded; this is a pure-Go encoder
-// built on top of pkg/sd's SaveAVI helper.
+// built on top of sdk/malina/model's SaveAVI helper.
 //
 // Run it from the repo root with:
 //
@@ -9,7 +9,7 @@
 //
 // The makefile target invokes
 // `go run ./examples/sd-encode -i $(FRAMES_DIR) -fps $(FPS) -secs $(SECS) -o $(OUT)`
-// with defaults FRAMES_DIR=samples/frames, FPS=24, SECS=1, OUT=output.avi.
+// with defaults FRAMES_DIR=examples/samples/frames, FPS=24, SECS=1, OUT=output.avi.
 // Override any of them on the command line, e.g.:
 //
 //	make example-sd-encode FRAMES_DIR=my/frames FPS=30 SECS=2 OUT=clip.avi
@@ -61,7 +61,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/ardanlabs/malina/pkg/sd"
+	"github.com/ardanlabs/malina/sdk/malina/model"
 	"golang.org/x/image/draw"
 )
 
@@ -160,7 +160,7 @@ func main() {
 	holdFrames := max(round(*holdSecs*float64(*fps)), 1)
 	transFrames := max(round(*xfadeSecs*float64(*fps)), 0)
 
-	var frames []*sd.SDImage
+	var frames []image.Image
 	if *transMode == transKenBurns {
 		frames = buildKenBurns(srcs, targetW, targetH, holdFrames)
 	} else {
@@ -184,7 +184,7 @@ func main() {
 		frames = buildTransitions(fitted, holdFrames, transFrames, *transMode)
 	}
 
-	if err := sd.SaveAVI(*outPath, frames, *fps, *quality); err != nil {
+	if err := model.SaveAVI(*outPath, frames, *fps, *quality); err != nil {
 		log.Fatalf("save AVI: %v", err)
 	}
 
@@ -298,18 +298,17 @@ func coverSize(srcW, srcH, dstW, dstH int) (int, int) {
 // buildTransitions returns the output frame sequence for the given
 // already-fitted frames, inserting transFrames intermediate frames between
 // each pair according to mode (other than cut which inserts none).
-func buildTransitions(fitted []*image.RGBA, holdFrames, transFrames int, mode string) []*sd.SDImage {
+func buildTransitions(fitted []*image.RGBA, holdFrames, transFrames int, mode string) []image.Image {
 	if mode == transCut {
 		transFrames = 0
 	}
 
-	out := make([]*sd.SDImage, 0,
+	out := make([]image.Image, 0,
 		len(fitted)*holdFrames+(len(fitted)-1)*transFrames)
 
 	for i, a := range fitted {
-		aSD := rgbaToSDImage(a)
 		for range holdFrames {
-			out = append(out, aSD)
+			out = append(out, a)
 		}
 		if i < len(fitted)-1 && transFrames > 0 {
 			b := fitted[i+1]
@@ -325,7 +324,7 @@ func buildTransitions(fitted []*image.RGBA, holdFrames, transFrames int, mode st
 // transitionFrame returns a new RGBA frame interpolated between a and b
 // at progress t (0 < t < 1) using the chosen transition mode. a and b
 // must have identical dimensions.
-func transitionFrame(a, b *image.RGBA, t float64, mode string) *sd.SDImage {
+func transitionFrame(a, b *image.RGBA, t float64, mode string) image.Image {
 	w, h := a.Bounds().Dx(), a.Bounds().Dy()
 	dst := image.NewRGBA(image.Rect(0, 0, w, h))
 
@@ -356,7 +355,7 @@ func transitionFrame(a, b *image.RGBA, t float64, mode string) *sd.SDImage {
 		}
 	}
 
-	return rgbaToSDImage(dst)
+	return dst
 }
 
 // blend writes (1-t)*a + t*b into dst for every RGBA byte (alpha included
@@ -391,8 +390,8 @@ func fadeFromColor(dst, src []byte, c color.RGBA, t float64) {
 // progressively-shrinking sub-rectangle (matching target aspect) of the
 // source and scaling it to (targetW, targetH). Cuts between images are
 // abrupt (no inter-image transition).
-func buildKenBurns(srcs []image.Image, targetW, targetH, holdFrames int) []*sd.SDImage {
-	out := make([]*sd.SDImage, 0, len(srcs)*holdFrames)
+func buildKenBurns(srcs []image.Image, targetW, targetH, holdFrames int) []image.Image {
+	out := make([]image.Image, 0, len(srcs)*holdFrames)
 
 	const startZoom = 1.00
 	const endZoom = 0.70
@@ -449,7 +448,7 @@ func buildKenBurns(srcs []image.Image, targetW, targetH, holdFrames int) []*sd.S
 
 			dst := image.NewRGBA(image.Rect(0, 0, targetW, targetH))
 			draw.BiLinear.Scale(dst, dst.Bounds(), src, sub, draw.Src, nil)
-			out = append(out, rgbaToSDImage(dst))
+			out = append(out, dst)
 		}
 	}
 	return out
@@ -457,26 +456,6 @@ func buildKenBurns(srcs []image.Image, targetW, targetH, holdFrames int) []*sd.S
 
 // =============================================================================
 // Helpers
-
-// rgbaToSDImage builds an SDImage (3-channel RGB) from an RGBA image.
-// Alpha is discarded.
-func rgbaToSDImage(rgba *image.RGBA) *sd.SDImage {
-	w, h := rgba.Bounds().Dx(), rgba.Bounds().Dy()
-	out := &sd.SDImage{
-		Width:   uint32(w),
-		Height:  uint32(h),
-		Channel: 3,
-		Data:    make([]byte, w*h*3),
-	}
-	src := rgba.Pix
-	dst := out.Data
-	for i, j := 0, 0; i < len(src); i, j = i+4, j+3 {
-		dst[j+0] = src[i+0]
-		dst[j+1] = src[i+1]
-		dst[j+2] = src[i+2]
-	}
-	return out
-}
 
 func round(f float64) int {
 	if f >= 0 {

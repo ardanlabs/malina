@@ -15,7 +15,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/ardanlabs/malina/pkg/sd"
+	"github.com/ardanlabs/malina/sdk/malina"
 )
 
 func main() {
@@ -24,19 +24,19 @@ func main() {
 		log.Fatal("MALINA_LIB must point to the directory containing libstable-diffusion")
 	}
 
-	if err := sd.Load(libPath); err != nil {
-		log.Fatalf("sd.Load: %v", err)
+	if err := malina.Init(malina.WithLibPath(libPath)); err != nil {
+		log.Fatalf("malina.Init: %v", err)
 	}
-
-	if err := sd.Init(libPath); err != nil {
-		log.Fatalf("sd.Init: %v", err)
+	info, err := malina.SystemInfo()
+	if err != nil {
+		log.Fatalf("malina.SystemInfo: %v", err)
 	}
 
 	fmt.Println("-- stable-diffusion.cpp --")
-	fmt.Println("version:                ", sd.Version())
-	fmt.Println("physical-cores:         ", sd.NumPhysicalCores())
-	fmt.Println("ggml-backend-devices:   ", sd.GGMLBackendDeviceCount())
+	fmt.Println("version:                ", info.NativeVersion)
+	fmt.Println("physical-cores:         ", info.PhysicalCores)
+	fmt.Println("ggml-backend-devices:   ", info.BackendDeviceCount)
 	fmt.Println()
 	fmt.Println("-- System info --")
-	fmt.Println(sd.SystemInfo())
+	fmt.Println(info.Description)
 }

@@ -1,0 +1,70 @@
+name: Bug report
+description: Report a reproducible Malina SDK, CLI, server, or native integration problem.
+title: "bug: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: Please omit prompts, models, paths, or logs that contain sensitive information.
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Include expected behavior and the smallest reproduction you can provide.
+    validations:
+      required: true
+  - type: input
+    id: malina-version
+    attributes:
+      label: Malina version or commit
+      placeholder: v0.0.0 or commit SHA
+    validations:
+      required: true
+  - type: input
+    id: native-version
+    attributes:
+      label: stable-diffusion.cpp version
+      description: Include the bundle release/revision and how it was obtained.
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Linux x86_64
+        - Linux arm64
+        - macOS arm64
+        - macOS x86_64
+        - Windows x86_64
+        - Windows arm64
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: backend
+    attributes:
+      label: Native backend and hardware
+      placeholder: CPU, CUDA + GPU, Metal + GPU, Vulkan + GPU
+    validations:
+      required: true
+  - type: input
+    id: model
+    attributes:
+      label: Model family and format
+      description: For example, SD 1.5 GGUF. A private model file is not required.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      render: shell
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I searched existing issues for this problem.
+          required: true
+        - label: This is not a security report; security issues use private vulnerability reporting.
+          required: true

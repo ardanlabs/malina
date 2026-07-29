@@ -1,0 +1,49 @@
+version: 2
+
+project_name: malina
+
+before:
+  hooks:
+    # Installs the BUI with its npm lockfile and embeds a deterministic build.
+    - make bui-build
+
+builds:
+  - id: malina
+    main: ./cmd/malina
+    binary: malina
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+
+# Initial archives are intentionally thin: the CLI, license, and README only.
+# Users install native stable-diffusion.cpp libraries with `malina libs pull`;
+# a Go target here does not claim that native inference supports that target.
+archives:
+  - formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: checksums.txt
+
+# syft emits one SBOM beside each archive. The workflow attests these along
+# with the archives and checksum manifest.
+sboms:
+  - id: archive
+    artifacts: archive
+    documents:
+      - "${artifact}.sbom.json"

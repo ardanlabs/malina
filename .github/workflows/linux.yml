@@ -3,117 +3,101 @@ name: Linux
 on:
   pull_request:
   push:
-    branches:
-      - main
+    branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
-# Linux libraries (libstable-diffusion.so + libggml*.so) are pulled from
-# leejet/stable-diffusion.cpp by `malina install`. LD_LIBRARY_PATH is set
-# so libstable-diffusion.so can resolve its libggml*.so dependencies
-# regardless of the RUNPATH the upstream binary was built with.
-#
-# leejet currently publishes no linux/cuda asset, so this job tests the
-# CPU build. The smoke test in pkg/sd runs the FFI happy path against
-# SD 1.5 with width=64, height=64, steps=1 to keep CI runtime bounded.
+env:
+  GOTOOLCHAIN: local
 
+# Static and unit feedback does not download native libraries or models. The
+# integration job owns the single cached multi-GB model download and retains
+# the native SDK and example smoke coverage.
 jobs:
-  test:
+  static:
+    name: Static checks
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
-
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Check Go version pin
+        run: ./.github/scripts/check-go-version.sh
       - name: Install Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
-          go-version-file: go.mod
-
+          go-version-file: .go-version
+      - name: Install analysis tools
+        run: |
+          go install honnef.co/go/tools/cmd/staticcheck@2026.1
+          go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
       - name: gofmt
         run: |
-          out=$(gofmt -s -d .)
-          if [ -n "$out" ]; then
-            echo "::error::gofmt -s reported diffs:"
-            echo "$out"
-            exit 1
-          fi
-
+          files="$(git ls-files '*.go')"
+          out="$(gofmt -s -d $files)"
+          test -z "$out" || { printf '%s\n' "$out"; exit 1; }
+      - name: go mod tidy drift
+        run: go mod tidy && git diff --exit-code -- go.mod go.sum
       - name: go vet
         run: go vet ./...
-
-      - name: Install static analysis tools
-        run: go install honnef.co/go/tools/cmd/staticcheck@latest
-
       - name: staticcheck
         run: staticcheck -checks=all ./...
-
-      - name: Install malina command
-        run: go install .
-
-      - name: Install stable-diffusion.cpp libraries
-        # No -v: `malina install` falls back to download.DefaultSDVersion
-        # baked into pkg/download. CI never silently tracks leejet's latest
-        # tag — bumping that constant in code is the rollover.
-        run: malina install -lib $GITHUB_WORKSPACE/lib
-
-      - name: Set MALINA_LIB and LD_LIBRARY_PATH
-        # LD_LIBRARY_PATH is required so the dynamic loader can find
-        # libggml-base.so / libggml-cpu.so / libggml.so when
-        # libstable-diffusion.so is dlopen'd. macOS/Windows don't need this
-        # — macOS resolves siblings via the dylib's RUNPATH, and Windows
-        # finds DLLs in the same directory automatically (PATH-augmented).
+      - name: Guard example imports
         run: |
-          echo "MALINA_LIB=$GITHUB_WORKSPACE/lib" >> "$GITHUB_ENV"
-          echo "LD_LIBRARY_PATH=$GITHUB_WORKSPACE/lib" >> "$GITHUB_ENV"
-
+          ! grep -R --include='*.go' -F '"github.com/ardanlabs/malina/sdk/malina/sd"' examples
+      - name: govulncheck
+        run: govulncheck ./...
+      - name: go fix drift
+        run: |
+          out="$(go fix -diff ./...)"
+          test -z "$out" || { printf '%s\n' "$out"; exit 1; }
+      - name: Build and check BUI
+        run: make bui-check
       - name: Build all
         run: go build ./...
 
+  unit:
+    name: Unit tests and race detector
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Check Go version pin
+        run: ./.github/scripts/check-go-version.sh
+      - name: Install Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: .go-version
+      - name: Unit tests
+        run: go test -count=1 ./...
+      - name: Race detector
+        run: go test -count=1 -race ./...
+
+  integration:
+    name: FFI integration and smoke tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Check Go version pin
+        run: ./.github/scripts/check-go-version.sh
+      - name: Setup Malina native environment
+        uses: ./.github/actions/setup-malina
+      - name: Smoke test server process
+        run: ./.github/scripts/server-smoke.sh
+      - name: Native and model integration tests
+        run: go test -count=1 ./sdk/malina/...
       - name: Build examples
         run: |
-          set -e
           for dir in ./examples/*/; do
-            if [ -f "$dir/main.go" ]; then
-              echo "Building $dir..."
-              go build -o /dev/null "$dir"
-            fi
+            [[ ! -f "$dir/main.go" ]] || go build -o /dev/null "$dir"
           done
-
-      - name: Cache test models
-        id: cache-models
-        uses: actions/cache@v5
-        with:
-          path: models
-          key: ${{ runner.os }}-malina-models-sd-1.5-v1
-
-      - name: Download test models
-        if: steps.cache-models.outputs.cache-hit != 'true'
-        run: |
-          set -e
-          mkdir -p ./models
-          malina model pull -y -o $GITHUB_WORKSPACE/models sd-1.5
-
-      - name: Run unit tests
-        run: |
-          export MALINA_TEST_MODEL=$GITHUB_WORKSPACE/models/sd-1.5/v1-5-pruned-emaonly.safetensors
-          go test -count=1 ./...
-
-      - name: Run unit tests (-race)
-        # Enforces the concurrency contract documented on Context (and the
-        # FFI trampolines in general). Linux-only because the race detector
-        # roughly triples runtime and one OS is enough to catch real races
-        # in pure-Go and cgo-free FFI code paths.
-        run: |
-          export MALINA_TEST_MODEL=$GITHUB_WORKSPACE/models/sd-1.5/v1-5-pruned-emaonly.safetensors
-          go test -count=1 -race ./...
-
       - name: Run hello example
-        run: |
-          export MALINA_TEST_MODEL=$GITHUB_WORKSPACE/models/sd-1.5/v1-5-pruned-emaonly.safetensors
-          go run ./examples/hello "a lovely cat"
-
+        run: go run ./examples/hello "a lovely cat"
       - name: Run sd-encode example
-        run: go run ./examples/sd-encode -i samples/frames -fps 24 -secs 1 -o /tmp/out.avi
+        run: go run ./examples/sd-encode -i examples/samples/frames -fps 24 -secs 1 -o /tmp/out.avi

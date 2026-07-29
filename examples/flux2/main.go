@@ -21,14 +21,16 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
 	"path/filepath"
 	"time"
 
-	"github.com/ardanlabs/malina/pkg/download"
-	"github.com/ardanlabs/malina/pkg/sd"
+	"github.com/ardanlabs/malina/sdk/malina"
+	"github.com/ardanlabs/malina/sdk/malina/model"
+	"github.com/ardanlabs/malina/sdk/tools/models"
 )
 
 func main() {
@@ -36,68 +38,46 @@ func main() {
 	if len(os.Args) >= 2 {
 		prompt = os.Args[1]
 	}
-
 	libPath := os.Getenv("MALINA_LIB")
 	if libPath == "" {
 		log.Fatal("MALINA_LIB must point to the directory containing libstable-diffusion")
 	}
-
 	bundleDir := os.Getenv("MALINA_FLUX2_DIR")
 	if bundleDir == "" {
-		bundleDir = filepath.Join(download.DefaultModelsDir(), "flux2-klein-9b")
+		bundleDir = filepath.Join(models.DefaultModelsDir(), "flux2-klein-9b")
 	}
-
-	manifest, err := download.LoadManifest(bundleDir)
+	manifest, err := models.LoadManifest(bundleDir)
 	if err != nil {
-		log.Fatalf("load bundle manifest from %s: %v (did you run `malina model pull flux2-klein-9b`?)", bundleDir, err)
+		log.Fatalf("load bundle manifest from %s: %v", bundleDir, err)
 	}
-
-	// Load the dynamic libraries.
-	if err := sd.Load(libPath); err != nil {
-		log.Fatalf("sd.Load: %v", err)
+	diffusion := manifest.Files[string(models.RoleDiffusion)]
+	vae := manifest.Files[string(models.RoleVAE)]
+	llm := manifest.Files[string(models.RoleLLM)]
+	fmt.Printf("diffusion: %s\nvae:       %s\nllm:       %s\n", diffusion, vae, llm)
+	if err := malina.Init(malina.WithLibPath(libPath)); err != nil {
+		log.Fatalf("malina.Init: %v", err)
 	}
-	if err := sd.Init(libPath); err != nil {
-		log.Fatalf("sd.Init: %v", err)
-	}
-
-	// Create and configure the inference context.
-	ctxParams := sd.ContextParamsInit()
-
-	// Declare models (FLUX.2 ships as three files: a quantized diffusion
-	// transformer, an autoencoder, and a Qwen3 LLM text encoder).
-	ctxParams.DiffusionModelPath = manifest.Files[string(download.RoleDiffusion)]
-	ctxParams.VAEPath = manifest.Files[string(download.RoleVAE)]
-	ctxParams.LLMPath = manifest.Files[string(download.RoleLLM)]
-
-	fmt.Println("diffusion:", ctxParams.DiffusionModelPath)
-	fmt.Println("vae:      ", ctxParams.VAEPath)
-	fmt.Println("llm:      ", ctxParams.LLMPath)
-	fmt.Println("loading context ...")
-
-	ctx, err := sd.NewContext(ctxParams)
+	engine, err := malina.New(model.WithDiffusionModelPath(diffusion), model.WithVAEPath(vae), model.WithLLMPath(llm))
 	if err != nil {
-		log.Fatalf("sd.NewContext: %v", err)
+		log.Fatalf("malina.New: %v", err)
 	}
-	defer sd.FreeContext(ctx)
-
-	// Initialize image generation parameters.
-	imgParams := sd.ImgGenParamsInit()
-
-	// Prompts.
-	imgParams.Prompt = prompt
-	imgParams.NegativePrompt = "mascots, watermark, signature"
-
-	fmt.Println("generating image for prompt:", prompt)
+	defer func() {
+		if err := engine.Unload(context.Background()); err != nil {
+			log.Printf("unload: %v", err)
+		}
+	}()
+	params := model.NewGenerateParams()
+	params.Prompt = prompt
+	params.NegativePrompt = "mascots, watermark, signature"
+	params.Steps = 4
 	start := time.Now()
-	img, err := sd.GenerateImage(ctx, imgParams)
+	img, err := engine.Generate(context.Background(), params)
 	if err != nil {
-		log.Fatalf("sd.GenerateImage: %v", err)
+		log.Fatalf("Generate: %v", err)
 	}
-	elapsed := time.Since(start)
-
 	const outPath = "output.png"
-	if err := img.SavePNG(outPath); err != nil {
-		log.Fatalf("SavePNG: %v", err)
+	if err := os.WriteFile(outPath, img.PNG, 0o644); err != nil {
+		log.Fatalf("write PNG: %v", err)
 	}
-	fmt.Printf("wrote %s (%dx%d, %d channels) in %s\n", outPath, img.Width, img.Height, img.Channel, elapsed.Round(time.Millisecond))
+	fmt.Printf("wrote %s (%dx%d) in %s\n", outPath, img.Width, img.Height, time.Since(start).Round(time.Millisecond))
 }

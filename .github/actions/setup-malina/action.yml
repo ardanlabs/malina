@@ -1,0 +1,70 @@
+name: Setup Malina native test environment
+description: Install Malina and cache its pinned native libraries and public test models
+
+runs:
+  using: composite
+  steps:
+    - name: Install Go
+      uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+      with:
+        go-version-file: .go-version
+
+    - name: Install Malina
+      shell: bash
+      run: go install ./cmd/malina
+
+    - name: Cache native libraries
+      id: cache-native
+      uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+      with:
+        path: lib
+        key: ${{ runner.os }}-${{ runner.arch }}-malina-native-${{ hashFiles('sdk/tools/libs/**') }}
+
+    - name: Download native libraries
+      if: steps.cache-native.outputs.cache-hit != 'true'
+      shell: bash
+      run: malina libs pull -lib "$GITHUB_WORKSPACE/lib"
+
+    - name: Export native environment
+      shell: bash
+      run: |
+        native_dir="$GITHUB_WORKSPACE/lib"
+        echo "MALINA_LIB=$native_dir" >> "$GITHUB_ENV"
+        case "$RUNNER_OS" in
+          Linux)
+            echo "LD_LIBRARY_PATH=$native_dir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+            ;;
+          Windows)
+            echo "$native_dir" >> "$GITHUB_PATH"
+            ;;
+          macOS)
+            # The Darwin bundle resolves its sibling dylibs through RUNPATH.
+            ;;
+          *)
+            echo "Unsupported runner OS: $RUNNER_OS" >&2
+            exit 1
+            ;;
+        esac
+
+    - name: Cache test models
+      id: cache-models
+      uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+      with:
+        path: models
+        key: malina-models-${{ hashFiles('.github/test-models.txt', 'sdk/tools/models/catalog.go') }}
+
+    - name: Download test models
+      if: steps.cache-models.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        mkdir -p "$GITHUB_WORKSPACE/models"
+        while IFS= read -r bundle || [[ -n "$bundle" ]]; do
+          bundle="${bundle%$'\r'}"
+          bundle="$(printf '%s' "$bundle" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+          [[ -z "$bundle" || "$bundle" == \#* ]] && continue
+          malina model pull -y -o "$GITHUB_WORKSPACE/models" "$bundle"
+        done < "$GITHUB_WORKSPACE/.github/test-models.txt"
+
+    - name: Export test model environment
+      shell: bash
+      run: echo "MALINA_TEST_MODEL=$GITHUB_WORKSPACE/models/sd-1.5/v1-5-pruned-emaonly.safetensors" >> "$GITHUB_ENV"

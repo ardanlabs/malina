@@ -1,6 +1,6 @@
 # Benchmarks
 
-Performance numbers for `pkg/sd` against each of the three model bundles
+Performance numbers for `sdk/malina/sd` against each of the three model bundles
 `malina model pull` knows how to download. Recorded on an Apple M5 Max
 (darwin/arm64) with the Metal backend baked into upstream
 `stable-diffusion-master-*` releases. The Go benchmarks all run against
@@ -18,7 +18,7 @@ make bench                           # runs all three per-bundle benchmarks
 
 - **Drivers**: `BenchmarkGenerateImageSD15`, `BenchmarkGenerateImageSDXL`,
   and `BenchmarkGenerateImageFlux2` in
-  [`pkg/sd/benchmark_test.go`](pkg/sd/benchmark_test.go). Each loads its
+  [`sdk/malina/sd/benchmark_test.go`](sdk/malina/sd/benchmark_test.go). Each loads its
   bundle's checkpoint(s) once, drops one untimed warm-up iteration (so
   Metal JIT and any first-call library setup do not pollute the
   measurement), and then runs `b.N` `GenerateImage` calls reusing the

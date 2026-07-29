@@ -1,0 +1,2 @@
+# Public, ungated model bundles used by native integration tests.
+sd-1.5

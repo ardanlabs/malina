@@ -1,0 +1,37 @@
+:root {
+  font: 16px system-ui;
+  background: #fff7fb;
+  color: #241725;
+}
+
+main {
+  max-width: 760px;
+  margin: 3rem auto;
+}
+
+section {
+  display: flex;
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
+
+input,
+textarea {
+  flex: 1;
+  padding: 0.8rem;
+}
+
+button {
+  background: #a20d52;
+  color: #fff;
+  border: 0;
+  padding: 0.7rem;
+}
+
+img {
+  max-width: 100%;
+}
+
+.error {
+  color: #b00020;
+}

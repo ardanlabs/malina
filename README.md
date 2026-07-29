@@ -4,9 +4,9 @@ hello@ardanlabs.com
 
 # Malina
 
-This project lets you use Go for hardware accelerated local image generation with [stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp) directly integrated into your applications. Malina provides a high-level API that mirrors `stable-diffusion.h` 1-to-1 plus pure-Go PNG/JPEG I/O and Motion-JPEG AVI muxing so you can hand any prompt to a Stable Diffusion model and get an image (or a short video) back.
+This project provides hardware-accelerated local image generation with [stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp). The importable `sdk/malina` package owns model lifecycle, bounded request admission, serialized generation, and PNG output; `sdk/malina/sd` remains an implementation and advanced FFI layer not intended for application code.
 
-Malina is the image-generation sibling of [ardanlabs/bucky](https://github.com/ardanlabs/bucky) (which binds whisper.cpp) and [hybridgroup/yzma](https://github.com/hybridgroup/yzma) (which binds llama.cpp). The end goal is to give [Kronk](https://github.com/ardanlabs/kronk) a native, OpenAI-compatible `POST /v1/images/generations` endpoint without the CGo toolchain.
+Malina is the image-generation sibling of [ardanlabs/bucky](https://github.com/ardanlabs/bucky) (which binds whisper.cpp) and [hybridgroup/yzma](https://github.com/hybridgroup/yzma) (which binds llama.cpp). It owns its OpenAI-compatible `POST /v1/images/generations` endpoint; future [Kronk](https://github.com/ardanlabs/kronk) integration will use Malina over HTTP rather than importing its native bindings in-process.
 
 > Malina is the Russian word for "raspberry" — a small, dense, fast-growing
 > fruit. Naming a stable-diffusion binding after a fast little thing that
@@ -15,9 +15,9 @@ Malina is the image-generation sibling of [ardanlabs/bucky](https://github.com/a
 To install malina, fetch the stable-diffusion.cpp shared libraries, and generate the bundled cat sample:
 
 ```shell
-$ go install github.com/ardanlabs/malina@latest
+$ go install github.com/ardanlabs/malina/cmd/malina@latest
 
-$ malina install -lib ./lib
+$ malina libs pull -lib ./lib
 $ export MALINA_LIB=$(pwd)/lib
 
 $ malina model pull sd-1.5
@@ -27,7 +27,7 @@ $ go run ./examples/hello "a lovely cat"
 
 ## Project Status
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/ardanlabs/malina.svg)](https://pkg.go.dev/github.com/ardanlabs/malina)
+[![Go Reference](https://pkg.go.dev/badge/github.com/ardanlabs/malina/sdk/malina.svg)](https://pkg.go.dev/github.com/ardanlabs/malina/sdk/malina)
 [![Go Report Card](https://goreportcard.com/badge/github.com/ardanlabs/malina?style=flat-square)](https://goreportcard.com/report/github.com/ardanlabs/malina)
 [![go.mod Go version](https://img.shields.io/github/go-mod/go-version/ardanlabs/malina)](https://github.com/ardanlabs/malina)
 [![stable-diffusion.cpp Release](https://img.shields.io/github/v/release/leejet/stable-diffusion.cpp?label=stable-diffusion.cpp)](https://github.com/leejet/stable-diffusion.cpp/releases)
@@ -39,9 +39,9 @@ Sometimes there are breaking changes to stable-diffusion.cpp that require an upd
 
 | stable-diffusion.cpp | malina |
 | -------------------- | ------ |
-| master-656-0e4ee04   | 0.1.x  |
+| master-669-2d40a8b   | 0.1.x  |
 
-The core FFI binding (context init, `generate_image`, image I/O, log/progress callbacks, GGML backend introspection), pure-Go PNG/JPEG decode + Motion-JPEG AVI mux, CLI (`install`, `system`, `info`, `model list|pull`), and examples (`hello`, `system`, `sd-encode`, `flux2`) have all landed. Kronk integration (an OpenAI-compatible `POST /v1/images/generations` endpoint) lives in the [kronk](https://github.com/ardanlabs/kronk) repo.
+The `sdk/malina` SDK, reusable `sdk/malina/model` package, CLI, one-model HTTP server, OpenAI-compatible image endpoint, and embedded management BUI have landed. Kronk integration is a later external HTTP adapter; Malina does not import or run Kronk in-process.
 
 ## Owner Information
 
@@ -60,15 +60,20 @@ Twitter:  https://x.com/goinggodotnet
 The fastest way to install on any supported platform is with Go:
 
 ```shell
-$ go install github.com/ardanlabs/malina@latest
+$ go install github.com/ardanlabs/malina/cmd/malina@latest
 
 $ malina --help
 ```
 
+GitHub release archives contain the thin `malina` executable, not the native
+stable-diffusion.cpp libraries or a model. Whether installing from a release
+archive or with `go install`, fetch a native library bundle separately as
+shown below.
+
 Then fetch the stable-diffusion.cpp shared library bundle (dylib on darwin, DLLs on windows, `.tar.gz` on linux — all sourced from the upstream [leejet/stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp/releases) releases):
 
 ```shell
-$ malina install -lib ./lib
+$ malina libs pull -lib ./lib
 $ export MALINA_LIB=$(pwd)/lib
 $ malina system
 ```
@@ -78,8 +83,49 @@ And pull a model bundle from the bundled catalog:
 ```shell
 $ malina model list
 $ malina model pull sd-1.5
-$ malina model info -m ~/models/sd-1.5/v1-5-pruned-emaonly.safetensors
+$ malina model info sd-1.5
 ```
+
+### Development environment
+
+With Nix and flakes enabled, enter the CPU development shell from the
+repository root and build the BUI and CLI:
+
+```shell
+$ nix develop ./zarf/nix#cpu
+$ (cd cmd/server/api/frontends/bui && npm ci && npm run build)
+$ go build ./cmd/malina
+```
+
+The repository's pre-commit hook is optional. It rebuilds generated files and
+checks whitespace; enable it for this clone with:
+
+```shell
+$ git config core.hooksPath .githooks
+```
+
+### Linux CPU container
+
+Pushes to `main` and version tags publish the Linux amd64 CPU image to GHCR
+after its exact digest passes a vulnerability scan and is signed. It contains
+the CLI, embedded BUI, and a checksum-verified copy of Malina's pinned CPU
+native-library bundle, but no model. The upstream CPU bundle requires an
+AVX2-capable x86-64 host. For example, after an image has been published:
+
+```shell
+$ docker pull ghcr.io/ardanlabs/malina:main
+$ docker run --rm -p 127.0.0.1:8080:8080 \
+    -v "$HOME/models:/models:ro" ghcr.io/ardanlabs/malina:main
+```
+
+Open `http://127.0.0.1:8080/admin/` and load a checkpoint under `/models`, or
+set `MALINA_MODEL=/models/<checkpoint>` when starting the container. The
+initial container supports **Linux amd64 CPU with AVX2 only**; it does not
+provide GPU backends, baseline pre-AVX2 x86-64, or arm64 images.
+
+Malina's HTTP server has no built-in authentication or TLS. Do not publish it
+on an untrusted interface; bind the host port to loopback as above, or place
+it behind an appropriately secured reverse proxy.
 
 ## Issues/Features
 
@@ -89,24 +135,25 @@ If you are interested in helping in any way, please send an email to [Bill Kenne
 
 ## Architecture
 
-The architecture of malina mirrors bucky and yzma file-for-file so anyone who knows either can drop straight in. There is no CGo: every C call goes through [purego](https://github.com/ebitengine/purego) + [JupiterRider/ffi](https://github.com/JupiterRider/ffi).
+Malina follows the service and CLI conventions of the sibling projects where useful while keeping native ownership behind its own high-level SDK. There is no CGo: every C call goes through [purego](https://github.com/ebitengine/purego) + [JupiterRider/ffi](https://github.com/JupiterRider/ffi).
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  cmd/         malina CLI (install, system, model, sd)       │
+│  cmd/malina   CLI (libs, system, model, generate, server)   │
+│  cmd/server   HTTP domain, one-model service, embedded BUI  │
 ├─────────────────────────────────────────────────────────────┤
-│  pkg/sd       1-to-1 mirror of stable-diffusion.h           │
-│               (context, gen_params, generate, video,        │
-│                image I/O, log, system)                      │
-│  pkg/download go-getter-driven release-archive resolver +   │
-│               bundle catalog (sd-1.5, sdxl, flux2)          │
-│  pkg/loader   MALINA_LIB-aware purego library loader        │
-│  pkg/utils    cross-platform Go ↔ C string helpers          │
+│  sdk/malina       concurrency-safe lifecycle and queue      │
+│  sdk/malina/model reusable-context config and PNG output    │
+├─────────────────────────────────────────────────────────────┤
+│  sdk/malina/sd internal/advanced stable-diffusion.h FFI     │
+│                (context, generation, image, video, system)  │
+│  sdk/tools/libs   native library installation               │
+│  sdk/tools/models curated model catalog and downloads       │
 └─────────────────────────────────────────────────────────────┘
                           │
                           ▼
             libstable-diffusion.{dylib|so|dll}
-              (stable-diffusion.cpp master-656)
+              (stable-diffusion.cpp master-669)
 ```
 
 ## Models
@@ -126,7 +173,7 @@ Each bundle drops every required file into `$HOME/models/<bundle>/` along with a
 
 ## Support
 
-Malina uses the prebuilt stable-diffusion.cpp release artifacts from [leejet/stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp/releases) directly — there is no companion builder repo. The pinned version is captured in [`pkg/download/install.go`](pkg/download/install.go) as `DefaultSDVersion`.
+Malina uses the prebuilt stable-diffusion.cpp release artifacts from [leejet/stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp/releases) directly — there is no companion builder repo. The pinned version is captured in [`sdk/tools/libs/libs.go`](sdk/tools/libs/libs.go) as `DefaultSDVersion`.
 
 | OS      | CPU   | GPU          | Source                                                      |
 | ------- | ----- | ------------ | ----------------------------------------------------------- |
@@ -134,9 +181,57 @@ Malina uses the prebuilt stable-diffusion.cpp release artifacts from [leejet/sta
 | macOS   | arm64 | Metal        | `sd-master-…-bin-MacOS-arm64.tar.gz` (upstream)             |
 | Windows | amd64 | CPU, CUDA 12 | `sd-master-…-bin-win-avx2-x64.zip` / `-cuda12-…` (upstream) |
 
-Whenever there is a new release of stable-diffusion.cpp, the FFI struct mirrors in `pkg/sd` and the version constant in `pkg/download` may need a refresh. Bump `DefaultSDVersion`, regenerate any struct-size assertions in `pkg/sd/*_test.go`, and let CI verify.
+Whenever there is a new release of stable-diffusion.cpp, the FFI struct mirrors in `sdk/malina/sd` and the version constant in `sdk/tools/libs` may need a refresh. Bump `DefaultSDVersion`, regenerate any struct-size assertions in `sdk/malina/sd/*_test.go`, and let CI verify.
 
 ## API Examples
+
+Use `sdk/malina` when embedding Malina. The handle owns one reusable native context and serializes calls to it, matching Kronk's `sdk/kronk` and `sdk/kronk/model` package layout:
+
+```go
+import (
+	"context"
+	"log"
+	"os"
+
+	"github.com/ardanlabs/malina/sdk/malina"
+	"github.com/ardanlabs/malina/sdk/malina/model"
+)
+
+if err := malina.Init(malina.WithLibPath(os.Getenv("MALINA_LIB"))); err != nil {
+	log.Fatal(err)
+}
+
+engine, err := malina.New(model.WithModelPath("model.safetensors"))
+if err != nil {
+	log.Fatal(err)
+}
+defer engine.Unload(context.Background())
+
+params := model.NewGenerateParams()
+params.Prompt = "a raspberry spaceship"
+image, err := engine.Generate(context.Background(), params)
+if err != nil {
+	log.Fatal(err)
+}
+if err := os.WriteFile("output.png", image.PNG, 0o644); err != nil {
+	log.Fatal(err)
+}
+```
+
+Start in degraded mode (health is available and readiness is false), then load a model from the BUI at `http://127.0.0.1:8080/admin/`:
+
+```shell
+$ MALINA_LIB=$(pwd)/lib malina server start
+```
+
+Use `--model` to load at startup. Configuration also accepts `MALINA_API_HOST`, `MALINA_MODEL`, `MALINA_QUEUE_DEPTH`, `MALINA_READ_TIMEOUT`, `MALINA_WRITE_TIMEOUT`, `MALINA_IDLE_TIMEOUT`, `MALINA_INFERENCE_TIMEOUT`, `MALINA_SHUTDOWN_TIMEOUT`, and `MALINA_BUI`.
+
+```shell
+$ curl -X POST localhost:8080/v1/malina/models/load -H 'content-type: application/json' -d '{"model_path":"/models/model.safetensors"}'
+$ curl -X POST localhost:8080/v1/images/generations -H 'content-type: application/json' -d '{"prompt":"a raspberry spaceship","size":"512x512","n":1,"response_format":"b64_json"}'
+```
+
+Routes are `GET /healthz`, `GET /readyz`, `POST /v1/images/generations`, `GET /v1/models`, `GET /v1/malina/models`, `GET /v1/malina/models/ps`, `POST /v1/malina/models/load`, and `POST /v1/malina/models/unload`.
 
 There are examples in the [examples/](./examples) directory. Each one
 expects `MALINA_LIB` and (for the model-loading examples) `MALINA_TEST_MODEL`
@@ -174,13 +269,13 @@ $ malina model pull flux2-klein-9b    # one-time
 $ make example-flux2
 ```
 
-[SD-ENCODE](examples/sd-encode/main.go) — mux a directory of PNG / JPEG frames into a Motion-JPEG AVI. No model is loaded; this is the pure-Go encoder built on top of `pkg/sd`'s `SaveAVI` helper.
+[SD-ENCODE](examples/sd-encode/main.go) — mux a directory of PNG / JPEG frames into a Motion-JPEG AVI. No model is loaded; this is the pure-Go `model.SaveAVI` encoder accepting standard Go images.
 
 ```shell
 $ make example-sd-encode
 ```
 
-## Sample API Program — Hello Example
+## SDK Program — Hello Example
 
 ```go
 // hello is the smallest possible malina example: load a stable-diffusion
@@ -188,12 +283,14 @@ $ make example-sd-encode
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
 	"time"
 
-	"github.com/ardanlabs/malina/pkg/sd"
+	"github.com/ardanlabs/malina/sdk/malina"
+	"github.com/ardanlabs/malina/sdk/malina/model"
 )
 
 func main() {
@@ -212,39 +309,33 @@ func main() {
 		log.Fatal("MALINA_TEST_MODEL must point to a stable-diffusion model file (.gguf or .safetensors)")
 	}
 
-	if err := sd.Load(libPath); err != nil {
-		log.Fatalf("sd.Load: %v", err)
+	if err := malina.Init(malina.WithLibPath(libPath)); err != nil {
+		log.Fatalf("malina.Init: %v", err)
 	}
-	if err := sd.Init(libPath); err != nil {
-		log.Fatalf("sd.Init: %v", err)
-	}
-
-	cparams := sd.ContextParamsInit()
-	cparams.ModelPath = modelPath
 
 	fmt.Println("loading model from", modelPath, "...")
-	ctx, err := sd.NewContext(cparams)
+	engine, err := malina.New(model.WithModelPath(modelPath))
 	if err != nil {
-		log.Fatalf("sd.NewContext: %v", err)
+		log.Fatalf("malina.New: %v", err)
 	}
-	defer sd.FreeContext(ctx)
+	defer engine.Unload(context.Background())
 
-	params := sd.ImgGenParamsInit()
+	params := model.NewGenerateParams()
 	params.Prompt = prompt
 
 	fmt.Println("generating image for prompt:", prompt)
 	start := time.Now()
-	img, err := sd.GenerateImage(ctx, params)
+	img, err := engine.Generate(context.Background(), params)
 	if err != nil {
-		log.Fatalf("sd.GenerateImage: %v", err)
+		log.Fatalf("malina.Generate: %v", err)
 	}
 	elapsed := time.Since(start)
 
 	const outPath = "hello.png"
-	if err := img.SavePNG(outPath); err != nil {
-		log.Fatalf("SavePNG: %v", err)
+	if err := os.WriteFile(outPath, img.PNG, 0o644); err != nil {
+		log.Fatalf("write PNG: %v", err)
 	}
-	fmt.Printf("wrote %s (%dx%d, %d channels) in %s\n", outPath, img.Width, img.Height, img.Channel, elapsed.Round(time.Millisecond))
+	fmt.Printf("wrote %s (%dx%d) in %s\n", outPath, img.Width, img.Height, elapsed.Round(time.Millisecond))
 }
 ```
 
@@ -255,7 +346,7 @@ $ make example-hello
 go run ./examples/hello "a lovely cat"
 loading model from /Users/bill/models/sd-1.5/v1-5-pruned-emaonly.safetensors ...
 generating image for prompt: a lovely cat
-wrote hello.png (512x512, 3 channels) in 6.842s
+wrote hello.png (512x512) in 6.842s
 ```
 
 ## License
