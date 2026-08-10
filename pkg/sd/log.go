@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime"
 	"strings"
 	"sync"
 	"unsafe"
@@ -20,17 +21,29 @@ var (
 	// SD_API void sd_set_log_callback(sd_log_cb_t sd_log_cb, void* data);
 	setLogCallbackFunc ffi.Fun
 
+	// GGML_API void ggml_log_set(ggml_log_callback log_callback, void* user_data);
+	//
+	// Loaded best-effort because static builds may not export the symbol.
+	// When available, configuring it prevents backend initialization messages
+	// such as ggml_metal_* from bypassing the stable-diffusion callback.
+	ggmlLogSetFunc ffi.Fun
+
 	// Persistent state for the C-callable trampoline. libffi requires
 	// these to outlive the FFI call, so they are package-scoped.
 	logCifCallback  ffi.Cif
 	logClosure      *ffi.Closure
 	logCallbackCode unsafe.Pointer
 	logCallbackFun  uintptr
+	ggmlLogCif      ffi.Cif
+	ggmlLogClosure  *ffi.Closure
+	ggmlLogCode     unsafe.Pointer
+	ggmlLogFun      uintptr
 
 	logMu          sync.Mutex
 	logUserHandler LogCallback
 	logLastError   string
 	logLastWarn    string
+	ggmlLastLevel  = LogInfo
 )
 
 // LogWriter is where the default log handler writes warning/error lines.
@@ -44,7 +57,19 @@ func loadLogFuncs(lib ffi.Lib) error {
 		return loadError("sd_set_log_callback", err)
 	}
 	setLogCallbackFunc = fn
+	loadGGMLLogFunc(lib)
+
 	return nil
+}
+
+func loadGGMLLogFunc(lib ffi.Lib) {
+	if ggmlLogSetFunc != (ffi.Fun{}) {
+		return
+	}
+
+	if fn, err := lib.Prep("ggml_log_set", &ffi.TypeVoid, &ffi.TypePointer, &ffi.TypePointer); err == nil {
+		ggmlLogSetFunc = fn
+	}
 }
 
 // installLogCallback registers a process-wide log handler with the C
@@ -53,34 +78,74 @@ func installLogCallback() error {
 	if setLogCallbackFunc == (ffi.Fun{}) {
 		return nil
 	}
-	if logClosure != nil {
-		// Already installed for this process.
+	if logClosure == nil {
+		closure, code, callback, err := prepareLogClosure("sd_log_cb_t", &logCifCallback, logTrampoline)
+		if err != nil {
+			return err
+		}
+		logClosure = closure
+		logCallbackCode = code
+		logCallbackFun = callback
+	}
+
+	if ggmlLogSetFunc != (ffi.Fun{}) {
+		if err := installGGMLLogCallback(); err != nil {
+			return err
+		}
+	}
+
+	var nilData unsafe.Pointer
+	setLogCallbackFunc.Call(nil, unsafe.Pointer(&logCallbackCode), unsafe.Pointer(&nilData))
+	if ggmlLogSetFunc != (ffi.Fun{}) {
+		ggmlLogSetFunc.Call(nil, unsafe.Pointer(&ggmlLogCode), unsafe.Pointer(&nilData))
+	}
+	runtime.KeepAlive(logCallbackFun)
+	runtime.KeepAlive(ggmlLogFun)
+
+	return nil
+}
+
+func installGGMLLogCallback() error {
+	if ggmlLogClosure != nil {
 		return nil
 	}
 
-	// Describe sd_log_cb_t: void (*)(sd_log_level_t, const char*, void*).
-	if status := ffi.PrepCif(&logCifCallback, ffi.DefaultAbi, 3,
+	closure, code, callback, err := prepareLogClosure("ggml_log_callback", &ggmlLogCif, ggmlLogTrampoline)
+	if err != nil {
+		return err
+	}
+	ggmlLogClosure = closure
+	ggmlLogCode = code
+	ggmlLogFun = callback
+
+	return nil
+}
+
+func prepareLogClosure(name string, cif *ffi.Cif, callback ffi.Callback) (*ffi.Closure, unsafe.Pointer, uintptr, error) {
+	// Both native callbacks have the signature:
+	// void (*)(int32_t level, const char* text, void* user_data).
+	if status := ffi.PrepCif(cif, ffi.DefaultAbi, 3,
 		&ffi.TypeVoid,
 		&ffi.TypeSint32,
 		&ffi.TypePointer,
 		&ffi.TypePointer,
 	); status != ffi.OK {
-		return fmt.Errorf("PrepCif sd_log_cb_t: %v", status)
+		return nil, nil, 0, fmt.Errorf("PrepCif %s: %v", name, status)
 	}
 
-	logClosure = ffi.ClosureAlloc(unsafe.Sizeof(ffi.Closure{}), &logCallbackCode)
-	if logClosure == nil {
-		return fmt.Errorf("ffi.ClosureAlloc returned nil")
+	var code unsafe.Pointer
+	closure := ffi.ClosureAlloc(unsafe.Sizeof(ffi.Closure{}), &code)
+	if closure == nil {
+		return nil, nil, 0, fmt.Errorf("ffi.ClosureAlloc for %s returned nil", name)
 	}
 
-	logCallbackFun = ffi.NewCallback(logTrampoline)
-	if status := ffi.PrepClosureLoc(logClosure, &logCifCallback, logCallbackFun, nil, logCallbackCode); status != ffi.OK {
-		return fmt.Errorf("PrepClosureLoc sd_log_cb_t: %v", status)
+	callbackFunc := ffi.NewCallback(callback)
+	if status := ffi.PrepClosureLoc(closure, cif, callbackFunc, nil, code); status != ffi.OK {
+		ffi.ClosureFree(closure)
+		return nil, nil, 0, fmt.Errorf("PrepClosureLoc %s: %v", name, status)
 	}
 
-	var nilData unsafe.Pointer
-	setLogCallbackFunc.Call(nil, unsafe.Pointer(&logCallbackCode), unsafe.Pointer(&nilData))
-	return nil
+	return closure, code, callbackFunc, nil
 }
 
 // logTrampoline is the C-callable function libffi invokes for every log line.
@@ -90,8 +155,42 @@ func logTrampoline(_ *ffi.Cif, _ unsafe.Pointer, args *unsafe.Pointer, _ unsafe.
 	level := LogLevel(*(*int32)(argsArr[0]))
 	textPtr := *(**byte)(argsArr[1])
 
-	text := strings.TrimRight(utils.BytePtrToString(textPtr), "\n")
+	dispatchLog(level, strings.TrimRight(utils.BytePtrToString(textPtr), "\n"))
+	return 0
+}
 
+func ggmlLogTrampoline(_ *ffi.Cif, _ unsafe.Pointer, args *unsafe.Pointer, _ unsafe.Pointer) uintptr {
+	argsArr := (*[3]unsafe.Pointer)(unsafe.Pointer(args))
+	rawLevel := *(*int32)(argsArr[0])
+	textPtr := *(**byte)(argsArr[1])
+
+	logMu.Lock()
+	ggmlLastLevel = mapGGMLLogLevel(rawLevel, ggmlLastLevel)
+	level := ggmlLastLevel
+	logMu.Unlock()
+
+	dispatchLog(level, strings.TrimRight(utils.BytePtrToString(textPtr), "\n"))
+	return 0
+}
+
+func mapGGMLLogLevel(rawLevel int32, previous LogLevel) LogLevel {
+	switch rawLevel {
+	case 1: // GGML_LOG_LEVEL_DEBUG
+		return LogDebug
+	case 2: // GGML_LOG_LEVEL_INFO
+		return LogInfo
+	case 3: // GGML_LOG_LEVEL_WARN
+		return LogWarn
+	case 4: // GGML_LOG_LEVEL_ERROR
+		return LogError
+	case 5: // GGML_LOG_LEVEL_CONT
+		return previous
+	default: // GGML_LOG_LEVEL_NONE or an unknown future value.
+		return LogDebug
+	}
+}
+
+func dispatchLog(level LogLevel, text string) {
 	logMu.Lock()
 	switch level {
 	case LogError:
@@ -104,13 +203,12 @@ func logTrampoline(_ *ffi.Cif, _ unsafe.Pointer, args *unsafe.Pointer, _ unsafe.
 
 	if handler != nil {
 		handler(level, text)
-		return 0
+		return
 	}
 
 	if level == LogWarn || level == LogError {
 		fmt.Fprintf(LogWriter, "[sd %s] %s\n", levelTag(level), text)
 	}
-	return 0
 }
 
 func levelTag(l LogLevel) string {
@@ -129,8 +227,9 @@ func levelTag(l LogLevel) string {
 }
 
 // SetLogCallback installs a Go callback that receives every log line emitted
-// by stable-diffusion.cpp. Pass nil to restore the default warn/error-to-
-// stderr handler. Safe to call from any goroutine.
+// by stable-diffusion.cpp and, when supported by the loaded library, GGML.
+// Pass nil to restore the default warn/error-to-stderr handler. Safe to call
+// from any goroutine.
 func SetLogCallback(cb LogCallback) {
 	logMu.Lock()
 	logUserHandler = cb
