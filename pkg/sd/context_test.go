@@ -10,7 +10,7 @@ import (
 // means struct fields will misalign and NewContext will produce garbage
 // pointers.
 func TestContextParamsStructSize(t *testing.T) {
-	const expectedSize = 224
+	const expectedSize = 280
 	got := unsafe.Sizeof(cContextParams{})
 	if got != expectedSize {
 		t.Fatalf("cContextParams size: got %d, want %d", got, expectedSize)
@@ -33,33 +33,24 @@ func TestContextParamsInitDefaults(t *testing.T) {
 		got  any
 		want any
 	}{
-		{"VAEDecodeOnly", p.VAEDecodeOnly, true},
-		{"FreeParamsImmediately", p.FreeParamsImmediately, true},
 		{"NThreads", p.NThreads, cores},
 		{"Wtype", p.Wtype, SDTypeCount},
 		{"RngType", p.RngType, RngCuda},
 		{"SamplerRngType", p.SamplerRngType, RngTypeCount},
 		{"Prediction", p.Prediction, PredictionCount},
 		{"LoraApplyMode", p.LoraApplyMode, LoraApplyAuto},
-		{"OffloadParamsToCPU", p.OffloadParamsToCPU, false},
-		{"MaxVram", p.MaxVram, float32(0)},
+		{"MaxVram", p.MaxVram, ""},
 		{"EnableMmap", p.EnableMmap, false},
-		{"KeepClipOnCPU", p.KeepClipOnCPU, false},
-		{"KeepControlNetOnCPU", p.KeepControlNetOnCPU, false},
-		{"KeepVAEOnCPU", p.KeepVAEOnCPU, false},
 		{"FlashAttn", p.FlashAttn, false},
 		{"DiffusionFlashAttn", p.DiffusionFlashAttn, false},
 		{"TaePreviewOnly", p.TaePreviewOnly, false},
 		{"DiffusionConvDirect", p.DiffusionConvDirect, false},
 		{"VAEConvDirect", p.VAEConvDirect, false},
-		{"CircularX", p.CircularX, false},
-		{"CircularY", p.CircularY, false},
 		{"ForceSDXLVAEConvScale", p.ForceSDXLVAEConvScale, false},
-		{"ChromaUseDitMask", p.ChromaUseDitMask, true},
-		{"ChromaUseT5Mask", p.ChromaUseT5Mask, false},
-		{"ChromaT5MaskPad", p.ChromaT5MaskPad, int32(1)},
-		{"QwenImageZeroCondT", p.QwenImageZeroCondT, false},
 		{"VaeFormat", p.VaeFormat, SDVaeFormatAuto},
+		{"StreamLayers", p.StreamLayers, false},
+		{"EagerLoad", p.EagerLoad, false},
+		{"AutoFit", p.AutoFit, false},
 	}
 
 	for _, c := range cases {

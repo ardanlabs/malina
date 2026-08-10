@@ -89,11 +89,9 @@ func BenchmarkGenerateImageFlux2(b *testing.B) {
 
 // BenchmarkGenerateImageImg2ImgSD15 measures end-to-end image-to-image
 // throughput against the sd-1.5 bundle. It mirrors the txt2img benchmark
-// but flips ContextParams.VAEDecodeOnly to false (so the VAE encoder is
-// loaded) and feeds a synthesized 512x512 neutral-grey buffer as
-// InitImage. Strength is left at the C library default (0.75) so the
-// full denoising schedule runs and the per-iteration cost includes the
-// VAE encode pass that's unique to img2img.
+// and feeds a synthesized 512x512 neutral-grey buffer as InitImage. Strength
+// is left at the C library default (0.75) so the full denoising schedule runs
+// and the per-iteration cost includes the VAE encode pass unique to img2img.
 //
 // Requires: MALINA_LIB and one of (MALINA_BENCH_MODEL or MALINA_TEST_MODEL).
 func BenchmarkGenerateImageImg2ImgSD15(b *testing.B) {
@@ -102,7 +100,6 @@ func BenchmarkGenerateImageImg2ImgSD15(b *testing.B) {
 
 	cparams := benchContextParams()
 	cparams.ModelPath = modelPath
-	cparams.VAEDecodeOnly = false
 
 	params := ImgGenParamsInit()
 	params.InitImage = benchSyntheticImage(int(params.Width), int(params.Height))
@@ -169,21 +166,9 @@ func runGenerateBench(b *testing.B, cparams ContextParams, params ImgGenParams) 
 	b.ReportMetric(float64(params.Width)*float64(params.Height), "px")
 }
 
-// benchContextParams returns ContextParams suitable for repeated
-// GenerateImage calls against the same Context.
-//
-// sd_ctx_params_init defaults FreeParamsImmediately to true, which
-// releases the model parameter memory after the first generation. A
-// second GenerateImage call on the same Context then aborts inside
-// libstable-diffusion with `GGML_ASSERT(buft) failed` because the
-// freed param tensors no longer have a backing buffer-type. The
-// benchmarks reuse one Context across b.N iterations so the model
-// load time is not folded into the timed loop, which requires
-// FreeParamsImmediately=false.
+// benchContextParams returns ContextParams suitable for benchmarks.
 func benchContextParams() ContextParams {
-	p := ContextParamsInit()
-	p.FreeParamsImmediately = false
-	return p
+	return ContextParamsInit()
 }
 
 // benchSetup ensures the stable-diffusion shared library is loaded and

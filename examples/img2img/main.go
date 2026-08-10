@@ -72,10 +72,6 @@ func main() {
 	cparams := sd.ContextParamsInit()
 	cparams.ModelPath = modelPath
 
-	// Img2img requires the VAE encoder, which the C library skips by
-	// default to save memory. GenerateImage aborts the process otherwise.
-	cparams.VAEDecodeOnly = false
-
 	fmt.Println("loading model from", modelPath, "...")
 	ctx, err := sd.NewContext(cparams)
 	if err != nil {

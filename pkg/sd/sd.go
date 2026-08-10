@@ -107,7 +107,10 @@ const (
 	SampleEulerCFGPP   SampleMethod = 15
 	SampleEulerACFGPP  SampleMethod = 16
 	SampleEulerGE      SampleMethod = 17
-	SampleMethodCount  SampleMethod = 18
+	SampleDPMPP2MSDE   SampleMethod = 18
+	SampleDPMPP2MSDEBT SampleMethod = 19
+	SampleLMS          SampleMethod = 20
+	SampleMethodCount  SampleMethod = 21
 )
 
 // Scheduler mirrors enum scheduler_t.
@@ -126,20 +129,25 @@ const (
 	SchedulerLCM         Scheduler = 9
 	SchedulerBongTangent Scheduler = 10
 	SchedulerLTX2        Scheduler = 11
-	SchedulerCount       Scheduler = 12
+	SchedulerLogitNormal Scheduler = 12
+	SchedulerFlux2       Scheduler = 13
+	SchedulerFlux        Scheduler = 14
+	SchedulerBeta        Scheduler = 15
+	SchedulerCount       Scheduler = 16
 )
 
 // Prediction mirrors enum prediction_t.
 type Prediction int32
 
 const (
-	PredictionEPS       Prediction = 0
-	PredictionV         Prediction = 1
-	PredictionEDMV      Prediction = 2
-	PredictionFlow      Prediction = 3
-	PredictionFluxFlow  Prediction = 4
-	PredictionFlux2Flow Prediction = 5
-	PredictionCount     Prediction = 6
+	PredictionEPS         Prediction = 0
+	PredictionV           Prediction = 1
+	PredictionEDMV        Prediction = 2
+	PredictionFlow        Prediction = 3
+	PredictionFluxFlow    Prediction = 4
+	PredictionSeFiFlow    Prediction = 5
+	PredictionMinit2IFlow Prediction = 6
+	PredictionCount       Prediction = 7
 )
 
 // LogLevel mirrors enum sd_log_level_t.
@@ -164,7 +172,8 @@ const (
 	SDVaeFormatFlux  SDVaeFormat = 0
 	SDVaeFormatSD3   SDVaeFormat = 1
 	SDVaeFormatFlux2 SDVaeFormat = 2
-	SDVaeFormatCount SDVaeFormat = 3
+	SDVaeFormatWan   SDVaeFormat = 3
+	SDVaeFormatCount SDVaeFormat = 4
 )
 
 // LoraApplyMode mirrors enum lora_apply_mode_t.
@@ -216,10 +225,6 @@ func Load(path string) error {
 	}
 
 	if err := loadGenFuncs(lib); err != nil {
-		return err
-	}
-
-	if err := loadLibcFuncs(); err != nil {
 		return err
 	}
 

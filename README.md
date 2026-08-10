@@ -39,7 +39,7 @@ Sometimes there are breaking changes to stable-diffusion.cpp that require an upd
 
 | stable-diffusion.cpp | malina |
 | -------------------- | ------ |
-| master-656-0e4ee04   | 0.1.x  |
+| master-813-bfbef5b   | 0.1.x  |
 
 The core FFI binding (context init, `generate_image`, image I/O, log/progress callbacks, GGML backend introspection), pure-Go PNG/JPEG decode + Motion-JPEG AVI mux, CLI (`install`, `system`, `info`, `model list|pull`), and examples (`hello`, `system`, `sd-encode`, `flux2`) have all landed. Kronk integration (an OpenAI-compatible `POST /v1/images/generations` endpoint) lives in the [kronk](https://github.com/ardanlabs/kronk) repo.
 
@@ -106,7 +106,7 @@ The architecture of malina mirrors bucky and yzma file-for-file so anyone who kn
                           │
                           ▼
             libstable-diffusion.{dylib|so|dll}
-              (stable-diffusion.cpp master-656)
+              (stable-diffusion.cpp master-813)
 ```
 
 ## Models

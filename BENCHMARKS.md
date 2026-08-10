@@ -23,11 +23,6 @@ make bench                           # runs all three per-bundle benchmarks
   Metal JIT and any first-call library setup do not pollute the
   measurement), and then runs `b.N` `GenerateImage` calls reusing the
   same `Context`.
-- **`FreeParamsImmediately = false`** is required for the reuse model:
-  the C library's `sd_ctx_params_init` defaults it to `true`, which
-  releases the model parameter tensors after the first call and aborts
-  the second call with `GGML_ASSERT(buft) failed`. The bench helper
-  `benchContextParams` flips it back to `false`.
 - **Default shape**: 512x512 with the bundle's natural step count
   (SD 1.5 / SDXL: 20 steps from `sd_img_gen_params_init`; FLUX.2
   [klein]: 4 steps, since the model is 4-step distilled). 512x512 keeps
