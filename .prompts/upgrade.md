@@ -104,6 +104,23 @@ stable-diffusion.cpp version, including:
 - benchmark provenance when benchmarks are rerun
 - relevant comments and examples
 
+Review the stable-diffusion.cpp-to-Malina compatibility table in `README.md`
+as an explicit release task. Determine whether the upstream upgrade required
+breaking FFI or public Go API changes. When it did:
+
+- add a row mapping <STABLE_DIFF_VERSION> to the new Malina release line
+  derived from <MALINA_VERSION> (for example, `v1.0.1` maps to `1.0.x`)
+- preserve the previous compatibility row so users of older Malina releases
+  can still identify their supported stable-diffusion.cpp build
+- do not leave the new stable-diffusion.cpp tag mapped to the old Malina
+  release line
+- mention the compatibility break and affected release lines in the release
+  notes and migration guidance
+
+For a non-breaking upstream upgrade, keep the existing Malina release-line
+mapping accurate and retain older rows when they remain useful compatibility
+references.
+
 Add or update an exact regression test asserting that `DefaultSDVersion`
 equals <STABLE_DIFF_VERSION>.
 
