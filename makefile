@@ -50,10 +50,12 @@ vuln-check:
 diff:
 	go fix -diff ./...
 
-# make test runs all package tests. MALINA_LIB must point at a directory
+# make test runs all package tests, including the model-backed tests guarded
+# by the malina_model_tests build tag. MALINA_LIB must point at a directory
 # with libstable-diffusion (see download-stable-diffusion.cpp). The pkg/sd
-# end-to-end smoke test additionally requires MALINA_TEST_MODEL to point
-# at a stable-diffusion checkpoint; when unset it is skipped, not failed.
+# end-to-end smoke test additionally requires MALINA_TEST_MODEL to point at
+# a stable-diffusion checkpoint; when unset it is skipped, not failed. GitHub
+# Actions intentionally runs go test without this tag so no model is needed.
 #
 # Default the per-bundle test env vars to the layout `malina model pull`
 # writes under $(MODELS_DIR). When a contributor has downloaded all three
@@ -71,7 +73,7 @@ test-only:
 	export MALINA_TEST_MODEL=$(abspath $(MALINA_TEST_MODEL)) && \
 	export MALINA_SDXL_TEST_MODEL=$(abspath $(MALINA_SDXL_TEST_MODEL)) && \
 	export MALINA_FLUX2_TEST_DIR=$(abspath $(MALINA_FLUX2_TEST_DIR)) && \
-	go test -count=1 ./...
+	go test -count=1 -tags=malina_model_tests ./...
 
 # test-race re-runs the suite under the race detector. The FFI helpers are
 # expected to be called from arbitrary goroutines in production callers
@@ -82,7 +84,7 @@ test-race:
 	export MALINA_TEST_MODEL=$(abspath $(MALINA_TEST_MODEL)) && \
 	export MALINA_SDXL_TEST_MODEL=$(abspath $(MALINA_SDXL_TEST_MODEL)) && \
 	export MALINA_FLUX2_TEST_DIR=$(abspath $(MALINA_FLUX2_TEST_DIR)) && \
-	go test -count=1 -race ./...
+	go test -count=1 -race -tags=malina_model_tests ./...
 
 test: test-only lint vuln-check diff
 

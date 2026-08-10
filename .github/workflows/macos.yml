@@ -56,29 +56,8 @@ jobs:
             fi
           done
 
-      - name: Cache test models
-        id: cache-models
-        uses: actions/cache@v5
-        with:
-          path: models
-          key: ${{ runner.os }}-malina-models-sd-1.5-v1
-
-      - name: Download test models
-        if: steps.cache-models.outputs.cache-hit != 'true'
-        run: |
-          set -e
-          mkdir -p ./models
-          malina model pull -y -o $GITHUB_WORKSPACE/models sd-1.5
-
-      - name: Run unit tests
-        run: |
-          export MALINA_TEST_MODEL=$GITHUB_WORKSPACE/models/sd-1.5/v1-5-pruned-emaonly.safetensors
-          go test -count=1 ./...
-
-      - name: Run hello example
-        run: |
-          export MALINA_TEST_MODEL=$GITHUB_WORKSPACE/models/sd-1.5/v1-5-pruned-emaonly.safetensors
-          go run ./examples/hello "a lovely cat"
+      - name: Run tests (model-backed tests excluded)
+        run: go test -count=1 ./...
 
       - name: Run sd-encode example
         run: go run ./examples/sd-encode -i samples/frames -fps 24 -secs 1 -o /tmp/out.avi

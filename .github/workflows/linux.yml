@@ -17,8 +17,8 @@ concurrency:
 # regardless of the RUNPATH the upstream binary was built with.
 #
 # leejet currently publishes no linux/cuda asset, so this job tests the
-# CPU build. The smoke test in pkg/sd runs the FFI happy path against
-# SD 1.5 with width=64, height=64, steps=1 to keep CI runtime bounded.
+# CPU build. Model-backed tests use the malina_model_tests build tag and are
+# intentionally excluded from GitHub Actions.
 
 jobs:
   test:
@@ -82,38 +82,15 @@ jobs:
             fi
           done
 
-      - name: Cache test models
-        id: cache-models
-        uses: actions/cache@v5
-        with:
-          path: models
-          key: ${{ runner.os }}-malina-models-sd-1.5-v1
+      - name: Run tests (model-backed tests excluded)
+        run: go test -count=1 ./...
 
-      - name: Download test models
-        if: steps.cache-models.outputs.cache-hit != 'true'
-        run: |
-          set -e
-          mkdir -p ./models
-          malina model pull -y -o $GITHUB_WORKSPACE/models sd-1.5
-
-      - name: Run unit tests
-        run: |
-          export MALINA_TEST_MODEL=$GITHUB_WORKSPACE/models/sd-1.5/v1-5-pruned-emaonly.safetensors
-          go test -count=1 ./...
-
-      - name: Run unit tests (-race)
+      - name: Run tests with race detector (model-backed tests excluded)
         # Enforces the concurrency contract documented on Context (and the
         # FFI trampolines in general). Linux-only because the race detector
         # roughly triples runtime and one OS is enough to catch real races
         # in pure-Go and cgo-free FFI code paths.
-        run: |
-          export MALINA_TEST_MODEL=$GITHUB_WORKSPACE/models/sd-1.5/v1-5-pruned-emaonly.safetensors
-          go test -count=1 -race ./...
-
-      - name: Run hello example
-        run: |
-          export MALINA_TEST_MODEL=$GITHUB_WORKSPACE/models/sd-1.5/v1-5-pruned-emaonly.safetensors
-          go run ./examples/hello "a lovely cat"
+        run: go test -count=1 -race ./...
 
       - name: Run sd-encode example
         run: go run ./examples/sd-encode -i samples/frames -fps 24 -secs 1 -o /tmp/out.avi
