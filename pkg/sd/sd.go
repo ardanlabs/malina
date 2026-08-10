@@ -224,6 +224,9 @@ func Load(path string) error {
 	if err := loadLogFuncs(lib); err != nil {
 		return err
 	}
+	if err := loadProgressFuncs(lib); err != nil {
+		return err
+	}
 
 	// Newer upstream builds, including the Windows CPU package, keep the
 	// backend registry and loader API in a companion ggml shared library
@@ -249,6 +252,7 @@ func Load(path string) error {
 	if err := installLogCallback(); err != nil {
 		return err
 	}
+	applyProgressCallback()
 
 	libPath = path
 
