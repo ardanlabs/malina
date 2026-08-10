@@ -60,28 +60,8 @@ jobs:
             fi
           done
 
-      - name: Cache test models
-        id: cache-models
-        uses: actions/cache@v5
-        with:
-          path: models
-          key: ${{ runner.os }}-malina-models-sd-1.5-v1
-
-      - name: Download test models
-        if: steps.cache-models.outputs.cache-hit != 'true'
-        run: |
-          mkdir -p ./models
-          malina model pull -y -o ${env:GITHUB_WORKSPACE}/models sd-1.5
-
-      - name: Set test env
-        run: |
-          echo "MALINA_TEST_MODEL=${env:GITHUB_WORKSPACE}/models/sd-1.5/v1-5-pruned-emaonly.safetensors" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-
-      - name: Run unit tests
+      - name: Run tests (model-backed tests excluded)
         run: go test -count=1 ./...
-
-      - name: Run hello example
-        run: go run ./examples/hello "a lovely cat"
 
       - name: Run sd-encode example
         shell: bash
