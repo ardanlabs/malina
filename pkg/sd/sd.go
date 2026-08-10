@@ -5,6 +5,7 @@ package sd
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/ardanlabs/malina/pkg/loader"
 	"github.com/jupiterrider/ffi"
@@ -187,7 +188,10 @@ const (
 	LoraApplyModeCount   LoraApplyMode = 3
 )
 
-var libPath string
+var (
+	libPath string
+	loadMu  sync.Mutex
+)
 
 // LibPath returns the path to the loaded stable-diffusion.cpp shared library.
 func LibPath() string {
@@ -206,7 +210,8 @@ func LibPath() string {
 // library load. Init is still safe to call but is effectively a no-op in that
 // case.
 func Load(path string) error {
-	libPath = path
+	loadMu.Lock()
+	defer loadMu.Unlock()
 
 	lib, err := loader.LoadLibrary(path, "stable-diffusion")
 	if err != nil {
@@ -216,19 +221,21 @@ func Load(path string) error {
 	if err := loadSystemFuncs(lib); err != nil {
 		return err
 	}
+	if err := loadLogFuncs(lib); err != nil {
+		return err
+	}
 
 	// Newer upstream builds, including the Windows CPU package, keep the
 	// backend registry and loader API in a companion ggml shared library
-	// instead of re-exporting them from libstable-diffusion. Load that library
-	// when available so Init can register the packaged ggml-cpu variants.
-	if ggmlBackendLoadAllFromPathFunc == (ffi.Fun{}) {
+	// instead of re-exporting them from libstable-diffusion. Backend loading
+	// and logging are independent symbols, so probe the companion when either
+	// one remains unresolved. Prefer exports from libstable-diffusion when it
+	// provides them because they govern that library's GGML instance.
+	if ggmlBackendLoadAllFromPathFunc == (ffi.Fun{}) || ggmlLogSetFunc == (ffi.Fun{}) {
 		if ggmlLib, err := loader.LoadLibrary(path, "ggml"); err == nil {
 			loadGGMLBackendFuncs(ggmlLib)
+			loadGGMLLogFunc(ggmlLib)
 		}
-	}
-
-	if err := loadLogFuncs(lib); err != nil {
-		return err
 	}
 
 	if err := loadContextFuncs(lib); err != nil {
@@ -242,6 +249,8 @@ func Load(path string) error {
 	if err := installLogCallback(); err != nil {
 		return err
 	}
+
+	libPath = path
 
 	return nil
 }
