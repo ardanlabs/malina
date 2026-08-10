@@ -100,9 +100,6 @@ func TestGenerateImageFlux2Smoke(t *testing.T) {
 // stable-diffusion.cpp's IMG2IMG branch runs to completion; the produced
 // pixels are not validated for content quality.
 //
-// VAEDecodeOnly is flipped off on the context — img2img needs the VAE
-// encoder, which the C library skips by default to save memory.
-//
 // Requires MALINA_LIB and MALINA_TEST_MODEL. Skipped otherwise.
 func TestGenerateImageImg2ImgSmoke(t *testing.T) {
 	testSetup(t)
@@ -110,7 +107,6 @@ func TestGenerateImageImg2ImgSmoke(t *testing.T) {
 
 	cparams := ContextParamsInit()
 	cparams.ModelPath = modelPath
-	cparams.VAEDecodeOnly = false
 
 	ctx, err := NewContext(cparams)
 	if err != nil {
@@ -202,7 +198,6 @@ func TestGenerateImageImg2ImgFromJPEGSmoke(t *testing.T) {
 
 	cparams := ContextParamsInit()
 	cparams.ModelPath = modelPath
-	cparams.VAEDecodeOnly = false
 
 	ctx, err := NewContext(cparams)
 	if err != nil {

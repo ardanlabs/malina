@@ -31,12 +31,12 @@ var (
 )
 
 // DefaultSDVersion is the leejet/stable-diffusion.cpp release tag malina's
-// FFI struct mirrors (e.g. sd_ctx_params_t's 224-byte layout) are tested
+// FFI struct mirrors (e.g. sd_ctx_params_t's 280-byte layout) are tested
 // against. `malina install` uses this when no -v flag is supplied so first
 // installs and CI runs don't depend on the GitHub releases API. Bumping
 // this value is a deliberate, reviewable change that should be paired with
 // re-running the FFI sizeof tests in pkg/sd.
-const DefaultSDVersion = "master-669-2d40a8b"
+const DefaultSDVersion = "master-813-bfbef5b"
 
 // SDRepo is the upstream GitHub repo we fetch prebuilt libraries from.
 const SDRepo = "leejet/stable-diffusion.cpp"
@@ -50,7 +50,7 @@ var (
 
 // SDLatestVersion queries the GitHub releases API for the most recent
 // upstream stable-diffusion.cpp release tag. leejet currently tags every
-// CI build (e.g. "master-656-0e4ee04"), so "latest" usually means
+// CI build (e.g. "master-813-bfbef5b"), so "latest" usually means
 // last-merged-to-master, not a semver release.
 func SDLatestVersion() (string, error) {
 	var (
@@ -166,7 +166,7 @@ func LibraryName(operatingSystem string) string {
 //	architecture: "amd64" or "arm64"
 //	osName:       "linux", "darwin", or "windows"
 //	processor:    "cpu", "cuda", "metal", "vulkan", or "rocm"
-//	version:      a leejet release tag (e.g. "master-656-0e4ee04")
+//	version:      a leejet release tag (e.g. "master-813-bfbef5b")
 //	dest:         destination directory for the extracted libraries
 func Get(architecture, osName, processor, version, dest string) error {
 	return GetWithProgress(architecture, osName, processor, version, dest, ProgressTracker)
@@ -195,63 +195,88 @@ func GetWithContext(ctx context.Context, architecture, osName, processor, versio
 		return ErrInvalidVersion
 	}
 
-	url, err := resolveAssetURL(ctx, arch, osVal, prcssr, version)
+	urls, err := resolveAssetURLs(ctx, arch, osVal, prcssr, version)
 	if err != nil {
 		return err
 	}
-	return downloadAndExtract(ctx, url, dest, osVal, progress)
+	for _, url := range urls {
+		if err := downloadAndExtract(ctx, url, dest, osVal, progress); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // =============================================================================
 
-// resolveAssetURL queries the GitHub releases API for the requested tag
-// and selects the asset matching the platform.
+type releaseAsset struct {
+	Name        string `json:"name"`
+	DownloadURL string `json:"browser_download_url"`
+}
+
+// resolveAssetURLs queries the GitHub releases API for the requested tag
+// and selects the assets matching the platform.
 //
 // leejet asset names contain the commit SHA and the build VM's OS minor
 // version (e.g. ubuntu 24.04, macOS 15.7.7), so we cannot compose the URL
 // from the version tag alone — we have to discover it.
-func resolveAssetURL(_ context.Context, arch Arch, osVal OS, prcssr Processor, version string) (string, error) {
+func resolveAssetURLs(_ context.Context, arch Arch, osVal OS, prcssr Processor, version string) ([]string, error) {
 	if osVal.Equal(Linux) && prcssr.Equal(CUDA) {
-		return "", fmt.Errorf("%w: leejet/stable-diffusion.cpp publishes no linux/cuda artifact; use -p vulkan or -p rocm, or build stable-diffusion.cpp yourself", ErrUnsupportedPlatform)
+		return nil, fmt.Errorf("%w: leejet/stable-diffusion.cpp publishes no linux/cuda artifact; use -p vulkan or -p rocm, or build stable-diffusion.cpp yourself", ErrUnsupportedPlatform)
 	}
 
 	pattern, err := assetPattern(arch, osVal, prcssr)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	apiURL := fmt.Sprintf("https://api.github.com/repos/%s/releases/tags/%s", SDRepo, version)
 	body, err := httpGetJSON(apiURL)
 	if err != nil {
-		return "", fmt.Errorf("fetch release %s: %w", version, err)
+		return nil, fmt.Errorf("fetch release %s: %w", version, err)
 	}
 
 	var rel struct {
-		Assets []struct {
-			Name        string `json:"name"`
-			DownloadURL string `json:"browser_download_url"`
-		} `json:"assets"`
+		Assets []releaseAsset `json:"assets"`
 	}
 	if err := json.Unmarshal(body, &rel); err != nil {
-		return "", fmt.Errorf("parse release %s: %w", version, err)
+		return nil, fmt.Errorf("parse release %s: %w", version, err)
 	}
 
+	return selectAssetURLs(rel.Assets, pattern, osVal, prcssr, version)
+}
+
+func selectAssetURLs(assets []releaseAsset, pattern *regexp.Regexp, osVal OS, prcssr Processor, version string) ([]string, error) {
 	// Pick the asset whose name matches the per-platform regex. If multiple
 	// match (e.g. two ROCm variants), prefer the lexicographically-greatest
 	// — for leejet's ROCm-7.13.0 vs ROCm-7.2.1 layout that gets us the
 	// newer build.
 	var matches []string
-	for _, a := range rel.Assets {
+	for _, a := range assets {
 		if pattern.MatchString(a.Name) {
 			matches = append(matches, a.DownloadURL)
 		}
 	}
 	if len(matches) == 0 {
-		return "", fmt.Errorf("%w: release %s has no asset matching %q",
+		return nil, fmt.Errorf("%w: release %s has no asset matching %q",
 			ErrFileNotFound, version, pattern)
 	}
 	sort.Strings(matches)
-	return matches[len(matches)-1], nil
+	urls := []string{matches[len(matches)-1]}
+
+	// Current Windows CUDA releases package the CUDA runtime and cuBLAS DLLs
+	// separately from stable-diffusion.dll. Older releases were self-contained,
+	// so include the companion archive when the same release provides it.
+	if osVal.Equal(Windows) && prcssr.Equal(CUDA) {
+		for _, a := range assets {
+			if a.Name == "cudart-sd-bin-win-cu12-x64.zip" {
+				urls = append(urls, a.DownloadURL)
+				break
+			}
+		}
+	}
+
+	return urls, nil
 }
 
 func assetPattern(arch Arch, osVal OS, prcssr Processor) (*regexp.Regexp, error) {
@@ -273,7 +298,7 @@ func assetPattern(arch Arch, osVal OS, prcssr Processor) (*regexp.Regexp, error)
 		}
 		switch prcssr {
 		case CPU:
-			return regexp.MustCompile(`^sd-.*-bin-win-avx2-x64\.zip$`), nil
+			return regexp.MustCompile(`^sd-.*-bin-win-(avx2|cpu)-x64\.zip$`), nil
 		case CUDA:
 			return regexp.MustCompile(`^sd-.*-bin-win-cuda12-x64\.zip$`), nil
 		case Vulkan:

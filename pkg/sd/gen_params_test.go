@@ -21,10 +21,11 @@ func TestNestedStructSizes(t *testing.T) {
 		{"cGuidanceParams", unsafe.Sizeof(cGuidanceParams{}), 48},
 		{"cSampleParams", unsafe.Sizeof(cSampleParams{}), 96},
 		{"cPMParams", unsafe.Sizeof(cPMParams{}), 32},
+		{"cPulidParams", unsafe.Sizeof(cPulidParams{}), 16},
 		{"cTilingParams", unsafe.Sizeof(cTilingParams{}), 32},
 		{"cCacheParams", unsafe.Sizeof(cCacheParams{}), 96},
 		{"cHiresParams", unsafe.Sizeof(cHiresParams{}), 56},
-		{"cImgGenParams", unsafe.Sizeof(cImgGenParams{}), 480},
+		{"cImgGenParams", unsafe.Sizeof(cImgGenParams{}), 544},
 	}
 	for _, c := range cases {
 		if c.got != c.want {
@@ -55,6 +56,8 @@ func TestImgGenParamsInitDefaults(t *testing.T) {
 		{"Seed", p.Seed, int64(-1)},
 		{"BatchCount", p.BatchCount, int32(1)},
 		{"Strength", p.Strength, float32(0.75)},
+		{"CircularX", p.CircularX, false},
+		{"CircularY", p.CircularY, false},
 	}
 	for _, c := range cases {
 		if c.got != c.want {
@@ -86,7 +89,10 @@ func TestImgGenParamsInitDefaults(t *testing.T) {
 
 		// Top-level control + photo-maker defaults
 		{"ControlStrength", raw.ControlStrength, float32(0.9)},
+		{"IPAdapterStrength", raw.IPAdapterStrength, float32(1)},
 		{"PMParams.StyleStrength", raw.PMParams.StyleStrength, float32(20)},
+		{"PulidParams.IDWeight", raw.PulidParams.IDWeight, float32(1)},
+		{"QwenImageLayers", raw.QwenImageLayers, int32(3)},
 
 		// VAETilingParams
 		{"VAETilingParams.TargetOverlap", raw.VAETilingParams.TargetOverlap, float32(0.5)},

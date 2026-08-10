@@ -12,15 +12,13 @@ import (
 
 // cContextParams mirrors struct sd_ctx_params_t from include/stable-diffusion.h.
 //
-// The C struct contains 16 string pointers, one struct pointer, a uint32, two
-// trailing string pointers, plus bools, ints, enums, and a float interleaved
-// in between. On the LP64 / LLP64 platforms stable-diffusion.cpp targets, the
-// C compiler applies natural alignment per type. Go's struct layout follows
-// the same rules, so matching the field order with explicit _padN blank
-// fields produces a binary-compatible struct on darwin/arm64, darwin/amd64,
-// linux/amd64 and windows/amd64.
+// On the LP64 / LLP64 platforms stable-diffusion.cpp targets, the C compiler
+// applies natural alignment per type. Go's struct layout follows the same
+// rules, so matching the field order with explicit padding produces a
+// binary-compatible struct on darwin/arm64, darwin/amd64, linux/amd64 and
+// windows/amd64.
 //
-// Total size: 224 bytes on darwin/arm64.
+// Total size: 280 bytes.
 type cContextParams struct {
 	ModelPath                   uintptr // 0..8
 	ClipLPath                   uintptr // 8..16
@@ -31,54 +29,49 @@ type cContextParams struct {
 	LLMVisionPath               uintptr // 48..56
 	DiffusionModelPath          uintptr // 56..64
 	HighNoiseDiffusionModelPath uintptr // 64..72
-	EmbeddingsConnectorsPath    uintptr // 72..80
-	VAEPath                     uintptr // 80..88
-	AudioVAEPath                uintptr // 88..96
-	TAESDPath                   uintptr // 96..104
-	ControlNetPath              uintptr // 104..112
-	Embeddings                  uintptr // 112..120
-	EmbeddingCount              uint32  // 120..124
-	_                           [4]byte // 124..128
-	PhotoMakerPath              uintptr // 128..136
-	TensorTypeRules             uintptr // 136..144
+	UncondDiffusionModelPath    uintptr // 72..80
+	EmbeddingsConnectorsPath    uintptr // 80..88
+	VAEPath                     uintptr // 88..96
+	AudioVAEPath                uintptr // 96..104
+	TAESDPath                   uintptr // 104..112
+	ControlNetPath              uintptr // 112..120
+	IPAdapterPath               uintptr // 120..128
+	MotionModulePath            uintptr // 128..136
+	Embeddings                  uintptr // 136..144
+	EmbeddingCount              uint32  // 144..148
+	_                           [4]byte // 148..152
+	PhotoMakerPath              uintptr // 152..160
+	PulidWeightsPath            uintptr // 160..168
+	TensorTypeRules             uintptr // 168..176
 
-	VAEDecodeOnly         uint8 // 144
-	FreeParamsImmediately uint8 // 145
-	_                     [2]byte
-	NThreads              int32 // 148..152
+	NThreads       int32 // 176..180
+	Wtype          int32 // 180..184
+	RngType        int32 // 184..188
+	SamplerRngType int32 // 188..192
+	Prediction     int32 // 192..196
+	LoraApplyMode  int32 // 196..200
 
-	Wtype          int32 // 152..156
-	RngType        int32 // 156..160
-	SamplerRngType int32 // 160..164
-	Prediction     int32 // 164..168
-	LoraApplyMode  int32 // 168..172
-
-	OffloadParamsToCPU    uint8 // 172
-	EnableMmap            uint8 // 173
-	KeepClipOnCPU         uint8 // 174
-	KeepControlNetOnCPU   uint8 // 175
-	KeepVAEOnCPU          uint8 // 176
-	FlashAttn             uint8 // 177
-	DiffusionFlashAttn    uint8 // 178
-	TaePreviewOnly        uint8 // 179
-	DiffusionConvDirect   uint8 // 180
-	VAEConvDirect         uint8 // 181
-	CircularX             uint8 // 182
-	CircularY             uint8 // 183
-	ForceSDXLVAEConvScale uint8 // 184
-	ChromaUseDitMask      uint8 // 185
-	ChromaUseT5Mask       uint8 // 186
+	EnableMmap            uint8 // 200
+	FlashAttn             uint8 // 201
+	DiffusionFlashAttn    uint8 // 202
+	TaePreviewOnly        uint8 // 203
+	DiffusionConvDirect   uint8 // 204
+	VAEConvDirect         uint8 // 205
+	ForceSDXLVAEConvScale uint8 // 206
 	_                     [1]byte
-	ChromaT5MaskPad       int32 // 188..192
-
-	QwenImageZeroCondT uint8 // 192
-	_                  [3]byte
-	VaeFormat          int32   // 196..200 (added in stable-diffusion.cpp master-666)
-	MaxVram            float32 // 200..204
-	_                  [4]byte // 204..208 (stream_layers + alignment pad to 8)
-
-	Backend       uintptr // 208..216
-	ParamsBackend uintptr // 216..224
+	VaeFormat             int32   // 208..212
+	_                     [4]byte // 212..216
+	MaxVram               uintptr // 216..224
+	StreamLayers          uint8   // 224
+	EagerLoad             uint8   // 225
+	_                     [6]byte // 226..232
+	Backend               uintptr // 232..240
+	ParamsBackend         uintptr // 240..248
+	SplitMode             uintptr // 248..256
+	AutoFit               uint8   // 256
+	_                     [7]byte // 257..264
+	RPCServers            uintptr // 264..272
+	ModelArgs             uintptr // 272..280
 }
 
 // The C API takes sd_ctx_params_t by pointer (sd_ctx_params_init,
@@ -103,21 +96,17 @@ type ContextParams struct {
 	LLMVisionPath               string
 	DiffusionModelPath          string
 	HighNoiseDiffusionModelPath string
+	UncondDiffusionModelPath    string
 	EmbeddingsConnectorsPath    string
 	VAEPath                     string
 	AudioVAEPath                string
 	TAESDPath                   string
 	ControlNetPath              string
+	IPAdapterPath               string
+	MotionModulePath            string
 	PhotoMakerPath              string
+	PulidWeightsPath            string
 	TensorTypeRules             string
-
-	// VAEDecodeOnly skips loading the VAE encoder weights when only image
-	// decoding is needed. Defaults to true.
-	VAEDecodeOnly bool
-
-	// FreeParamsImmediately releases model parameter memory after each
-	// inference step. Defaults to true.
-	FreeParamsImmediately bool
 
 	// NThreads sets the CPU thread count used by ggml ops. Defaults to the
 	// number of physical cores reported by sd_get_num_physical_cores.
@@ -129,41 +118,34 @@ type ContextParams struct {
 	Prediction     Prediction
 	LoraApplyMode  LoraApplyMode
 
-	OffloadParamsToCPU    bool
 	EnableMmap            bool
-	KeepClipOnCPU         bool
-	KeepControlNetOnCPU   bool
-	KeepVAEOnCPU          bool
 	FlashAttn             bool
 	DiffusionFlashAttn    bool
 	TaePreviewOnly        bool
 	DiffusionConvDirect   bool
 	VAEConvDirect         bool
-	CircularX             bool
-	CircularY             bool
 	ForceSDXLVAEConvScale bool
-
-	// ChromaUseDitMask defaults to true. Used by Chroma-family models.
-	ChromaUseDitMask bool
-	ChromaUseT5Mask  bool
-	ChromaT5MaskPad  int32
-
-	QwenImageZeroCondT bool
 
 	// VaeFormat selects the VAE numerical format. Defaults to
 	// SDVaeFormatAuto (-1), which lets the C library pick the matching
-	// format based on the loaded model checkpoint. Added in
-	// stable-diffusion.cpp master-666.
+	// format based on the loaded model checkpoint.
 	VaeFormat SDVaeFormat
 
-	// MaxVram caps graph-cut segmented param offload in GiB. 0 disables;
-	// -1 means "auto: free VRAM minus 1 GiB".
-	MaxVram float32
+	// MaxVram sets the GiB budget or backend assignment specification for
+	// graph-cut segmented parameter offload. Empty disables it; "-1" selects
+	// automatic sizing.
+	MaxVram      string
+	StreamLayers bool
+	EagerLoad    bool
 
 	// Backend selects the ggml backend by name (e.g. "cuda", "metal",
 	// "vulkan"). Empty means use the library default.
 	Backend       string
 	ParamsBackend string
+	SplitMode     string
+	AutoFit       bool
+	RPCServers    string
+	ModelArgs     string
 }
 
 var (
@@ -203,33 +185,23 @@ func ContextParamsInit() ContextParams {
 	ctxParamsInitFunc.Call(nil, unsafe.Pointer(&rawPtr))
 
 	return ContextParams{
-		VAEDecodeOnly:         raw.VAEDecodeOnly != 0,
-		FreeParamsImmediately: raw.FreeParamsImmediately != 0,
 		NThreads:              raw.NThreads,
 		Wtype:                 SDType(raw.Wtype),
 		RngType:               RngType(raw.RngType),
 		SamplerRngType:        RngType(raw.SamplerRngType),
 		Prediction:            Prediction(raw.Prediction),
 		LoraApplyMode:         LoraApplyMode(raw.LoraApplyMode),
-		OffloadParamsToCPU:    raw.OffloadParamsToCPU != 0,
 		EnableMmap:            raw.EnableMmap != 0,
-		KeepClipOnCPU:         raw.KeepClipOnCPU != 0,
-		KeepControlNetOnCPU:   raw.KeepControlNetOnCPU != 0,
-		KeepVAEOnCPU:          raw.KeepVAEOnCPU != 0,
 		FlashAttn:             raw.FlashAttn != 0,
 		DiffusionFlashAttn:    raw.DiffusionFlashAttn != 0,
 		TaePreviewOnly:        raw.TaePreviewOnly != 0,
 		DiffusionConvDirect:   raw.DiffusionConvDirect != 0,
 		VAEConvDirect:         raw.VAEConvDirect != 0,
-		CircularX:             raw.CircularX != 0,
-		CircularY:             raw.CircularY != 0,
 		ForceSDXLVAEConvScale: raw.ForceSDXLVAEConvScale != 0,
-		ChromaUseDitMask:      raw.ChromaUseDitMask != 0,
-		ChromaUseT5Mask:       raw.ChromaUseT5Mask != 0,
-		ChromaT5MaskPad:       raw.ChromaT5MaskPad,
-		QwenImageZeroCondT:    raw.QwenImageZeroCondT != 0,
 		VaeFormat:             SDVaeFormat(raw.VaeFormat),
-		MaxVram:               raw.MaxVram,
+		StreamLayers:          raw.StreamLayers != 0,
+		EagerLoad:             raw.EagerLoad != 0,
+		AutoFit:               raw.AutoFit != 0,
 	}
 }
 
@@ -240,33 +212,23 @@ func NewContext(params ContextParams) (Context, error) {
 	var refs cStringRefs
 
 	raw := cContextParams{
-		VAEDecodeOnly:         boolToU8(params.VAEDecodeOnly),
-		FreeParamsImmediately: boolToU8(params.FreeParamsImmediately),
 		NThreads:              params.NThreads,
 		Wtype:                 int32(params.Wtype),
 		RngType:               int32(params.RngType),
 		SamplerRngType:        int32(params.SamplerRngType),
 		Prediction:            int32(params.Prediction),
 		LoraApplyMode:         int32(params.LoraApplyMode),
-		OffloadParamsToCPU:    boolToU8(params.OffloadParamsToCPU),
 		EnableMmap:            boolToU8(params.EnableMmap),
-		KeepClipOnCPU:         boolToU8(params.KeepClipOnCPU),
-		KeepControlNetOnCPU:   boolToU8(params.KeepControlNetOnCPU),
-		KeepVAEOnCPU:          boolToU8(params.KeepVAEOnCPU),
 		FlashAttn:             boolToU8(params.FlashAttn),
 		DiffusionFlashAttn:    boolToU8(params.DiffusionFlashAttn),
 		TaePreviewOnly:        boolToU8(params.TaePreviewOnly),
 		DiffusionConvDirect:   boolToU8(params.DiffusionConvDirect),
 		VAEConvDirect:         boolToU8(params.VAEConvDirect),
-		CircularX:             boolToU8(params.CircularX),
-		CircularY:             boolToU8(params.CircularY),
 		ForceSDXLVAEConvScale: boolToU8(params.ForceSDXLVAEConvScale),
-		ChromaUseDitMask:      boolToU8(params.ChromaUseDitMask),
-		ChromaUseT5Mask:       boolToU8(params.ChromaUseT5Mask),
-		ChromaT5MaskPad:       params.ChromaT5MaskPad,
-		QwenImageZeroCondT:    boolToU8(params.QwenImageZeroCondT),
 		VaeFormat:             int32(params.VaeFormat),
-		MaxVram:               params.MaxVram,
+		StreamLayers:          boolToU8(params.StreamLayers),
+		EagerLoad:             boolToU8(params.EagerLoad),
+		AutoFit:               boolToU8(params.AutoFit),
 	}
 
 	for _, m := range []struct {
@@ -282,15 +244,23 @@ func NewContext(params ContextParams) (Context, error) {
 		{&raw.LLMVisionPath, params.LLMVisionPath},
 		{&raw.DiffusionModelPath, params.DiffusionModelPath},
 		{&raw.HighNoiseDiffusionModelPath, params.HighNoiseDiffusionModelPath},
+		{&raw.UncondDiffusionModelPath, params.UncondDiffusionModelPath},
 		{&raw.EmbeddingsConnectorsPath, params.EmbeddingsConnectorsPath},
 		{&raw.VAEPath, params.VAEPath},
 		{&raw.AudioVAEPath, params.AudioVAEPath},
 		{&raw.TAESDPath, params.TAESDPath},
 		{&raw.ControlNetPath, params.ControlNetPath},
+		{&raw.IPAdapterPath, params.IPAdapterPath},
+		{&raw.MotionModulePath, params.MotionModulePath},
 		{&raw.PhotoMakerPath, params.PhotoMakerPath},
+		{&raw.PulidWeightsPath, params.PulidWeightsPath},
 		{&raw.TensorTypeRules, params.TensorTypeRules},
+		{&raw.MaxVram, params.MaxVram},
 		{&raw.Backend, params.Backend},
 		{&raw.ParamsBackend, params.ParamsBackend},
+		{&raw.SplitMode, params.SplitMode},
+		{&raw.RPCServers, params.RPCServers},
+		{&raw.ModelArgs, params.ModelArgs},
 	} {
 		p, err := refs.add(m.s)
 		if err != nil {

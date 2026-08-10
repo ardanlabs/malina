@@ -59,6 +59,13 @@ type cPMParams struct {
 	_             [4]byte // 28..32
 }
 
+// cPulidParams mirrors sd_pulid_params_t. Size: 16 bytes.
+type cPulidParams struct {
+	IDEmbeddingPath uintptr // 0..8
+	IDWeight        float32 // 8..12
+	_               [4]byte // 12..16
+}
+
 // cTilingParams mirrors sd_tiling_params_t. Size: 32 bytes.
 type cTilingParams struct {
 	Enabled         uint8   // 0
@@ -119,37 +126,44 @@ type cHiresParams struct {
 	_                 [4]byte // 52..56 (trailing pad to size 56)
 }
 
-// cImgGenParams mirrors sd_img_gen_params_t. Size: 480 bytes.
+// cImgGenParams mirrors sd_img_gen_params_t. Size: 544 bytes.
 type cImgGenParams struct {
-	Loras              uintptr // 0..8
-	LoraCount          uint32  // 8..12
-	_                  [4]byte // 12..16
-	Prompt             uintptr // 16..24
-	NegativePrompt     uintptr // 24..32
-	ClipSkip           int32   // 32..36
-	_                  [4]byte // 36..40
-	InitImage          cImage  // 40..64
-	RefImages          uintptr // 64..72
-	RefImagesCount     int32   // 72..76
-	AutoResizeRefImage uint8   // 76
-	IncreaseRefIndex   uint8   // 77
-	_                  [2]byte // 78..80
-	MaskImage          cImage  // 80..104
-	Width              int32   // 104..108
-	Height             int32   // 108..112
-	SampleParams       cSampleParams
-	Strength           float32 // 208..212
-	_                  [4]byte // 212..216
-	Seed               int64   // 216..224
-	BatchCount         int32   // 224..228
-	_                  [4]byte // 228..232
-	ControlImage       cImage  // 232..256
-	ControlStrength    float32 // 256..260
-	_                  [4]byte // 260..264
-	PMParams           cPMParams
-	VAETilingParams    cTilingParams
-	Cache              cCacheParams
-	Hires              cHiresParams
+	Loras             uintptr // 0..8
+	LoraCount         uint32  // 8..12
+	_                 [4]byte // 12..16
+	Prompt            uintptr // 16..24
+	NegativePrompt    uintptr // 24..32
+	ClipSkip          int32   // 32..36
+	_                 [4]byte // 36..40
+	InitImage         cImage  // 40..64
+	RefImages         uintptr // 64..72
+	RefImagesCount    int32   // 72..76
+	_                 [4]byte // 76..80
+	RefImageArgs      uintptr // 80..88
+	MaskImage         cImage  // 88..112
+	Width             int32   // 112..116
+	Height            int32   // 116..120
+	SampleParams      cSampleParams
+	Strength          float32 // 216..220
+	_                 [4]byte // 220..224
+	Seed              int64   // 224..232
+	BatchCount        int32   // 232..236
+	_                 [4]byte // 236..240
+	ControlImage      cImage  // 240..264
+	ControlStrength   float32 // 264..268
+	_                 [4]byte // 268..272
+	IPAdapterImage    cImage  // 272..296
+	IPAdapterStrength float32 // 296..300
+	_                 [4]byte // 300..304
+	PMParams          cPMParams
+	PulidParams       cPulidParams
+	VAETilingParams   cTilingParams
+	Cache             cCacheParams
+	Hires             cHiresParams
+	QwenImageLayers   int32 // 536..540
+	CircularX         uint8 // 540
+	CircularY         uint8 // 541
+	_                 [2]byte
 }
 
 // =============================================================================
@@ -195,6 +209,11 @@ type ImgGenParams struct {
 	// BatchCount is the number of images to generate per call. Default 1.
 	BatchCount int32
 
+	// CircularX and CircularY enable seamless tiling across the corresponding
+	// image axis.
+	CircularX bool
+	CircularY bool
+
 	// Strength is the noise strength for img2img. Default 0.75. Only takes
 	// effect when InitImage is set: lower values preserve more of the
 	// source image, 1.0 destroys it entirely.
@@ -206,10 +225,6 @@ type ImgGenParams struct {
 	// from random noise. Must be 3-channel RGB; the C library bilinearly
 	// resizes the pixels to (Width, Height) automatically.
 	//
-	// The Context this is passed to must have been created with
-	// ContextParams.VAEDecodeOnly = false; otherwise stable-diffusion.cpp
-	// aborts the process because the VAE encoder weights were skipped at
-	// load time.
 	InitImage *SDImage
 }
 
@@ -217,8 +232,11 @@ var (
 	// SD_API void sd_img_gen_params_init(sd_img_gen_params_t* sd_img_gen_params);
 	imgGenParamsInitFunc ffi.Fun
 
-	// SD_API sd_image_t* generate_image(sd_ctx_t* sd_ctx, const sd_img_gen_params_t* sd_img_gen_params);
+	// SD_API bool generate_image(sd_ctx_t*, const sd_img_gen_params_t*, sd_image_t**, int*);
 	generateImageFunc ffi.Fun
+
+	// SD_API void free_sd_images(sd_image_t* result_images, int num_images);
+	freeSDImagesFunc ffi.Fun
 )
 
 func loadGenFuncs(lib ffi.Lib) error {
@@ -228,8 +246,12 @@ func loadGenFuncs(lib ffi.Lib) error {
 		return loadError("sd_img_gen_params_init", err)
 	}
 
-	if generateImageFunc, err = lib.Prep("generate_image", &ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer); err != nil {
+	if generateImageFunc, err = lib.Prep("generate_image", &ffi.TypeUint8, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer); err != nil {
 		return loadError("generate_image", err)
+	}
+
+	if freeSDImagesFunc, err = lib.Prep("free_sd_images", &ffi.TypeVoid, &ffi.TypePointer, &ffi.TypeSint32); err != nil {
+		return loadError("free_sd_images", err)
 	}
 
 	return nil
@@ -251,6 +273,8 @@ func ImgGenParamsInit() ImgGenParams {
 		Seed:       raw.Seed,
 		BatchCount: raw.BatchCount,
 		Strength:   raw.Strength,
+		CircularX:  raw.CircularX != 0,
+		CircularY:  raw.CircularY != 0,
 	}
 }
 
@@ -264,9 +288,8 @@ func defaultCImgGenParams() cImgGenParams {
 // GenerateImage runs the diffusion pipeline configured by ctx and params and
 // returns a single decoded image. The returned SDImage owns its pixel data
 // (copied out of the C heap), so it remains valid after the context is
-// freed. The underlying sd_image_t (and its pixel buffer) allocated by
-// stable-diffusion.cpp is released via libc free before this function
-// returns, so repeated calls do not accumulate C-heap memory.
+// freed. The underlying result batch is released by stable-diffusion.cpp's
+// free_sd_images before this function returns.
 func GenerateImage(ctx Context, params ImgGenParams) (*SDImage, error) {
 	if ctx == 0 {
 		return nil, errors.New("GenerateImage: nil context")
@@ -285,6 +308,8 @@ func GenerateImage(ctx Context, params ImgGenParams) (*SDImage, error) {
 	raw.SampleParams.Guidance.TxtCfg = params.CFGScale
 	raw.SampleParams.SampleMethod = int32(params.Sampler)
 	raw.SampleParams.Scheduler = int32(params.Scheduler)
+	raw.CircularX = boolToU8(params.CircularX)
+	raw.CircularY = boolToU8(params.CircularY)
 
 	var refs cStringRefs
 	p, err := refs.add(params.Prompt)
@@ -309,32 +334,32 @@ func GenerateImage(ctx Context, params ImgGenParams) (*SDImage, error) {
 
 	rawPtr := &raw
 	var resultPtr *cImage
+	var resultCount int32
+	resultPtrPtr := &resultPtr
+	resultCountPtr := &resultCount
+	var result ffi.Arg
 	generateImageFunc.Call(
-		unsafe.Pointer(&resultPtr),
+		&result,
 		unsafe.Pointer(&ctx),
 		unsafe.Pointer(&rawPtr),
+		unsafe.Pointer(&resultPtrPtr),
+		unsafe.Pointer(&resultCountPtr),
 	)
 	runtime.KeepAlive(refs.keep)
 	runtime.KeepAlive(params.InitImage)
 	runtime.KeepAlive(&raw)
 
-	if resultPtr == nil {
+	if byte(result) == 0 || resultPtr == nil || resultCount == 0 {
 		if last := LastError(); last != "" {
-			return nil, fmt.Errorf("generate_image returned NULL: %s", last)
+			return nil, fmt.Errorf("generate_image failed: %s", last)
 		}
-		return nil, errors.New("generate_image returned NULL (no log message captured)")
+		return nil, errors.New("generate_image failed (no log message captured)")
 	}
 
-	// Copy the pixel buffer into a Go-owned slice, then release both
-	// C-heap allocations. Upstream allocates with libc calloc (for the
-	// sd_image_t array) and libc malloc (for each element's pixel
-	// buffer); libc free is the matched deallocator. Two-level free:
-	// pixel buffer first, then the struct itself. When batch support is
-	// surfaced through the Go layer the Data buffers for elements
-	// [1..N-1] must also be freed before the array.
+	// Copy the first pixel buffer into a Go-owned slice, then ask the library
+	// to release the complete result batch with its own allocator.
 	out := sdImageFromC(resultPtr)
-	cFree(unsafe.Pointer(resultPtr.Data))
-	cFree(unsafe.Pointer(resultPtr))
+	freeSDImagesFunc.Call(nil, unsafe.Pointer(&resultPtr), unsafe.Pointer(&resultCount))
 
 	return out, nil
 }

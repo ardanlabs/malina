@@ -2,6 +2,7 @@ package download
 
 import (
 	"errors"
+	"slices"
 	"testing"
 )
 
@@ -112,6 +113,7 @@ func TestAssetPattern(t *testing.T) {
 			matches: []string{
 				"sd-master-656-0e4ee04-bin-Darwin-15.7.7-arm64.zip",
 				"sd-master-700-deadbee-bin-Darwin-14.6.1-arm64.zip",
+				"sd-master-bfbef5b-bin-Darwin-macOS-26.5.2-arm64.zip",
 			},
 			rejects: []string{
 				"sd-master-656-0e4ee04-bin-Darwin-15.7.7-x86_64.zip",
@@ -126,7 +128,10 @@ func TestAssetPattern(t *testing.T) {
 		{
 			name: "windows amd64 cpu",
 			arch: AMD64, os: Windows, proc: CPU,
-			matches: []string{"sd-master-656-0e4ee04-bin-win-avx2-x64.zip"},
+			matches: []string{
+				"sd-master-656-0e4ee04-bin-win-avx2-x64.zip",
+				"sd-master-bfbef5b-bin-win-cpu-x64.zip",
+			},
 			rejects: []string{
 				"sd-master-656-0e4ee04-bin-win-cuda12-x64.zip",
 				"sd-master-656-0e4ee04-bin-win-vulkan-x64.zip",
@@ -247,5 +252,27 @@ func TestAssetPattern(t *testing.T) {
 				t.Errorf("expected errors.Is(%v), got %v", tt.wantErr, err)
 			}
 		})
+	}
+}
+
+func TestSelectAssetURLsWindowsCUDA(t *testing.T) {
+	pattern, err := assetPattern(AMD64, Windows, CUDA)
+	if err != nil {
+		t.Fatalf("assetPattern: unexpected error: %v", err)
+	}
+
+	assets := []releaseAsset{
+		{Name: "sd-master-bfbef5b-bin-win-cuda12-x64.zip", DownloadURL: "https://example.com/stable-diffusion.zip"},
+		{Name: "cudart-sd-bin-win-cu12-x64.zip", DownloadURL: "https://example.com/cudart.zip"},
+		{Name: "sd-master-bfbef5b-bin-win-cpu-x64.zip", DownloadURL: "https://example.com/cpu.zip"},
+	}
+	want := []string{"https://example.com/stable-diffusion.zip", "https://example.com/cudart.zip"}
+
+	got, err := selectAssetURLs(assets, pattern, Windows, CUDA, "master-813-bfbef5b")
+	if err != nil {
+		t.Fatalf("selectAssetURLs: unexpected error: %v", err)
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("selectAssetURLs: got %v, want %v", got, want)
 	}
 }

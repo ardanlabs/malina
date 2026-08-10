@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/ardanlabs/malina/pkg/loader"
+	"github.com/jupiterrider/ffi"
 )
 
 // Opaque handles. These are pointers in C; in Go we carry them as uintptr
@@ -107,7 +108,10 @@ const (
 	SampleEulerCFGPP   SampleMethod = 15
 	SampleEulerACFGPP  SampleMethod = 16
 	SampleEulerGE      SampleMethod = 17
-	SampleMethodCount  SampleMethod = 18
+	SampleDPMPP2MSDE   SampleMethod = 18
+	SampleDPMPP2MSDEBT SampleMethod = 19
+	SampleLMS          SampleMethod = 20
+	SampleMethodCount  SampleMethod = 21
 )
 
 // Scheduler mirrors enum scheduler_t.
@@ -126,20 +130,25 @@ const (
 	SchedulerLCM         Scheduler = 9
 	SchedulerBongTangent Scheduler = 10
 	SchedulerLTX2        Scheduler = 11
-	SchedulerCount       Scheduler = 12
+	SchedulerLogitNormal Scheduler = 12
+	SchedulerFlux2       Scheduler = 13
+	SchedulerFlux        Scheduler = 14
+	SchedulerBeta        Scheduler = 15
+	SchedulerCount       Scheduler = 16
 )
 
 // Prediction mirrors enum prediction_t.
 type Prediction int32
 
 const (
-	PredictionEPS       Prediction = 0
-	PredictionV         Prediction = 1
-	PredictionEDMV      Prediction = 2
-	PredictionFlow      Prediction = 3
-	PredictionFluxFlow  Prediction = 4
-	PredictionFlux2Flow Prediction = 5
-	PredictionCount     Prediction = 6
+	PredictionEPS         Prediction = 0
+	PredictionV           Prediction = 1
+	PredictionEDMV        Prediction = 2
+	PredictionFlow        Prediction = 3
+	PredictionFluxFlow    Prediction = 4
+	PredictionSeFiFlow    Prediction = 5
+	PredictionMinit2IFlow Prediction = 6
+	PredictionCount       Prediction = 7
 )
 
 // LogLevel mirrors enum sd_log_level_t.
@@ -164,7 +173,8 @@ const (
 	SDVaeFormatFlux  SDVaeFormat = 0
 	SDVaeFormatSD3   SDVaeFormat = 1
 	SDVaeFormatFlux2 SDVaeFormat = 2
-	SDVaeFormatCount SDVaeFormat = 3
+	SDVaeFormatWan   SDVaeFormat = 3
+	SDVaeFormatCount SDVaeFormat = 4
 )
 
 // LoraApplyMode mirrors enum lora_apply_mode_t.
@@ -191,10 +201,10 @@ func LibPath() string {
 // first context creation) to populate the process-wide ggml backend registry
 // from the same directory.
 //
-// In the official leejet releases the ggml backends are statically linked into
-// libstable-diffusion, so backend registration happens automatically as part
-// of library load. Init is still safe to call (and recommended for consistency
-// with bucky) but is effectively a no-op in that case.
+// In releases where the ggml backends are statically linked into
+// libstable-diffusion, backend registration happens automatically as part of
+// library load. Init is still safe to call but is effectively a no-op in that
+// case.
 func Load(path string) error {
 	libPath = path
 
@@ -205,6 +215,16 @@ func Load(path string) error {
 
 	if err := loadSystemFuncs(lib); err != nil {
 		return err
+	}
+
+	// Newer upstream builds, including the Windows CPU package, keep the
+	// backend registry and loader API in a companion ggml shared library
+	// instead of re-exporting them from libstable-diffusion. Load that library
+	// when available so Init can register the packaged ggml-cpu variants.
+	if ggmlBackendLoadAllFromPathFunc == (ffi.Fun{}) {
+		if ggmlLib, err := loader.LoadLibrary(path, "ggml"); err == nil {
+			loadGGMLBackendFuncs(ggmlLib)
+		}
 	}
 
 	if err := loadLogFuncs(lib); err != nil {
@@ -219,10 +239,6 @@ func Load(path string) error {
 		return err
 	}
 
-	if err := loadLibcFuncs(); err != nil {
-		return err
-	}
-
 	if err := installLogCallback(); err != nil {
 		return err
 	}
@@ -234,8 +250,7 @@ func Load(path string) error {
 // process-wide ggml registry. Required when libstable-diffusion was built with
 // -DGGML_BACKEND_DL=ON, where backends ship as separate libggml-*.so files
 // that don't auto-register on libstable-diffusion load. No-op on static builds
-// (the upstream leejet releases) because the underlying ggml symbol is either
-// absent or finds nothing to load.
+// because the underlying ggml symbol is either absent or finds nothing to load.
 //
 // Call Init AFTER Load and BEFORE the first context creation.
 //
