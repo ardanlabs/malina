@@ -43,25 +43,23 @@ func loadSystemFuncs(lib ffi.Lib) error {
 		return loadError("sd_get_num_physical_cores", err)
 	}
 
-	// Optional. leejet's official Windows zip ships a single stable-diffusion.dll
-	// with ggml statically linked but NOT re-exported (GGML_API expands to nothing
-	// on a non-GGML_SHARED PE/COFF build), so GetProcAddress returns
-	// ERROR_PROC_NOT_FOUND for every ggml_* symbol. On Mach-O / ELF the same
-	// static link still exports the symbols by default visibility. Treat both
-	// ggml_* preps as best-effort and let GGMLBackendDeviceCount report -1
-	// when the symbol is unavailable.
-	if fn, perr := lib.Prep("ggml_backend_dev_count", &ffi.TypeUint64); perr == nil {
-		ggmlBackendDevCountFunc = fn
-	}
-
-	// Optional: only present when libstable-diffusion was built with
-	// -DGGML_BACKEND_DL=ON. Best-effort — a Prep failure here just means
-	// the symbol isn't exported, which is fine for static builds.
-	if fn, perr := lib.Prep("ggml_backend_load_all_from_path", &ffi.TypeVoid, &ffi.TypePointer); perr == nil {
-		ggmlBackendLoadAllFromPathFunc = fn
-	}
+	loadGGMLBackendFuncs(lib)
 
 	return nil
+}
+
+func loadGGMLBackendFuncs(lib ffi.Lib) {
+	if ggmlBackendDevCountFunc == (ffi.Fun{}) {
+		if fn, err := lib.Prep("ggml_backend_dev_count", &ffi.TypeUint64); err == nil {
+			ggmlBackendDevCountFunc = fn
+		}
+	}
+
+	if ggmlBackendLoadAllFromPathFunc == (ffi.Fun{}) {
+		if fn, err := lib.Prep("ggml_backend_load_all_from_path", &ffi.TypeVoid, &ffi.TypePointer); err == nil {
+			ggmlBackendLoadAllFromPathFunc = fn
+		}
+	}
 }
 
 // Version returns the stable-diffusion.cpp library version string.
@@ -100,9 +98,9 @@ func NumPhysicalCores() int32 {
 // libraries in the same process.
 //
 // Returns -1 when the underlying ggml_backend_dev_count symbol is not exported
-// by the loaded libstable-diffusion (e.g. leejet's Windows DLL statically
-// links ggml without re-exporting its API). In that case, callers cannot use
-// this to detect a populated registry; assume Init is safe to call.
+// by either libstable-diffusion or a companion ggml shared library. In that
+// case, callers cannot use this to detect a populated registry; assume Init is
+// safe to call.
 func GGMLBackendDeviceCount() int {
 	if ggmlBackendDevCountFunc == (ffi.Fun{}) {
 		return -1
@@ -120,11 +118,10 @@ func GGMLBackendDeviceCount() int {
 // registered backends and the first context creation asserts on
 // device==NULL.
 //
-// On builds where backends are statically linked into libstable-diffusion
-// (the upstream leejet releases), the symbol is not present at all and this
-// is a no-op (loadSystemFuncs leaves the Fun zero-valued). On builds where
-// the symbol is present but no libggml-*.{so,dylib,dll} files match in
-// dirPath, the underlying ggml implementation is itself a safe no-op.
+// On builds where backends are statically linked into libstable-diffusion,
+// the symbol may not be present and this is a no-op. On builds where the
+// symbol is present but no libggml-*.{so,dylib,dll} files match in dirPath,
+// the underlying ggml implementation is itself a safe no-op.
 func ggmlBackendLoadAllFromPath(dirPath string) error {
 	if ggmlBackendLoadAllFromPathFunc == (ffi.Fun{}) {
 		return nil
