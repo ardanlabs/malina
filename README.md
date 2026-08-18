@@ -121,6 +121,7 @@ Malina ships a small bundled catalog so you can `malina model pull sd-1.5` inste
 $ malina model list
 $ malina model pull sd-1.5
 $ malina model pull sdxl-base-1.0
+$ malina model pull flux2-klein-4b   # license-gated; export HF_TOKEN first
 $ malina model pull flux2-klein-9b   # license-gated; export HF_TOKEN first
 ```
 

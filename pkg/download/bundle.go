@@ -53,9 +53,10 @@ type Bundle struct {
 
 // Catalog returns the curated set of bundles malina ships with.
 //
-// These three were chosen to span the practical complexity range:
+// These bundles span the practical complexity range:
 //   - sd-1.5: smallest, single-file, fully open
 //   - sdxl-base-1.0: mainstream quality baseline, single-file
+//   - flux2-klein-4b: smaller multi-file FLUX.2 option
 //   - flux2-klein-9b: multi-file (diffusion + VAE + LLM), license-gated
 func Catalog() []Bundle {
 	return []Bundle{
@@ -82,6 +83,32 @@ func Catalog() []Bundle {
 					Filename: "sd_xl_base_1.0.safetensors",
 					URL:      "https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/resolve/main/sd_xl_base_1.0.safetensors",
 					Size:     "6.9 GB",
+				},
+			},
+		},
+		{
+			Name:        "flux2-klein-4b",
+			Description: "FLUX.2 [klein] 4B — compact 4-step distilled model with Qwen3-4B text encoder. Three files (~5.3 GB total).",
+			License:     "FLUX Non-Commercial",
+			Gated:       true,
+			Files: []BundleFile{
+				{
+					Role:     RoleDiffusion,
+					Filename: "flux-2-klein-4b-Q4_0.gguf",
+					URL:      "https://huggingface.co/leejet/FLUX.2-klein-4B-GGUF/resolve/main/flux-2-klein-4b-Q4_0.gguf",
+					Size:     "2.5 GB",
+				},
+				{
+					Role:     RoleVAE,
+					Filename: "ae.safetensors",
+					URL:      "https://huggingface.co/black-forest-labs/FLUX.2-dev/resolve/main/ae.safetensors",
+					Size:     "335 MB",
+				},
+				{
+					Role:     RoleLLM,
+					Filename: "Qwen3-4B-Q4_K_M.gguf",
+					URL:      "https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf",
+					Size:     "2.5 GB",
 				},
 			},
 		},

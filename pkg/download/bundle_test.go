@@ -17,8 +17,9 @@ func TestBundleByName(t *testing.T) {
 	}{
 		{"sd-1.5", true},
 		{"sdxl-base-1.0", true},
+		{"flux2-klein-4b", true},
 		{"flux2-klein-9b", true},
-		{"  Flux2-Klein-9B  ", true},
+		{"  Flux2-Klein-4B  ", true},
 		{"unknown", false},
 		{"", false},
 	}
@@ -34,7 +35,7 @@ func TestBundleByName(t *testing.T) {
 
 func TestBundleNames(t *testing.T) {
 	got := BundleNames()
-	want := []string{"flux2-klein-9b", "sd-1.5", "sdxl-base-1.0"}
+	want := []string{"flux2-klein-4b", "flux2-klein-9b", "sd-1.5", "sdxl-base-1.0"}
 	if len(got) != len(want) {
 		t.Fatalf("BundleNames: got %v, want %v", got, want)
 	}
@@ -73,6 +74,15 @@ func TestBundleShapes(t *testing.T) {
 			gated: false,
 			files: []wantFile{
 				{RoleModel, "sd_xl_base_1.0.safetensors"},
+			},
+		},
+		{
+			name:  "flux2-klein-4b",
+			gated: true,
+			files: []wantFile{
+				{RoleDiffusion, "flux-2-klein-4b-Q4_0.gguf"},
+				{RoleVAE, "ae.safetensors"},
+				{RoleLLM, "Qwen3-4B-Q4_K_M.gguf"},
 			},
 		},
 		{
