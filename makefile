@@ -7,11 +7,12 @@ MODELS_DIR    ?= $(HOME)/models
 # -----------------------------------------------------------------------------
 # Bundle downloads. Each target invokes `malina model pull` which downloads
 # every file in the named bundle into $(MODELS_DIR)/<bundle>/ along with a
-# manifest.json. The flux bundle is license-gated; set HF_TOKEN first.
+# manifest.json. The FLUX bundles are license-gated; set HF_TOKEN first.
 
 download-models:
 	go run . model pull -y -o $(MODELS_DIR) sd-1.5
 	go run . model pull -y -o $(MODELS_DIR) sdxl-base-1.0
+	go run . model pull -y -o $(MODELS_DIR) flux2-klein-4b
 	go run . model pull -y -o $(MODELS_DIR) flux2-klein-9b	
 
 
@@ -32,7 +33,7 @@ clean-stable-diffusion.cpp:
 #
 #   make download-stable-diffusion.cpp                          # malina-pinned version (see pkg/download.DefaultSDVersion)
 #   make download-stable-diffusion.cpp VERSION=latest           # whatever leejet/stable-diffusion.cpp /releases/latest returns
-#   make download-stable-diffusion.cpp VERSION=master-813-bfbef5b
+#   make download-stable-diffusion.cpp VERSION=master-820-de298c2
 #   make download-stable-diffusion.cpp VERSION=v0.9.0
 download-stable-diffusion.cpp:
 	go run . install -lib $(MALINA_LIB) -u $(if $(VERSION),-v $(VERSION))
