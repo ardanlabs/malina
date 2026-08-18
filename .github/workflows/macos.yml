@@ -2,7 +2,7 @@ name: macOS
 
 # Disabled on PR/push until upstream leejet/stable-diffusion.cpp ships a
 # Metal kernel for the GGML_OP_NORM op that the current pinned build
-# (master-813-bfbef5b) emits in the CLIP path. On the GitHub-hosted M1
+# (master-820-de298c2) emits in the CLIP path. On the GitHub-hosted M1
 # runner the ggml graph optimizer does not fuse NORM away, so dispatch
 # hits a missing case in ggml_metal_op_encode_impl and aborts inside
 # CLIPTextModelRunner::compute. Newer Apple Silicon (M2+) fuses the op
