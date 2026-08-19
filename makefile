@@ -312,6 +312,13 @@ example-hello:
 	export MALINA_TEST_MODEL=$(MODELS_DIR)/sd-1.5/v1-5-pruned-emaonly.safetensors && \
 	go run ./examples/hello "a lovely cat"
 
+# example-concurrent measures serial and concurrent generation using two
+# independent native contexts. Each context loads its own model weights.
+example-concurrent:
+	export MALINA_LIB=$(MALINA_LIB) && \
+	export MALINA_TEST_MODEL=$(MODELS_DIR)/sd-1.5/v1-5-pruned-emaonly.safetensors && \
+	go run ./examples/concurrent
+
 # example-img2img requires the sd-1.5 bundle and a source PNG. By default
 # it consumes hello.png produced by `make example-hello`, so the natural
 # flow is:

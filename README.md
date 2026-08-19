@@ -162,6 +162,12 @@ $ make example-system
 $ make example-hello
 ```
 
+[CONCURRENT](examples/concurrent/main.go) — compare serial generation with concurrent generation on independent native contexts. Contexts cannot be shared concurrently, and each independent context loads another copy of the model weights.
+
+```shell
+$ make example-concurrent
+```
+
 [IMG2IMG](examples/img2img/main.go) — image-to-image: load a source PNG or JPEG, hand it to stable-diffusion as the starting latent, and let the prompt repaint it. The default chain consumes `hello.png` written by the previous example.
 
 ```shell
