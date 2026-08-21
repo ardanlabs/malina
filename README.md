@@ -39,8 +39,8 @@ Sometimes there are breaking changes to stable-diffusion.cpp that require an upd
 
 | stable-diffusion.cpp | malina |
 | -------------------- | ------ |
-| master-827-97d2990   | 1.0.x (default in 1.0.4+) |
-| master-820-de298c2   | 1.0.x  |
+| master-827-97d2990   | 1.0.4+ |
+| master-820-de298c2   | 1.0.2–1.0.3 |
 | master-813-bfbef5b   | 1.0.1  |
 | master-669-2d40a8b   | 0.1.x  |
 
