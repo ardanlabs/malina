@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"unsafe"
 
+	"github.com/ardanlabs/malina/pkg/utils"
 	"github.com/jupiterrider/ffi"
 )
 
@@ -15,7 +16,7 @@ import (
 // cSlgParams mirrors sd_slg_params_t.
 // Size: 32 bytes (16+12, padded to 32 by 8-aligned final field).
 type cSlgParams struct {
-	Layers     uintptr // 0..8   (int*)
+	Layers     *int32  // 0..8   (int*)
 	LayerCount uint64  // 8..16  (size_t)
 	LayerStart float32 // 16..20
 	LayerEnd   float32 // 20..24
@@ -43,10 +44,10 @@ type cSampleParams struct {
 	Eta               float32         // 60..64
 	ShiftedTimestep   int32           // 64..68
 	_                 [4]byte         // 68..72 (pad before pointer)
-	CustomSigmas      uintptr         // 72..80
+	CustomSigmas      *float32        // 72..80
 	CustomSigmasCount int32           // 80..84
 	FlowShift         float32         // 84..88
-	ExtraSampleArgs   uintptr         // 88..96
+	ExtraSampleArgs   *byte           // 88..96
 }
 
 // cPMParams mirrors sd_pm_params_t. Size: 32 bytes.
@@ -54,14 +55,14 @@ type cPMParams struct {
 	IDImages      uintptr // 0..8
 	IDImagesCount int32   // 8..12
 	_             [4]byte // 12..16
-	IDEmbedPath   uintptr // 16..24
+	IDEmbedPath   *byte   // 16..24
 	StyleStrength float32 // 24..28
 	_             [4]byte // 28..32
 }
 
 // cPulidParams mirrors sd_pulid_params_t. Size: 16 bytes.
 type cPulidParams struct {
-	IDEmbeddingPath uintptr // 0..8
+	IDEmbeddingPath *byte   // 0..8
 	IDWeight        float32 // 8..12
 	_               [4]byte // 12..16
 }
@@ -76,7 +77,7 @@ type cTilingParams struct {
 	TargetOverlap   float32 // 12..16
 	RelSizeX        float32 // 16..20
 	RelSizeY        float32 // 20..24
-	ExtraTilingArgs uintptr // 24..32
+	ExtraTilingArgs *byte   // 24..32
 }
 
 // cCacheParams mirrors sd_cache_params_t. Size: 96 bytes.
@@ -97,7 +98,7 @@ type cCacheParams struct {
 	MaxContinuousCachedSteps int32   // 44..48
 	TaylorseerNDerivatives   int32   // 48..52
 	TaylorseerSkipInterval   int32   // 52..56
-	SCMMask                  uintptr // 56..64
+	SCMMask                  *byte   // 56..64
 	SCMPolicyDynamic         uint8   // 64
 	_                        [3]byte // 65..68
 	SpectrumW                float32 // 68..72
@@ -111,19 +112,27 @@ type cCacheParams struct {
 
 // cHiresParams mirrors sd_hires_params_t. Size: 56 bytes.
 type cHiresParams struct {
-	Enabled           uint8   // 0
-	_                 [3]byte // 1..4
-	Upscaler          int32   // 4..8
-	ModelPath         uintptr // 8..16
-	Scale             float32 // 16..20
-	TargetWidth       int32   // 20..24
-	TargetHeight      int32   // 24..28
-	Steps             int32   // 28..32
-	DenoisingStrength float32 // 32..36
-	UpscaleTileSize   int32   // 36..40
-	CustomSigmas      uintptr // 40..48
-	CustomSigmasCount int32   // 48..52
-	_                 [4]byte // 52..56 (trailing pad to size 56)
+	Enabled           uint8    // 0
+	_                 [3]byte  // 1..4
+	Upscaler          int32    // 4..8
+	ModelPath         *byte    // 8..16
+	Scale             float32  // 16..20
+	TargetWidth       int32    // 20..24
+	TargetHeight      int32    // 24..28
+	Steps             int32    // 28..32
+	DenoisingStrength float32  // 32..36
+	UpscaleTileSize   int32    // 36..40
+	CustomSigmas      *float32 // 40..48
+	CustomSigmasCount int32    // 48..52
+	_                 [4]byte  // 52..56 (trailing pad to size 56)
+}
+
+// cLora mirrors sd_lora_t. Size: 16 bytes.
+type cLora struct {
+	IsHighNoise uint8
+	_           [3]byte
+	Multiplier  float32
+	Path        uintptr
 }
 
 // cImgGenParams mirrors sd_img_gen_params_t. Size: 544 bytes.
@@ -131,15 +140,15 @@ type cImgGenParams struct {
 	Loras             uintptr // 0..8
 	LoraCount         uint32  // 8..12
 	_                 [4]byte // 12..16
-	Prompt            uintptr // 16..24
-	NegativePrompt    uintptr // 24..32
+	Prompt            *byte   // 16..24
+	NegativePrompt    *byte   // 24..32
 	ClipSkip          int32   // 32..36
 	_                 [4]byte // 36..40
 	InitImage         cImage  // 40..64
 	RefImages         uintptr // 64..72
 	RefImagesCount    int32   // 72..76
 	_                 [4]byte // 76..80
-	RefImageArgs      uintptr // 80..88
+	RefImageArgs      *byte   // 80..88
 	MaskImage         cImage  // 88..112
 	Width             int32   // 112..116
 	Height            int32   // 116..120
@@ -169,15 +178,12 @@ type cImgGenParams struct {
 // =============================================================================
 // Public API
 
-// ImgGenParams is the Go-side representation of sd_img_gen_params_t with the
-// commonly-used text-to-image / image-to-image knobs surfaced as top-level
-// fields. Advanced subsystems (LoRA, HiRes, Cache, PhotoMaker, ControlNet,
-// reference images) are left at C library defaults in v1 and exposed in
-// later milestones.
+// ImgGenParams is the Go-side representation of sd_img_gen_params_t.
 //
 // Use ImgGenParamsInit to obtain a value populated with the library defaults,
 // then set Prompt and any other fields before passing to GenerateImage.
 type ImgGenParams struct {
+	Loras          []Lora
 	Prompt         string
 	NegativePrompt string
 
@@ -225,7 +231,30 @@ type ImgGenParams struct {
 	// from random noise. Must be 3-channel RGB; the C library bilinearly
 	// resizes the pixels to (Width, Height) automatically.
 	//
-	InitImage *SDImage
+	InitImage    *SDImage
+	RefImages    []*SDImage
+	RefImageArgs string
+	MaskImage    *SDImage
+
+	ImageCFG          float32
+	DistilledGuidance float32
+	SLG               SLGParams
+	Eta               float32
+	ShiftedTimestep   int32
+	CustomSigmas      []float32
+	FlowShift         float32
+	ExtraSampleArgs   string
+
+	ControlImage      *SDImage
+	ControlStrength   float32
+	IPAdapterImage    *SDImage
+	IPAdapterStrength float32
+	PhotoMaker        PhotoMakerParams
+	PuLID             PuLIDParams
+	VAETiling         TilingParams
+	Cache             CacheParams
+	Hires             HiresParams
+	QwenImageLayers   int32
 }
 
 var (
@@ -237,6 +266,10 @@ var (
 
 	// SD_API void free_sd_images(sd_image_t* result_images, int num_images);
 	freeSDImagesFunc ffi.Fun
+
+	sampleParamsInitFunc ffi.Fun
+	cacheParamsInitFunc  ffi.Fun
+	hiresParamsInitFunc  ffi.Fun
 )
 
 func loadGenFuncs(lib ffi.Lib) error {
@@ -254,6 +287,10 @@ func loadGenFuncs(lib ffi.Lib) error {
 		return loadError("free_sd_images", err)
 	}
 
+	sampleParamsInitFunc = prepOptional(lib, "sd_sample_params_init", &ffi.TypeVoid, &ffi.TypePointer)
+	cacheParamsInitFunc = prepOptional(lib, "sd_cache_params_init", &ffi.TypeVoid, &ffi.TypePointer)
+	hiresParamsInitFunc = prepOptional(lib, "sd_hires_params_init", &ffi.TypeVoid, &ffi.TypePointer)
+
 	return nil
 }
 
@@ -263,18 +300,34 @@ func loadGenFuncs(lib ffi.Lib) error {
 func ImgGenParamsInit() ImgGenParams {
 	raw := defaultCImgGenParams()
 	return ImgGenParams{
-		ClipSkip:   raw.ClipSkip,
-		Width:      raw.Width,
-		Height:     raw.Height,
-		Steps:      raw.SampleParams.SampleSteps,
-		CFGScale:   raw.SampleParams.Guidance.TxtCfg,
-		Sampler:    SampleMethod(raw.SampleParams.SampleMethod),
-		Scheduler:  Scheduler(raw.SampleParams.Scheduler),
-		Seed:       raw.Seed,
-		BatchCount: raw.BatchCount,
-		Strength:   raw.Strength,
-		CircularX:  raw.CircularX != 0,
-		CircularY:  raw.CircularY != 0,
+		ClipSkip:          raw.ClipSkip,
+		Width:             raw.Width,
+		Height:            raw.Height,
+		Steps:             raw.SampleParams.SampleSteps,
+		CFGScale:          raw.SampleParams.Guidance.TxtCfg,
+		ImageCFG:          raw.SampleParams.Guidance.ImgCfg,
+		DistilledGuidance: raw.SampleParams.Guidance.DistilledGuidance,
+		SLG:               slgParamsFromC(raw.SampleParams.Guidance.SLG),
+		Sampler:           SampleMethod(raw.SampleParams.SampleMethod),
+		Scheduler:         Scheduler(raw.SampleParams.Scheduler),
+		Eta:               raw.SampleParams.Eta,
+		ShiftedTimestep:   raw.SampleParams.ShiftedTimestep,
+		FlowShift:         raw.SampleParams.FlowShift,
+		ExtraSampleArgs:   cString(raw.SampleParams.ExtraSampleArgs),
+		CustomSigmas:      copyCFloat32s(raw.SampleParams.CustomSigmas, raw.SampleParams.CustomSigmasCount),
+		Seed:              raw.Seed,
+		BatchCount:        raw.BatchCount,
+		Strength:          raw.Strength,
+		CircularX:         raw.CircularX != 0,
+		CircularY:         raw.CircularY != 0,
+		ControlStrength:   raw.ControlStrength,
+		IPAdapterStrength: raw.IPAdapterStrength,
+		PhotoMaker:        photoMakerParamsFromC(raw.PMParams),
+		PuLID:             pulidParamsFromC(raw.PulidParams),
+		VAETiling:         tilingParamsFromC(raw.VAETilingParams),
+		Cache:             cacheParamsFromC(raw.Cache),
+		Hires:             hiresParamsFromC(raw.Hires),
+		QwenImageLayers:   raw.QwenImageLayers,
 	}
 }
 
@@ -285,50 +338,68 @@ func defaultCImgGenParams() cImgGenParams {
 	return raw
 }
 
+// SampleParamsInit returns stable-diffusion.cpp's sampling defaults.
+func SampleParamsInit() SampleParams {
+	var raw cSampleParams
+	if sampleParamsInitFunc != (ffi.Fun{}) {
+		ptr := &raw
+		sampleParamsInitFunc.Call(nil, unsafe.Pointer(&ptr))
+	} else {
+		raw = defaultCImgGenParams().SampleParams
+	}
+	return sampleParamsFromC(raw)
+}
+
+// CacheParamsInit returns stable-diffusion.cpp's cache defaults.
+func CacheParamsInit() CacheParams {
+	var raw cCacheParams
+	if cacheParamsInitFunc != (ffi.Fun{}) {
+		ptr := &raw
+		cacheParamsInitFunc.Call(nil, unsafe.Pointer(&ptr))
+	} else {
+		raw = defaultCImgGenParams().Cache
+	}
+	return cacheParamsFromC(raw)
+}
+
+// HiresParamsInit returns stable-diffusion.cpp's high-resolution pass defaults.
+func HiresParamsInit() HiresParams {
+	var raw cHiresParams
+	if hiresParamsInitFunc != (ffi.Fun{}) {
+		ptr := &raw
+		hiresParamsInitFunc.Call(nil, unsafe.Pointer(&ptr))
+	} else {
+		raw = defaultCImgGenParams().Hires
+	}
+	return hiresParamsFromC(raw)
+}
+
 // GenerateImage runs the diffusion pipeline configured by ctx and params and
 // returns a single decoded image. The returned SDImage owns its pixel data
 // (copied out of the C heap), so it remains valid after the context is
 // freed. The underlying result batch is released by stable-diffusion.cpp's
 // free_sd_images before this function returns.
 func GenerateImage(ctx Context, params ImgGenParams) (*SDImage, error) {
+	images, err := GenerateImages(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+	return images[0], nil
+}
+
+// GenerateImages runs the diffusion pipeline and returns every image produced
+// by the requested batch. All returned pixel buffers are copied into Go-owned
+// memory before the native result array is freed with free_sd_images.
+func GenerateImages(ctx Context, params ImgGenParams) ([]*SDImage, error) {
 	if ctx == 0 {
-		return nil, errors.New("GenerateImage: nil context")
+		return nil, errors.New("GenerateImages: nil context")
 	}
 
-	// Start from the C library's defaults so every nested struct is filled
-	// in correctly, then overlay the user-controllable fields.
-	raw := defaultCImgGenParams()
-	raw.ClipSkip = params.ClipSkip
-	raw.Width = params.Width
-	raw.Height = params.Height
-	raw.Seed = params.Seed
-	raw.BatchCount = params.BatchCount
-	raw.Strength = params.Strength
-	raw.SampleParams.SampleSteps = params.Steps
-	raw.SampleParams.Guidance.TxtCfg = params.CFGScale
-	raw.SampleParams.SampleMethod = int32(params.Sampler)
-	raw.SampleParams.Scheduler = int32(params.Scheduler)
-	raw.CircularX = boolToU8(params.CircularX)
-	raw.CircularY = boolToU8(params.CircularY)
-
-	var refs cStringRefs
-	p, err := refs.add(params.Prompt)
+	state, err := marshalImgGenParams(params)
 	if err != nil {
 		return nil, err
 	}
-	raw.Prompt = p
-
-	np, err := refs.add(params.NegativePrompt)
-	if err != nil {
-		return nil, err
-	}
-	raw.NegativePrompt = np
-
-	if params.InitImage != nil {
-		if err := bindCImage(&raw.InitImage, params.InitImage, "InitImage"); err != nil {
-			return nil, err
-		}
-	}
+	raw := state.raw
 
 	clearLastLog()
 
@@ -345,21 +416,291 @@ func GenerateImage(ctx Context, params ImgGenParams) (*SDImage, error) {
 		unsafe.Pointer(&resultPtrPtr),
 		unsafe.Pointer(&resultCountPtr),
 	)
-	runtime.KeepAlive(refs.keep)
-	runtime.KeepAlive(params.InitImage)
+	runtime.KeepAlive(state)
+	runtime.KeepAlive(params)
 	runtime.KeepAlive(&raw)
 
 	if byte(result) == 0 || resultPtr == nil || resultCount == 0 {
+		if resultPtr != nil && resultCount > 0 {
+			freeSDImagesFunc.Call(nil, unsafe.Pointer(&resultPtr), unsafe.Pointer(&resultCount))
+		}
 		if last := LastError(); last != "" {
 			return nil, fmt.Errorf("generate_image failed: %s", last)
 		}
 		return nil, errors.New("generate_image failed (no log message captured)")
 	}
 
-	// Copy the first pixel buffer into a Go-owned slice, then ask the library
-	// to release the complete result batch with its own allocator.
-	out := sdImageFromC(resultPtr)
+	rawImages := unsafe.Slice(resultPtr, int(resultCount))
+	out := make([]*SDImage, resultCount)
+	for i := range rawImages {
+		out[i] = sdImageFromC(&rawImages[i])
+	}
 	freeSDImagesFunc.Call(nil, unsafe.Pointer(&resultPtr), unsafe.Pointer(&resultCount))
 
 	return out, nil
+}
+
+type marshaledImgGenParams struct {
+	raw              cImgGenParams
+	refs             cStringRefs
+	loras            []cLora
+	refImages        []cImage
+	photoMakerImages []cImage
+	slgLayers        []int32
+}
+
+func marshalImgGenParams(params ImgGenParams) (*marshaledImgGenParams, error) {
+	state := &marshaledImgGenParams{raw: defaultCImgGenParams()}
+	raw := &state.raw
+	raw.ClipSkip = params.ClipSkip
+	raw.Width = params.Width
+	raw.Height = params.Height
+	raw.Seed = params.Seed
+	raw.BatchCount = params.BatchCount
+	raw.Strength = params.Strength
+	raw.SampleParams.SampleSteps = params.Steps
+	raw.SampleParams.Guidance.TxtCfg = params.CFGScale
+	raw.SampleParams.Guidance.ImgCfg = params.ImageCFG
+	raw.SampleParams.Guidance.DistilledGuidance = params.DistilledGuidance
+	raw.SampleParams.SampleMethod = int32(params.Sampler)
+	raw.SampleParams.Scheduler = int32(params.Scheduler)
+	raw.SampleParams.Eta = params.Eta
+	raw.SampleParams.ShiftedTimestep = params.ShiftedTimestep
+	raw.SampleParams.FlowShift = params.FlowShift
+	raw.CircularX = boolToU8(params.CircularX)
+	raw.CircularY = boolToU8(params.CircularY)
+	raw.ControlStrength = params.ControlStrength
+	raw.IPAdapterStrength = params.IPAdapterStrength
+	raw.QwenImageLayers = params.QwenImageLayers
+
+	for _, item := range []struct {
+		dst   **byte
+		value string
+	}{
+		{&raw.Prompt, params.Prompt},
+		{&raw.NegativePrompt, params.NegativePrompt},
+		{&raw.RefImageArgs, params.RefImageArgs},
+		{&raw.SampleParams.ExtraSampleArgs, params.ExtraSampleArgs},
+		{&raw.PMParams.IDEmbedPath, params.PhotoMaker.IDEmbedPath},
+		{&raw.PulidParams.IDEmbeddingPath, params.PuLID.IDEmbeddingPath},
+		{&raw.VAETilingParams.ExtraTilingArgs, params.VAETiling.ExtraArgs},
+		{&raw.Cache.SCMMask, params.Cache.SCMMask},
+		{&raw.Hires.ModelPath, params.Hires.ModelPath},
+	} {
+		ptr, err := state.refs.addPointer(item.value)
+		if err != nil {
+			return nil, err
+		}
+		*item.dst = ptr
+	}
+
+	var err error
+	if err = bindOptionalCImage(&raw.InitImage, params.InitImage, "InitImage"); err != nil {
+		return nil, err
+	}
+	if err = bindOptionalCImage(&raw.MaskImage, params.MaskImage, "MaskImage"); err != nil {
+		return nil, err
+	}
+	if err = bindOptionalCImage(&raw.ControlImage, params.ControlImage, "ControlImage"); err != nil {
+		return nil, err
+	}
+	if err = bindOptionalCImage(&raw.IPAdapterImage, params.IPAdapterImage, "IPAdapterImage"); err != nil {
+		return nil, err
+	}
+	state.refImages, err = bindCImages(params.RefImages, "RefImages")
+	if err != nil {
+		return nil, err
+	}
+	if len(state.refImages) > 0 {
+		raw.RefImages = uintptr(unsafe.Pointer(&state.refImages[0]))
+		raw.RefImagesCount = int32(len(state.refImages))
+	}
+	state.photoMakerImages, err = bindCImages(params.PhotoMaker.IDImages, "PhotoMaker.IDImages")
+	if err != nil {
+		return nil, err
+	}
+	if len(state.photoMakerImages) > 0 {
+		raw.PMParams.IDImages = uintptr(unsafe.Pointer(&state.photoMakerImages[0]))
+		raw.PMParams.IDImagesCount = int32(len(state.photoMakerImages))
+	}
+	raw.PMParams.StyleStrength = params.PhotoMaker.StyleStrength
+	raw.PulidParams.IDWeight = params.PuLID.IDWeight
+
+	state.loras = make([]cLora, len(params.Loras))
+	for i := range params.Loras {
+		path, err := state.refs.add(params.Loras[i].Path)
+		if err != nil {
+			return nil, err
+		}
+		state.loras[i] = cLora{
+			IsHighNoise: boolToU8(params.Loras[i].IsHighNoise),
+			Multiplier:  params.Loras[i].Multiplier,
+			Path:        path,
+		}
+	}
+	if len(state.loras) > 0 {
+		raw.Loras = uintptr(unsafe.Pointer(&state.loras[0]))
+		raw.LoraCount = uint32(len(state.loras))
+	}
+
+	state.slgLayers = append([]int32(nil), params.SLG.Layers...)
+	if len(state.slgLayers) > 0 {
+		raw.SampleParams.Guidance.SLG.Layers = &state.slgLayers[0]
+	}
+	raw.SampleParams.Guidance.SLG.LayerCount = uint64(len(state.slgLayers))
+	raw.SampleParams.Guidance.SLG.LayerStart = params.SLG.LayerStart
+	raw.SampleParams.Guidance.SLG.LayerEnd = params.SLG.LayerEnd
+	raw.SampleParams.Guidance.SLG.Scale = params.SLG.Scale
+	raw.SampleParams.CustomSigmas = float32SlicePtr(params.CustomSigmas)
+	raw.SampleParams.CustomSigmasCount = int32(len(params.CustomSigmas))
+
+	raw.VAETilingParams = tilingParamsToC(params.VAETiling, raw.VAETilingParams.ExtraTilingArgs)
+	raw.Cache = cacheParamsToC(params.Cache, raw.Cache.SCMMask)
+	raw.Hires = hiresParamsToC(params.Hires, raw.Hires.ModelPath)
+	raw.Hires.CustomSigmas = float32SlicePtr(params.Hires.CustomSigmas)
+	raw.Hires.CustomSigmasCount = int32(len(params.Hires.CustomSigmas))
+
+	return state, nil
+}
+
+func bindOptionalCImage(dst *cImage, src *SDImage, field string) error {
+	if src == nil {
+		*dst = cImage{}
+		return nil
+	}
+	return bindCImage(dst, src, field)
+}
+
+func bindCImages(images []*SDImage, field string) ([]cImage, error) {
+	result := make([]cImage, len(images))
+	for i := range images {
+		if images[i] == nil {
+			return nil, fmt.Errorf("%s[%d]: nil image", field, i)
+		}
+		if err := bindCImage(&result[i], images[i], fmt.Sprintf("%s[%d]", field, i)); err != nil {
+			return nil, err
+		}
+	}
+	return result, nil
+}
+
+func float32SlicePtr(values []float32) *float32 {
+	if len(values) == 0 {
+		return nil
+	}
+	return &values[0]
+}
+
+func sampleParamsFromC(raw cSampleParams) SampleParams {
+	return SampleParams{
+		Guidance: GuidanceParams{
+			TextCFG:           raw.Guidance.TxtCfg,
+			ImageCFG:          raw.Guidance.ImgCfg,
+			DistilledGuidance: raw.Guidance.DistilledGuidance,
+			SLG:               slgParamsFromC(raw.Guidance.SLG),
+		},
+		Scheduler:       Scheduler(raw.Scheduler),
+		Method:          SampleMethod(raw.SampleMethod),
+		Steps:           raw.SampleSteps,
+		Eta:             raw.Eta,
+		ShiftedTimestep: raw.ShiftedTimestep,
+		FlowShift:       raw.FlowShift,
+		ExtraArgs:       cString(raw.ExtraSampleArgs),
+		CustomSigmas:    copyCFloat32s(raw.CustomSigmas, raw.CustomSigmasCount),
+	}
+}
+
+func slgParamsFromC(raw cSlgParams) SLGParams {
+	params := SLGParams{LayerStart: raw.LayerStart, LayerEnd: raw.LayerEnd, Scale: raw.Scale}
+	if raw.Layers != nil && raw.LayerCount > 0 {
+		params.Layers = append([]int32(nil), unsafe.Slice(raw.Layers, int(raw.LayerCount))...)
+	}
+	return params
+}
+
+func photoMakerParamsFromC(raw cPMParams) PhotoMakerParams {
+	return PhotoMakerParams{IDEmbedPath: cString(raw.IDEmbedPath), StyleStrength: raw.StyleStrength}
+}
+
+func pulidParamsFromC(raw cPulidParams) PuLIDParams {
+	return PuLIDParams{IDEmbeddingPath: cString(raw.IDEmbeddingPath), IDWeight: raw.IDWeight}
+}
+
+func tilingParamsFromC(raw cTilingParams) TilingParams {
+	return TilingParams{
+		Enabled: raw.Enabled != 0, TemporalTiling: raw.TemporalTiling != 0,
+		TileSizeX: raw.TileSizeX, TileSizeY: raw.TileSizeY, TargetOverlap: raw.TargetOverlap,
+		RelativeSizeX: raw.RelSizeX, RelativeSizeY: raw.RelSizeY, ExtraArgs: cString(raw.ExtraTilingArgs),
+	}
+}
+
+func tilingParamsToC(params TilingParams, extra *byte) cTilingParams {
+	return cTilingParams{
+		Enabled: boolToU8(params.Enabled), TemporalTiling: boolToU8(params.TemporalTiling),
+		TileSizeX: params.TileSizeX, TileSizeY: params.TileSizeY, TargetOverlap: params.TargetOverlap,
+		RelSizeX: params.RelativeSizeX, RelSizeY: params.RelativeSizeY, ExtraTilingArgs: extra,
+	}
+}
+
+func cacheParamsFromC(raw cCacheParams) CacheParams {
+	return CacheParams{
+		Mode: CacheMode(raw.Mode), ReuseThreshold: raw.ReuseThreshold, StartPercent: raw.StartPercent,
+		EndPercent: raw.EndPercent, ErrorDecayRate: raw.ErrorDecayRate,
+		UseRelativeThreshold: raw.UseRelativeThreshold != 0, ResetErrorOnCompute: raw.ResetErrorOnCompute != 0,
+		FnComputeBlocks: raw.FnComputeBlocks, BnComputeBlocks: raw.BnComputeBlocks,
+		ResidualDiffThreshold: raw.ResidualDiffThreshold, MaxWarmupSteps: raw.MaxWarmupSteps,
+		MaxCachedSteps: raw.MaxCachedSteps, MaxContinuousCachedSteps: raw.MaxContinuousCachedSteps,
+		TaylorseerNDerivatives: raw.TaylorseerNDerivatives, TaylorseerSkipInterval: raw.TaylorseerSkipInterval,
+		SCMMask: cString(raw.SCMMask), SCMPolicyDynamic: raw.SCMPolicyDynamic != 0,
+		SpectrumW: raw.SpectrumW, SpectrumM: raw.SpectrumM, SpectrumLambda: raw.SpectrumLam,
+		SpectrumWindowSize: raw.SpectrumWindowSize, SpectrumFlexWindow: raw.SpectrumFlexWindow,
+		SpectrumWarmupSteps: raw.SpectrumWarmupSteps, SpectrumStopPercent: raw.SpectrumStopPercent,
+	}
+}
+
+func cacheParamsToC(params CacheParams, mask *byte) cCacheParams {
+	return cCacheParams{
+		Mode: int32(params.Mode), ReuseThreshold: params.ReuseThreshold, StartPercent: params.StartPercent,
+		EndPercent: params.EndPercent, ErrorDecayRate: params.ErrorDecayRate,
+		UseRelativeThreshold: boolToU8(params.UseRelativeThreshold), ResetErrorOnCompute: boolToU8(params.ResetErrorOnCompute),
+		FnComputeBlocks: params.FnComputeBlocks, BnComputeBlocks: params.BnComputeBlocks,
+		ResidualDiffThreshold: params.ResidualDiffThreshold, MaxWarmupSteps: params.MaxWarmupSteps,
+		MaxCachedSteps: params.MaxCachedSteps, MaxContinuousCachedSteps: params.MaxContinuousCachedSteps,
+		TaylorseerNDerivatives: params.TaylorseerNDerivatives, TaylorseerSkipInterval: params.TaylorseerSkipInterval,
+		SCMMask: mask, SCMPolicyDynamic: boolToU8(params.SCMPolicyDynamic),
+		SpectrumW: params.SpectrumW, SpectrumM: params.SpectrumM, SpectrumLam: params.SpectrumLambda,
+		SpectrumWindowSize: params.SpectrumWindowSize, SpectrumFlexWindow: params.SpectrumFlexWindow,
+		SpectrumWarmupSteps: params.SpectrumWarmupSteps, SpectrumStopPercent: params.SpectrumStopPercent,
+	}
+}
+
+func hiresParamsFromC(raw cHiresParams) HiresParams {
+	return HiresParams{
+		Enabled: raw.Enabled != 0, Upscaler: HiresUpscaler(raw.Upscaler), ModelPath: cString(raw.ModelPath),
+		Scale: raw.Scale, TargetWidth: raw.TargetWidth, TargetHeight: raw.TargetHeight, Steps: raw.Steps,
+		DenoisingStrength: raw.DenoisingStrength, UpscaleTileSize: raw.UpscaleTileSize,
+		CustomSigmas: copyCFloat32s(raw.CustomSigmas, raw.CustomSigmasCount),
+	}
+}
+
+func hiresParamsToC(params HiresParams, modelPath *byte) cHiresParams {
+	return cHiresParams{
+		Enabled: boolToU8(params.Enabled), Upscaler: int32(params.Upscaler), ModelPath: modelPath,
+		Scale: params.Scale, TargetWidth: params.TargetWidth, TargetHeight: params.TargetHeight, Steps: params.Steps,
+		DenoisingStrength: params.DenoisingStrength, UpscaleTileSize: params.UpscaleTileSize,
+	}
+}
+
+func cString(ptr *byte) string {
+	if ptr == nil {
+		return ""
+	}
+	return utils.BytePtrToString(ptr)
+}
+
+func copyCFloat32s(ptr *float32, count int32) []float32 {
+	if ptr == nil || count <= 0 {
+		return nil
+	}
+	return append([]float32(nil), unsafe.Slice(ptr, int(count))...)
 }

@@ -74,6 +74,12 @@ type cContextParams struct {
 	ModelArgs             uintptr // 272..280
 }
 
+// cEmbedding mirrors sd_embedding_t. Size: 16 bytes.
+type cEmbedding struct {
+	Name uintptr
+	Path uintptr
+}
+
 // The C API takes sd_ctx_params_t by pointer (sd_ctx_params_init,
 // new_sd_ctx), so we never need a libffi struct descriptor for it — every
 // callsite uses &ffi.TypePointer for the argument and passes a
@@ -104,6 +110,7 @@ type ContextParams struct {
 	ControlNetPath              string
 	IPAdapterPath               string
 	MotionModulePath            string
+	Embeddings                  []Embedding
 	PhotoMakerPath              string
 	PulidWeightsPath            string
 	TensorTypeRules             string
@@ -209,9 +216,40 @@ func ContextParamsInit() ContextParams {
 // that must be released with FreeContext when no longer needed. Returns an
 // error if the underlying new_sd_ctx returns NULL.
 func NewContext(params ContextParams) (Context, error) {
-	var refs cStringRefs
+	state, err := marshalContextParams(params)
+	if err != nil {
+		return 0, err
+	}
+	raw := state.raw
 
-	raw := cContextParams{
+	clearLastLog()
+
+	rawPtr := &raw
+	var handle Context
+	newSDCtxFunc.Call(unsafe.Pointer(&handle), unsafe.Pointer(&rawPtr))
+	runtime.KeepAlive(state)
+	runtime.KeepAlive(params)
+	runtime.KeepAlive(&raw)
+
+	if handle == 0 {
+		if last := LastError(); last != "" {
+			return 0, fmt.Errorf("new_sd_ctx returned NULL: %s", last)
+		}
+		return 0, errors.New("new_sd_ctx returned NULL (no log message captured; check that ModelPath / DiffusionModelPath exist and are readable)")
+	}
+	return handle, nil
+}
+
+type marshaledContextParams struct {
+	raw        cContextParams
+	refs       cStringRefs
+	embeddings []cEmbedding
+}
+
+func marshalContextParams(params ContextParams) (*marshaledContextParams, error) {
+	state := &marshaledContextParams{}
+	raw := &state.raw
+	*raw = cContextParams{
 		NThreads:              params.NThreads,
 		Wtype:                 int32(params.Wtype),
 		RngType:               int32(params.RngType),
@@ -262,28 +300,31 @@ func NewContext(params ContextParams) (Context, error) {
 		{&raw.RPCServers, params.RPCServers},
 		{&raw.ModelArgs, params.ModelArgs},
 	} {
-		p, err := refs.add(m.s)
+		p, err := state.refs.add(m.s)
 		if err != nil {
-			return 0, err
+			return nil, err
 		}
 		*m.dst = p
 	}
 
-	clearLastLog()
-
-	rawPtr := &raw
-	var handle Context
-	newSDCtxFunc.Call(unsafe.Pointer(&handle), unsafe.Pointer(&rawPtr))
-	runtime.KeepAlive(refs.keep)
-	runtime.KeepAlive(&raw)
-
-	if handle == 0 {
-		if last := LastError(); last != "" {
-			return 0, fmt.Errorf("new_sd_ctx returned NULL: %s", last)
+	state.embeddings = make([]cEmbedding, len(params.Embeddings))
+	for i := range params.Embeddings {
+		name, err := state.refs.add(params.Embeddings[i].Name)
+		if err != nil {
+			return nil, err
 		}
-		return 0, errors.New("new_sd_ctx returned NULL (no log message captured; check that ModelPath / DiffusionModelPath exist and are readable)")
+		path, err := state.refs.add(params.Embeddings[i].Path)
+		if err != nil {
+			return nil, err
+		}
+		state.embeddings[i] = cEmbedding{Name: name, Path: path}
 	}
-	return handle, nil
+	if len(state.embeddings) > 0 {
+		raw.Embeddings = uintptr(unsafe.Pointer(&state.embeddings[0]))
+		raw.EmbeddingCount = uint32(len(state.embeddings))
+	}
+
+	return state, nil
 }
 
 // FreeContext releases a Context previously returned by NewContext.
@@ -305,15 +346,23 @@ type cStringRefs struct {
 }
 
 func (r *cStringRefs) add(s string) (uintptr, error) {
+	p, err := r.addPointer(s)
+	if err != nil || p == nil {
+		return 0, err
+	}
+	return uintptr(unsafe.Pointer(p)), nil
+}
+
+func (r *cStringRefs) addPointer(s string) (*byte, error) {
 	if s == "" {
-		return 0, nil
+		return nil, nil
 	}
 	p, err := utils.BytePtrFromString(s)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	r.keep = append(r.keep, p)
-	return uintptr(unsafe.Pointer(p)), nil
+	return p, nil
 }
 
 func boolToU8(b bool) uint8 {

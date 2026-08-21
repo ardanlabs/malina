@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"unsafe"
+
+	"github.com/jupiterrider/ffi"
 )
 
 // LoadImage decodes a PNG or JPEG file from disk into an SDImage with 3
@@ -93,6 +95,10 @@ type cImage struct {
 	Data    *byte // 16..24  (uint8 *)
 }
 
+// ffiTypeImage describes sd_image_t for the few C APIs that pass the struct
+// by value rather than by pointer.
+var ffiTypeImage = ffi.NewType(&ffi.TypeUint32, &ffi.TypeUint32, &ffi.TypeUint32, &ffi.TypePointer)
+
 // SDImage is a Go-side representation of a generated image. Data holds raw
 // pixel bytes in row-major order with Channel bytes per pixel (typically 3
 // for RGB output from stable-diffusion.cpp).
@@ -156,6 +162,9 @@ func (img *SDImage) SavePNG(filename string) error {
 // runtime.KeepAlive) so the Go GC does not collect the backing array.
 // field names the destination so validation errors are self-describing.
 func bindCImage(dst *cImage, src *SDImage, field string) error {
+	if src == nil {
+		return fmt.Errorf("%s: nil image", field)
+	}
 	if src.Width == 0 || src.Height == 0 {
 		return fmt.Errorf("%s: zero dimension (%dx%d)", field, src.Width, src.Height)
 	}

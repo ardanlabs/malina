@@ -36,7 +36,7 @@ var (
 // installs and CI runs don't depend on the GitHub releases API. Bumping
 // this value is a deliberate, reviewable change that should be paired with
 // re-running the FFI sizeof tests in pkg/sd.
-const DefaultSDVersion = "master-820-de298c2"
+const DefaultSDVersion = "master-827-97d2990"
 
 // SDRepo is the upstream GitHub repo we fetch prebuilt libraries from.
 const SDRepo = "leejet/stable-diffusion.cpp"
@@ -50,7 +50,7 @@ var (
 
 // SDLatestVersion queries the GitHub releases API for the most recent
 // upstream stable-diffusion.cpp release tag. leejet currently tags every
-// CI build (e.g. "master-820-de298c2"), so "latest" usually means
+// CI build (e.g. "master-827-97d2990"), so "latest" usually means
 // last-merged-to-master, not a semver release.
 func SDLatestVersion() (string, error) {
 	var (
@@ -166,7 +166,7 @@ func LibraryName(operatingSystem string) string {
 //	architecture: "amd64" or "arm64"
 //	osName:       "linux", "darwin", or "windows"
 //	processor:    "cpu", "cuda", "metal", "vulkan", or "rocm"
-//	version:      a leejet release tag (e.g. "master-820-de298c2")
+//	version:      a leejet release tag (e.g. "master-827-97d2990")
 //	dest:         destination directory for the extracted libraries
 func Get(architecture, osName, processor, version, dest string) error {
 	return GetWithProgress(architecture, osName, processor, version, dest, ProgressTracker)
