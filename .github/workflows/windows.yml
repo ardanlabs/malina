@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: true
 
 # Windows x64. leejet ships stable-diffusion.dll alongside ggml-*.dll in
-# the win-avx2-x64 zip. Adding the lib directory to PATH lets the OS
+# the win-cpu-x64 zip. Adding the lib directory to PATH lets the OS
 # resolve those sibling DLLs when stable-diffusion.dll is loaded.
 
 jobs:

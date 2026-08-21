@@ -4,7 +4,7 @@ hello@ardanlabs.com
 
 # Malina
 
-This project lets you use Go for hardware accelerated local image generation with [stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp) directly integrated into your applications. Malina provides a high-level API that mirrors `stable-diffusion.h` 1-to-1 plus pure-Go PNG/JPEG I/O and Motion-JPEG AVI muxing so you can hand any prompt to a Stable Diffusion model and get an image (or a short video) back.
+This project lets you use Go for hardware accelerated local image and video generation with [stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp) directly integrated into your applications. Malina maps the safe public `stable-diffusion.h` API plus pure-Go PNG/JPEG I/O and Motion-JPEG AVI muxing.
 
 Malina is the image-generation sibling of [ardanlabs/bucky](https://github.com/ardanlabs/bucky) (which binds whisper.cpp) and [hybridgroup/yzma](https://github.com/hybridgroup/yzma) (which binds llama.cpp). The end goal is to give [Kronk](https://github.com/ardanlabs/kronk) a native, OpenAI-compatible `POST /v1/images/generations` endpoint without the CGo toolchain.
 
@@ -39,11 +39,12 @@ Sometimes there are breaking changes to stable-diffusion.cpp that require an upd
 
 | stable-diffusion.cpp | malina |
 | -------------------- | ------ |
-| master-820-de298c2   | 1.0.2  |
+| master-827-97d2990   | 1.0.x (default in 1.0.4+) |
+| master-820-de298c2   | 1.0.x  |
 | master-813-bfbef5b   | 1.0.1  |
 | master-669-2d40a8b   | 0.1.x  |
 
-The core FFI binding (context init, `generate_image`, image I/O, log/progress callbacks, GGML backend introspection), pure-Go PNG/JPEG decode + Motion-JPEG AVI mux, CLI (`install`, `system`, `info`, `model list|pull`), and examples (`hello`, `system`, `sd-encode`, `flux2`) have all landed. Kronk integration (an OpenAI-compatible `POST /v1/images/generations` endpoint) lives in the [kronk](https://github.com/ardanlabs/kronk) repo.
+The FFI binding includes image and native video generation, upscaling, ADetailer, ControlNet hot-swap, conversion, Canny preprocessing, cancellation, preview/backend callbacks, device listing, and every generation parameter in the target header. Pure-Go PNG/JPEG decode + Motion-JPEG AVI mux, the CLI (`install`, `system`, `info`, `model list|pull`), and examples (`hello`, `system`, `sd-encode`, `flux2`) have also landed. Kronk integration (an OpenAI-compatible `POST /v1/images/generations` endpoint) lives in the [kronk](https://github.com/ardanlabs/kronk) repo.
 
 ## Owner Information
 
@@ -67,7 +68,7 @@ $ go install github.com/ardanlabs/malina@latest
 $ malina --help
 ```
 
-Then fetch the stable-diffusion.cpp shared library bundle (dylib on darwin, DLLs on windows, `.tar.gz` on linux — all sourced from the upstream [leejet/stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp/releases) releases):
+Then fetch the stable-diffusion.cpp shared library bundle (dylib on macOS, DLLs on Windows, and `.so` files on Linux, all distributed in ZIP archives from the upstream [leejet/stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp/releases) releases):
 
 ```shell
 $ malina install -lib ./lib
@@ -97,9 +98,9 @@ The architecture of malina mirrors bucky and yzma file-for-file so anyone who kn
 ┌─────────────────────────────────────────────────────────────┐
 │  cmd/         malina CLI (install, system, model, sd)       │
 ├─────────────────────────────────────────────────────────────┤
-│  pkg/sd       1-to-1 mirror of stable-diffusion.h           │
-│               (context, gen_params, generate, video,        │
-│                image I/O, log, system)                      │
+│  pkg/sd       safe stable-diffusion.h FFI surface           │
+│               (image/video generation, upscaler, callbacks, │
+│                conversion, image I/O, log, system)          │
 │  pkg/download go-getter-driven release-archive resolver +   │
 │               bundle catalog (sd-1.5, sdxl, flux2)          │
 │  pkg/loader   MALINA_LIB-aware purego library loader        │
@@ -108,8 +109,25 @@ The architecture of malina mirrors bucky and yzma file-for-file so anyone who kn
                           │
                           ▼
             libstable-diffusion.{dylib|so|dll}
-              (stable-diffusion.cpp master-820)
+              (stable-diffusion.cpp master-827)
 ```
+
+### FFI API coverage
+
+`pkg/sd` prepares 59 of the 62 functions exported by the pinned
+`stable-diffusion.h`. This includes all functions with a safe ownership
+contract. Newer optional symbols are resolved at load time so an explicitly
+requested older compatible library can still load; calling an unavailable
+feature returns `sd.ErrUnsupportedAPI`.
+
+The only functions intentionally not called are `sd_ctx_params_to_str`,
+`sd_sample_params_to_str`, and `sd_img_gen_params_to_str`. Each returns a
+newly allocated `char *`, but upstream provides no matching public deallocator.
+Freeing those pointers from Go would be unsafe across Windows CRT boundaries,
+and not freeing them would leak. Malina will bind them when upstream exposes a
+matched free API. The exported `sample_method_to_str` and `scheduler_to_str`
+data arrays are represented by the safe name and parse functions instead of
+directly exposing C global memory.
 
 ## Models
 
@@ -131,13 +149,31 @@ Each bundle drops every required file into `$HOME/models/<bundle>/` along with a
 
 Malina uses the prebuilt stable-diffusion.cpp release artifacts from [leejet/stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp/releases) directly — there is no companion builder repo. The pinned version is captured in [`pkg/download/install.go`](pkg/download/install.go) as `DefaultSDVersion`.
 
-| OS      | CPU   | GPU          | Source                                                      |
-| ------- | ----- | ------------ | ----------------------------------------------------------- |
-| Linux   | amd64 | CPU (avx2)   | `sd-master-…-linux-avx2-x64.tar.gz` (upstream)              |
-| macOS   | arm64 | Metal        | `sd-master-…-bin-MacOS-arm64.tar.gz` (upstream)             |
-| Windows | amd64 | CPU, CUDA 12 | `sd-master-…-bin-win-avx2-x64.zip` / `-cuda12-…` (upstream) |
+| OS      | CPU   | Backend           | Upstream artifact pattern                                      |
+| ------- | ----- | ----------------- | -------------------------------------------------------------- |
+| macOS   | arm64 | Metal             | `sd-master-…-bin-Darwin-macOS-…-arm64.zip`                     |
+| Windows | amd64 | CPU               | `sd-master-…-bin-win-cpu-x64.zip`                              |
+| Windows | amd64 | CUDA 12           | `sd-master-…-bin-win-cuda12-x64.zip` plus `cudart-…-cu12-…zip` |
+| Windows | amd64 | Vulkan            | `sd-master-…-bin-win-vulkan-x64.zip`                           |
+| Windows | amd64 | ROCm              | `sd-master-…-bin-win-rocm-…-x64.zip`                           |
+| Linux   | amd64 | CPU               | `sd-master-…-bin-Linux-Ubuntu-…-x86_64.zip`                    |
+| Linux   | amd64 | Vulkan / ROCm     | CPU pattern plus `-vulkan.zip` or `-rocm-….zip`                |
 
 Whenever there is a new release of stable-diffusion.cpp, the FFI struct mirrors in `pkg/sd` and the version constant in `pkg/download` may need a refresh. Bump `DefaultSDVersion`, regenerate any struct-size assertions in `pkg/sd/*_test.go`, and let CI verify.
+
+The `malina_model_tests` suite exercises the standard SD 1.5, SDXL, and
+FLUX.2 fixtures configured by the Makefile. Additional wrapped APIs have
+fixture-gated smoke tests; set the applicable model path before `make test`:
+
+| Environment variable | Smoke test |
+| -------------------- | ---------- |
+| `MALINA_CONTROLNET_TEST_MODEL` | ControlNet load, query, and unload |
+| `MALINA_UPSCALER_TEST_MODEL` | ESRGAN context, factor query, and upscale |
+| `MALINA_ADETAILER_TEST_MODEL` | Detector context and ADetailer pass |
+| `MALINA_VIDEO_TEST_MODEL` | Native video frame and audio generation |
+
+Each advanced test reports the exact missing variable and skips when its
+fixture is unavailable.
 
 ## API Examples
 

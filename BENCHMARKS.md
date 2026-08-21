@@ -3,21 +3,24 @@
 Performance numbers for `pkg/sd` against each of the three model bundles
 `malina model pull` knows how to download. Recorded on an Apple M5 Max
 (darwin/arm64) with the Metal backend baked into upstream
-`stable-diffusion-master-*` releases. The Go benchmarks all run against
-the same `lib/libstable-diffusion.dylib`.
+stable-diffusion.cpp `master-827-97d2990` artifact
+`sd-master-97d2990-bin-Darwin-macOS-26.5.2-arm64.zip` (SHA-256
+`ca158103c77a9ec637327c05a8c9adc042169dd5d6261c8f6fc04affd7befaf1`).
+The Go benchmarks all run against the extracted
+`lib/libstable-diffusion.dylib`.
 
 Reproduce with:
 
 ```
 make download-stable-diffusion.cpp   # populates ./lib
 make download-models                 # populates ~/models (sd-1.5, sdxl-base-1.0, flux2-klein-9b)
-make bench                           # runs all three per-bundle benchmarks
+make bench BENCHTIME=1x              # runs all four generation benchmarks
 ```
 
 ## Methodology
 
 - **Drivers**: `BenchmarkGenerateImageSD15`, `BenchmarkGenerateImageSDXL`,
-  and `BenchmarkGenerateImageFlux2` in
+  `BenchmarkGenerateImageFlux2`, and `BenchmarkGenerateImageImg2ImgSD15` in
   [`pkg/sd/benchmark_test.go`](pkg/sd/benchmark_test.go). Each loads its
   bundle's checkpoint(s) once, drops one untimed warm-up iteration (so
   Metal JIT and any first-call library setup do not pollute the
@@ -42,16 +45,17 @@ make bench                           # runs all three per-bundle benchmarks
   (width × height of the generated image, so the bench output records
   what shape was timed).
 
-## End-to-end text-to-image generation
+## End-to-end generation
 
-Recorded on Apple M5 Max, Metal backend, `lib/libstable-diffusion.dylib`
-built from upstream stable-diffusion.cpp.
+Recorded on Apple M5 Max, Metal backend, using the exact upstream artifact
+and digest listed above. All measurements used `make bench BENCHTIME=1x`.
 
-| Bundle           | Shape     | Steps | b.N | ns/op          | s/img | B/op    | allocs/op |
-|------------------|-----------|------:|----:|---------------:|------:|--------:|----------:|
-| sd-1.5           | 512x512   |    20 |   1 | 18,460,529,666 | 18.46 | 792,408 |       104 |
-| sdxl-base-1.0    | 512x512   |    20 |   1 |  8,469,844,708 |  8.47 | 793,176 |       120 |
-| flux2-klein-9b   | 512x512   |     4 |   1 | 13,341,297,750 | 13.34 | 793,896 |       120 |
+| Workload                | Model/bundle       | Shape   | Steps | b.N | ns/op          | s/img | B/op    | allocs/op |
+|-------------------------|--------------------|---------|------:|----:|---------------:|------:|--------:|----------:|
+| text-to-image           | sd-1.5             | 512x512 |    20 |   1 | 17,674,499,209 | 17.67 | 793,616 |       112 |
+| text-to-image           | sdxl-base-1.0      | 512x512 |    20 |   1 |  8,218,386,917 |  8.22 | 794,384 |       128 |
+| text-to-image           | flux2-klein-9b     | 512x512 |     4 |   1 | 13,606,341,459 | 13.61 | 795,320 |       132 |
+| image-to-image          | sd-1.5             | 512x512 |    20 |   1 | 16,469,723,708 | 16.47 | 794,600 |       132 |
 
 Run commands:
 
@@ -59,7 +63,8 @@ Run commands:
 make bench-sd-1.5    # BenchmarkGenerateImageSD15
 make bench-sdxl      # BenchmarkGenerateImageSDXL
 make bench-flux2     # BenchmarkGenerateImageFlux2
-make bench           # all three in sequence
+make bench-img2img-sd-1.5 # BenchmarkGenerateImageImg2ImgSD15
+make bench           # all four in sequence
 ```
 
 Each bench skips (rather than fails) when its model env points at a
@@ -71,6 +76,7 @@ The per-bundle env vars are:
 | `BenchmarkGenerateImageSD15`  | `MALINA_BENCH_MODEL`         | `MALINA_TEST_MODEL`     |
 | `BenchmarkGenerateImageSDXL`  | `MALINA_BENCH_SDXL_MODEL`    | `MALINA_SDXL_TEST_MODEL`|
 | `BenchmarkGenerateImageFlux2` | `MALINA_BENCH_FLUX2_DIR`     | `MALINA_FLUX2_TEST_DIR` |
+| `BenchmarkGenerateImageImg2ImgSD15` | `MALINA_BENCH_MODEL` | `MALINA_TEST_MODEL`     |
 
 The `MALINA_BENCH_*` variants take precedence over the `MALINA_*_TEST_*`
 forms so contributors can benchmark a different checkpoint without

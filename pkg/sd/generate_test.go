@@ -8,7 +8,9 @@ import (
 	"image/jpeg"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/ardanlabs/malina/pkg/download"
 )
@@ -84,6 +86,179 @@ func TestGenerateImageSD15Smoke(t *testing.T) {
 	params.Steps = 1
 
 	assertGenerateSmoke(t, cparams, params)
+}
+
+// TestGenerateImagesSD15BatchSmoke verifies that Malina copies every native
+// batch result before releasing the upstream result array.
+func TestGenerateImagesSD15BatchSmoke(t *testing.T) {
+	testSetup(t)
+	modelPath := testEnvModelFile(t, "MALINA_TEST_MODEL")
+
+	cparams := ContextParamsInit()
+	cparams.ModelPath = modelPath
+	ctx, err := NewContext(cparams)
+	if err != nil {
+		t.Fatalf("NewContext: %v", err)
+	}
+	defer FreeContext(ctx)
+
+	params := ImgGenParamsInit()
+	params.Prompt = "a lovely cat"
+	params.Width = 64
+	params.Height = 64
+	params.Steps = 1
+	params.Seed = 42
+	params.BatchCount = 2
+
+	for call := range 2 {
+		images, err := GenerateImages(ctx, params)
+		if err != nil {
+			t.Fatalf("GenerateImages call %d: %v", call, err)
+		}
+		if len(images) != 2 {
+			t.Fatalf("GenerateImages call %d returned %d images, want 2", call, len(images))
+		}
+		for i, image := range images {
+			if image == nil || len(image.Data) != 64*64*3 {
+				t.Fatalf("call %d image %d is invalid: %#v", call, i, image)
+			}
+		}
+		images[0].Data[0] ^= 0xff
+	}
+}
+
+func TestContextTargetAPISD15Smoke(t *testing.T) {
+	testSetup(t)
+	modelPath := testEnvModelFile(t, "MALINA_TEST_MODEL")
+
+	cparams := ContextParamsInit()
+	cparams.ModelPath = modelPath
+	ctx, err := NewContext(cparams)
+	if err != nil {
+		t.Fatalf("NewContext: %v", err)
+	}
+	defer FreeContext(ctx)
+
+	supportsImages, err := ContextSupportsImageGeneration(ctx)
+	if err != nil {
+		t.Fatalf("ContextSupportsImageGeneration: %v", err)
+	}
+	if !supportsImages {
+		t.Fatal("SD 1.5 context does not report image-generation support")
+	}
+	if _, err := ContextSupportsVideoGeneration(ctx); err != nil {
+		t.Fatalf("ContextSupportsVideoGeneration: %v", err)
+	}
+	method, err := DefaultSampleMethod(ctx)
+	if err != nil {
+		t.Fatalf("DefaultSampleMethod: %v", err)
+	}
+	if _, err := DefaultScheduler(ctx, method); err != nil {
+		t.Fatalf("DefaultScheduler: %v", err)
+	}
+	if err := CancelGeneration(ctx, CancelReset); err != nil {
+		t.Fatalf("CancelGeneration reset: %v", err)
+	}
+}
+
+func TestPreviewCallbackSD15Smoke(t *testing.T) {
+	testSetup(t)
+	modelPath := testEnvModelFile(t, "MALINA_TEST_MODEL")
+
+	cparams := ContextParamsInit()
+	cparams.ModelPath = modelPath
+	ctx, err := NewContext(cparams)
+	if err != nil {
+		t.Fatalf("NewContext: %v", err)
+	}
+	defer FreeContext(ctx)
+
+	var callbacks atomic.Int32
+	err = SetPreviewCallback(func(_ int, frames []SDImage, _ bool) {
+		callbacks.Add(1)
+		for i := range frames {
+			if len(frames[i].Data) == 0 {
+				t.Errorf("preview frame %d has no copied pixels", i)
+			}
+		}
+	}, PreviewVAE, 1, true, false)
+	if err != nil {
+		t.Fatalf("SetPreviewCallback: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := SetPreviewCallback(nil, PreviewNone, 1, false, false); err != nil {
+			t.Errorf("disable preview callback: %v", err)
+		}
+	})
+
+	params := ImgGenParamsInit()
+	params.Prompt = "a cat"
+	params.Width = 64
+	params.Height = 64
+	params.Steps = 2
+	params.Seed = 42
+	if _, err := GenerateImage(ctx, params); err != nil {
+		t.Fatalf("GenerateImage: %v", err)
+	}
+	if callbacks.Load() == 0 {
+		t.Fatal("preview callback was not invoked")
+	}
+}
+
+func TestCancelGenerationSD15Smoke(t *testing.T) {
+	testSetup(t)
+	modelPath := testEnvModelFile(t, "MALINA_TEST_MODEL")
+
+	cparams := ContextParamsInit()
+	cparams.ModelPath = modelPath
+	ctx, err := NewContext(cparams)
+	if err != nil {
+		t.Fatalf("NewContext: %v", err)
+	}
+	defer FreeContext(ctx)
+
+	started := make(chan struct{}, 1)
+	SetProgressCallback(func(step int, _ int, _ float32) {
+		if step > 0 {
+			select {
+			case started <- struct{}{}:
+			default:
+			}
+		}
+	})
+	t.Cleanup(func() { SetProgressCallback(nil) })
+
+	params := ImgGenParamsInit()
+	params.Prompt = "a cat"
+	params.Width = 128
+	params.Height = 128
+	params.Steps = 20
+	params.Seed = 42
+	done := make(chan error, 1)
+	go func() {
+		_, err := GenerateImage(ctx, params)
+		done <- err
+	}()
+
+	select {
+	case <-started:
+	case <-time.After(30 * time.Second):
+		t.Fatal("generation did not report progress before cancellation timeout")
+	}
+	if err := CancelGeneration(ctx, CancelAll); err != nil {
+		t.Fatalf("CancelGeneration: %v", err)
+	}
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("cancelled GenerateImage returned nil error")
+		}
+	case <-time.After(30 * time.Second):
+		t.Fatal("cancelled generation did not return")
+	}
+	if err := CancelGeneration(ctx, CancelReset); err != nil {
+		t.Fatalf("CancelGeneration reset: %v", err)
+	}
 }
 
 // TestGenerateImageSDXLSmoke mirrors the sd-1.5 test against the sdxl-

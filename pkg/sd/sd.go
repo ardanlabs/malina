@@ -1,6 +1,7 @@
 // Package sd provides Go FFI bindings to stable-diffusion.cpp using purego and
-// jupiterrider/ffi. It mirrors the public C API exposed by stable-diffusion.h as
-// a thin layer; higher-level ergonomics live in cmd/ or downstream consumers.
+// jupiterrider/ffi. It maps the public C API exposed by stable-diffusion.h where
+// upstream provides a safe ownership contract; higher-level ergonomics live in
+// cmd/ or downstream consumers.
 package sd
 
 import (
@@ -246,6 +247,12 @@ func Load(path string) error {
 	}
 
 	if err := loadGenFuncs(lib); err != nil {
+		return err
+	}
+	loadExtendedFuncs(lib)
+	loadVideoFuncs(lib)
+	loadUpscalerFuncs(lib)
+	if err := loadCallbacksFuncs(lib); err != nil {
 		return err
 	}
 
