@@ -37,12 +37,12 @@ $ go run ./examples/hello "a lovely cat"
 
 Sometimes there are breaking changes to stable-diffusion.cpp that require an update to malina. Here are the known compatible versions:
 
-| stable-diffusion.cpp | malina |
-| -------------------- | ------ |
-| master-827-97d2990   | 1.0.x (default in 1.0.4+) |
-| master-820-de298c2   | 1.0.x  |
-| master-813-bfbef5b   | 1.0.1  |
-| master-669-2d40a8b   | 0.1.x  |
+| stable-diffusion.cpp | malina      |
+| -------------------- | ----------- |
+| master-827-97d2990   | 1.0.4+      |
+| master-820-de298c2   | 1.0.2–1.0.3 |
+| master-813-bfbef5b   | 1.0.1       |
+| master-669-2d40a8b   | 0.1.x       |
 
 The FFI binding includes image and native video generation, upscaling, ADetailer, ControlNet hot-swap, conversion, Canny preprocessing, cancellation, preview/backend callbacks, device listing, and every generation parameter in the target header. Pure-Go PNG/JPEG decode + Motion-JPEG AVI mux, the CLI (`install`, `system`, `info`, `model list|pull`), and examples (`hello`, `system`, `sd-encode`, `flux2`) have also landed. Kronk integration (an OpenAI-compatible `POST /v1/images/generations` endpoint) lives in the [kronk](https://github.com/ardanlabs/kronk) repo.
 
@@ -149,15 +149,15 @@ Each bundle drops every required file into `$HOME/models/<bundle>/` along with a
 
 Malina uses the prebuilt stable-diffusion.cpp release artifacts from [leejet/stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp/releases) directly — there is no companion builder repo. The pinned version is captured in [`pkg/download/install.go`](pkg/download/install.go) as `DefaultSDVersion`.
 
-| OS      | CPU   | Backend           | Upstream artifact pattern                                      |
-| ------- | ----- | ----------------- | -------------------------------------------------------------- |
-| macOS   | arm64 | Metal             | `sd-master-…-bin-Darwin-macOS-…-arm64.zip`                     |
-| Windows | amd64 | CPU               | `sd-master-…-bin-win-cpu-x64.zip`                              |
-| Windows | amd64 | CUDA 12           | `sd-master-…-bin-win-cuda12-x64.zip` plus `cudart-…-cu12-…zip` |
-| Windows | amd64 | Vulkan            | `sd-master-…-bin-win-vulkan-x64.zip`                           |
-| Windows | amd64 | ROCm              | `sd-master-…-bin-win-rocm-…-x64.zip`                           |
-| Linux   | amd64 | CPU               | `sd-master-…-bin-Linux-Ubuntu-…-x86_64.zip`                    |
-| Linux   | amd64 | Vulkan / ROCm     | CPU pattern plus `-vulkan.zip` or `-rocm-….zip`                |
+| OS      | CPU   | Backend       | Upstream artifact pattern                                      |
+| ------- | ----- | ------------- | -------------------------------------------------------------- |
+| macOS   | arm64 | Metal         | `sd-master-…-bin-Darwin-macOS-…-arm64.zip`                     |
+| Windows | amd64 | CPU           | `sd-master-…-bin-win-cpu-x64.zip`                              |
+| Windows | amd64 | CUDA 12       | `sd-master-…-bin-win-cuda12-x64.zip` plus `cudart-…-cu12-…zip` |
+| Windows | amd64 | Vulkan        | `sd-master-…-bin-win-vulkan-x64.zip`                           |
+| Windows | amd64 | ROCm          | `sd-master-…-bin-win-rocm-…-x64.zip`                           |
+| Linux   | amd64 | CPU           | `sd-master-…-bin-Linux-Ubuntu-…-x86_64.zip`                    |
+| Linux   | amd64 | Vulkan / ROCm | CPU pattern plus `-vulkan.zip` or `-rocm-….zip`                |
 
 Whenever there is a new release of stable-diffusion.cpp, the FFI struct mirrors in `pkg/sd` and the version constant in `pkg/download` may need a refresh. Bump `DefaultSDVersion`, regenerate any struct-size assertions in `pkg/sd/*_test.go`, and let CI verify.
 
@@ -165,12 +165,12 @@ The `malina_model_tests` suite exercises the standard SD 1.5, SDXL, and
 FLUX.2 fixtures configured by the Makefile. Additional wrapped APIs have
 fixture-gated smoke tests; set the applicable model path before `make test`:
 
-| Environment variable | Smoke test |
-| -------------------- | ---------- |
-| `MALINA_CONTROLNET_TEST_MODEL` | ControlNet load, query, and unload |
-| `MALINA_UPSCALER_TEST_MODEL` | ESRGAN context, factor query, and upscale |
-| `MALINA_ADETAILER_TEST_MODEL` | Detector context and ADetailer pass |
-| `MALINA_VIDEO_TEST_MODEL` | Native video frame and audio generation |
+| Environment variable           | Smoke test                                |
+| ------------------------------ | ----------------------------------------- |
+| `MALINA_CONTROLNET_TEST_MODEL` | ControlNet load, query, and unload        |
+| `MALINA_UPSCALER_TEST_MODEL`   | ESRGAN context, factor query, and upscale |
+| `MALINA_ADETAILER_TEST_MODEL`  | Detector context and ADetailer pass       |
+| `MALINA_VIDEO_TEST_MODEL`      | Native video frame and audio generation   |
 
 Each advanced test reports the exact missing variable and skips when its
 fixture is unavailable.
