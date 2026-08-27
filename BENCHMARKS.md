@@ -1,13 +1,14 @@
 # Benchmarks
 
 Performance numbers for `pkg/sd` against each of the three model bundles
-`malina model pull` knows how to download. Recorded on an Apple M5 Max
-(darwin/arm64) with the Metal backend baked into upstream
-stable-diffusion.cpp `master-827-97d2990` artifact
-`sd-master-97d2990-bin-Darwin-macOS-26.5.2-arm64.zip` (SHA-256
-`ca158103c77a9ec637327c05a8c9adc042169dd5d6261c8f6fc04affd7befaf1`).
+`malina model pull` knows how to download. Recorded on an Apple M5 Max with
+128 GiB RAM (macOS 26.6.2, darwin/arm64) using the Metal backend from upstream
+stable-diffusion.cpp `master-830-50d6405` artifact
+`sd-master-50d6405-bin-Darwin-macOS-26.5.2-arm64.zip` (SHA-256
+`ce2fd86d73c1bf11bb768a9f8c1c334a94d811b64cbd6d0699857bc4b504de8b`).
 The Go benchmarks all run against the extracted
-`lib/libstable-diffusion.dylib`.
+`lib/libstable-diffusion.dylib` (SHA-256
+`c683f0ddb0e9da5f40e333072f145c82cdc2921f12af24aa37cdf1bda07f7533`).
 
 Reproduce with:
 
@@ -27,11 +28,12 @@ make bench BENCHTIME=1x              # runs all four generation benchmarks
   measurement), and then runs `b.N` `GenerateImage` calls reusing the
   same `Context`.
 - **Default shape**: 512x512 with the bundle's natural step count
-  (SD 1.5 / SDXL: 20 steps from `sd_img_gen_params_init`; FLUX.2
-  [klein]: 4 steps, since the model is 4-step distilled). 512x512 keeps
-  per-iteration wall time bounded on Metal — SDXL at its native
-  1024x1024 is ~30 s/iter and FLUX.2 at 1024x1024 is well over a
-  minute.
+  (SD 1.5 / SDXL: 20 configured steps from `sd_img_gen_params_init`; FLUX.2
+  [klein]: 4 steps, since the model is 4-step distilled). Img2img retains the
+  20-step configuration and the default 0.75 strength, which executes a
+  16-step denoising schedule. 512x512 keeps per-iteration wall time bounded
+  on Metal — SDXL at its native 1024x1024 is ~30 s/iter and FLUX.2 at
+  1024x1024 is well over a minute.
 - **`BENCHTIME` default `1x`**: a single SD/SDXL/FLUX inference is on
   the order of tens of seconds on Metal, *and* Go's testing framework
   invokes the bench body twice when N>1 (once with N=1 to validate,
@@ -52,10 +54,10 @@ and digest listed above. All measurements used `make bench BENCHTIME=1x`.
 
 | Workload                | Model/bundle       | Shape   | Steps | b.N | ns/op          | s/img | B/op    | allocs/op |
 |-------------------------|--------------------|---------|------:|----:|---------------:|------:|--------:|----------:|
-| text-to-image           | sd-1.5             | 512x512 |    20 |   1 | 17,674,499,209 | 17.67 | 793,616 |       112 |
-| text-to-image           | sdxl-base-1.0      | 512x512 |    20 |   1 |  8,218,386,917 |  8.22 | 794,384 |       128 |
-| text-to-image           | flux2-klein-9b     | 512x512 |     4 |   1 | 13,606,341,459 | 13.61 | 795,320 |       132 |
-| image-to-image          | sd-1.5             | 512x512 |    20 |   1 | 16,469,723,708 | 16.47 | 794,600 |       132 |
+| text-to-image           | sd-1.5             | 512x512 |    20 |   1 | 17,665,693,500 | 17.67 | 793,616 |       112 |
+| text-to-image           | sdxl-base-1.0      | 512x512 |    20 |   1 |  8,155,155,792 |  8.16 | 794,400 |       128 |
+| text-to-image           | flux2-klein-9b     | 512x512 |     4 |   1 | 13,439,134,458 | 13.44 | 795,320 |       132 |
+| image-to-image          | sd-1.5             | 512x512 |    16 |   1 | 14,820,781,666 | 14.82 | 794,584 |       132 |
 
 Run commands:
 

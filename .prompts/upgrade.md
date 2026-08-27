@@ -1,5 +1,5 @@
-STABLE_DIFF_VERSION = master-827-97d2990
-MALINA_VERSION = v1.0.4
+STABLE_DIFF_VERSION = master-830-50d6405
+MALINA_VERSION = v1.0.5
 
 Upgrade this Malina repository to stable-diffusion.cpp
 <STABLE_DIFF_VERSION> and prepare Malina release <MALINA_VERSION>.
@@ -241,6 +241,14 @@ performed locally.
 Produce Markdown release notes for <MALINA_VERSION> using the latest published
 Malina tag before this work as the baseline. Summarize the complete changes
 since that tag, not merely the immediately preceding commit.
+
+Before drafting, read `.prompts/release.md` and use its release-note template
+as the required structure. Preserve its headings and order, replace every
+placeholder, and write `None` for a section with no applicable changes rather
+than omitting the section. Derive authors, contributors, and commit statistics
+from Git. Include relevant uncommitted worktree changes made by this upgrade in
+the content and category counts, but do not count uncommitted work as a commit
+or invent contributor attribution.
 
 Include, when applicable:
 

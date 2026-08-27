@@ -15,6 +15,7 @@ import (
 	"regexp"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -36,7 +37,7 @@ var (
 // installs and CI runs don't depend on the GitHub releases API. Bumping
 // this value is a deliberate, reviewable change that should be paired with
 // re-running the FFI sizeof tests in pkg/sd.
-const DefaultSDVersion = "master-827-97d2990"
+const DefaultSDVersion = "master-830-50d6405"
 
 // SDRepo is the upstream GitHub repo we fetch prebuilt libraries from.
 const SDRepo = "leejet/stable-diffusion.cpp"
@@ -48,10 +49,9 @@ var (
 	RetryDelay = 3 * time.Second
 )
 
-// SDLatestVersion queries the GitHub releases API for the most recent
-// upstream stable-diffusion.cpp release tag. leejet currently tags every
-// CI build (e.g. "master-827-97d2990"), so "latest" usually means
-// last-merged-to-master, not a semver release.
+// SDLatestVersion queries the GitHub releases API for the greatest upstream
+// stable-diffusion.cpp build tag. GitHub's latest-release marker is not used
+// because concurrent CI builds can finish and publish out of order.
 func SDLatestVersion() (string, error) {
 	var (
 		version string
@@ -67,22 +67,53 @@ func SDLatestVersion() (string, error) {
 	return "", fmt.Errorf("unable to fetch latest version: %w", err)
 }
 
+type sdRelease struct {
+	TagName    string `json:"tag_name"`
+	Draft      bool   `json:"draft"`
+	Prerelease bool   `json:"prerelease"`
+}
+
 func getLatestSDVersion() (string, error) {
-	url := fmt.Sprintf("https://api.github.com/repos/%s/releases/latest", SDRepo)
+	url := fmt.Sprintf("https://api.github.com/repos/%s/releases?per_page=100", SDRepo)
 	body, err := httpGetJSON(url)
 	if err != nil {
 		return "", err
 	}
-	var result struct {
-		TagName string `json:"tag_name"`
-	}
-	if err := json.Unmarshal(body, &result); err != nil {
+	var releases []sdRelease
+	if err := json.Unmarshal(body, &releases); err != nil {
 		return "", err
 	}
-	if result.TagName == "" {
-		return "", errors.New("releases API returned empty tag_name")
+	return latestSDVersion(releases)
+}
+
+func latestSDVersion(releases []sdRelease) (string, error) {
+	latestVersion := ""
+	latestBuild := -1
+	tagPattern := regexp.MustCompile(`^master-([0-9]+)-[0-9a-f]+$`)
+	for _, release := range releases {
+		if release.Draft || release.Prerelease {
+			continue
+		}
+
+		matches := tagPattern.FindStringSubmatch(release.TagName)
+		if matches == nil {
+			continue
+		}
+
+		build, err := strconv.Atoi(matches[1])
+		if err != nil {
+			return "", fmt.Errorf("parse stable-diffusion.cpp build number %q: %w", matches[1], err)
+		}
+		if build > latestBuild {
+			latestVersion = release.TagName
+			latestBuild = build
+		}
 	}
-	return result.TagName, nil
+	if latestVersion == "" {
+		return "", errors.New("releases API returned no stable-diffusion.cpp build tags")
+	}
+
+	return latestVersion, nil
 }
 
 // AlreadyInstalled reports whether a stable-diffusion shared library is
@@ -166,7 +197,7 @@ func LibraryName(operatingSystem string) string {
 //	architecture: "amd64" or "arm64"
 //	osName:       "linux", "darwin", or "windows"
 //	processor:    "cpu", "cuda", "metal", "vulkan", or "rocm"
-//	version:      a leejet release tag (e.g. "master-827-97d2990")
+//	version:      a leejet release tag (e.g. "master-830-50d6405")
 //	dest:         destination directory for the extracted libraries
 func Get(architecture, osName, processor, version, dest string) error {
 	return GetWithProgress(architecture, osName, processor, version, dest, ProgressTracker)
