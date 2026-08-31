@@ -3,7 +3,7 @@ package main
 import "testing"
 
 func TestVersionExact(t *testing.T) {
-	const want = "1.0.5"
+	const want = "1.0.6"
 
 	if got := Version(); got != want {
 		t.Errorf("Version: got %q, want %q", got, want)

@@ -75,7 +75,10 @@ const (
 	SDTypeMXFP4  SDType = 39
 	SDTypeNVFP4  SDType = 40
 	SDTypeQ1_0   SDType = 41
-	SDTypeCount  SDType = 42
+	SDTypeQ2_0   SDType = 42
+	SDTypeF8E4M3 SDType = 43
+	SDTypeF8E5M2 SDType = 44
+	SDTypeCount  SDType = 45
 )
 
 // RngType mirrors enum rng_type_t.

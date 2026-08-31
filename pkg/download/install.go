@@ -37,7 +37,7 @@ var (
 // installs and CI runs don't depend on the GitHub releases API. Bumping
 // this value is a deliberate, reviewable change that should be paired with
 // re-running the FFI sizeof tests in pkg/sd.
-const DefaultSDVersion = "master-830-50d6405"
+const DefaultSDVersion = "master-841-6b3edaa"
 
 // SDRepo is the upstream GitHub repo we fetch prebuilt libraries from.
 const SDRepo = "leejet/stable-diffusion.cpp"
@@ -197,7 +197,7 @@ func LibraryName(operatingSystem string) string {
 //	architecture: "amd64" or "arm64"
 //	osName:       "linux", "darwin", or "windows"
 //	processor:    "cpu", "cuda", "metal", "vulkan", or "rocm"
-//	version:      a leejet release tag (e.g. "master-830-50d6405")
+//	version:      a leejet release tag (e.g. "master-841-6b3edaa")
 //	dest:         destination directory for the extracted libraries
 func Get(architecture, osName, processor, version, dest string) error {
 	return GetWithProgress(architecture, osName, processor, version, dest, ProgressTracker)
