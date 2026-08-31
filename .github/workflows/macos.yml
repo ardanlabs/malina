@@ -1,10 +1,11 @@
 name: macOS
 
+# Keep this workflow manual-only. The stable-diffusion.cpp Metal artifact
+# aborts on GitHub's hosted Apple Silicon runner during pkg/sd native API
+# tests, even though the same release passes on newer local Apple hardware.
+# Restore pull_request and push triggers only after the hosted runner passes
+# the complete package suite without a native SIGABRT.
 on:
-  pull_request:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 concurrency:
