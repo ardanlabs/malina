@@ -1,15 +1,10 @@
 name: macOS
 
-# Disabled on PR/push until upstream leejet/stable-diffusion.cpp ships a
-# Metal kernel for the GGML_OP_NORM op that the current pinned build
-# (master-827-97d2990) emits in the CLIP path. On the GitHub-hosted M1
-# runner the ggml graph optimizer does not fuse NORM away, so dispatch
-# hits a missing case in ggml_metal_op_encode_impl and aborts inside
-# CLIPTextModelRunner::compute. Newer Apple Silicon (M2+) fuses the op
-# and runs fine, so local verification on developer hardware is the
-# interim signal. Restore the pull_request + push triggers below once
-# the pinned DefaultSDVersion is bumped to a build that includes the
-# upstream Metal NORM kernel.
+# Keep this workflow manual-only. The stable-diffusion.cpp Metal artifact
+# aborts on GitHub's hosted Apple Silicon runner during pkg/sd native API
+# tests, even though the same release passes on newer local Apple hardware.
+# Restore pull_request and push triggers only after the hosted runner passes
+# the complete package suite without a native SIGABRT.
 on:
   workflow_dispatch:
 
@@ -17,10 +12,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# macOS Apple Silicon. leejet's Darwin asset ships libstable-diffusion as
-# a Metal-capable dylib alongside its ggml siblings. No DYLD_LIBRARY_PATH
-# is needed — the dylib's RUNPATH resolves sibling libraries from the same
-# directory.
+# macOS Apple Silicon. leejet's Darwin artifact ships a universal,
+# Metal-capable libstable-diffusion dylib with ggml linked into it, so no
+# sibling libraries or DYLD_LIBRARY_PATH are required.
 
 jobs:
   test:

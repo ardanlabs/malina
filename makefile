@@ -33,7 +33,7 @@ clean-stable-diffusion.cpp:
 #
 #   make download-stable-diffusion.cpp                          # malina-pinned version (see pkg/download.DefaultSDVersion)
 #   make download-stable-diffusion.cpp VERSION=latest           # greatest leejet master-N-shortsha release
-#   make download-stable-diffusion.cpp VERSION=master-830-50d6405
+#   make download-stable-diffusion.cpp VERSION=master-841-6b3edaa
 #   make download-stable-diffusion.cpp VERSION=v0.9.0
 download-stable-diffusion.cpp:
 	go run . install -lib $(MALINA_LIB) -u $(if $(VERSION),-v $(VERSION))

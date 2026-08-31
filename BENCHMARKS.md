@@ -3,12 +3,12 @@
 Performance numbers for `pkg/sd` against each of the three model bundles
 `malina model pull` knows how to download. Recorded on an Apple M5 Max with
 128 GiB RAM (macOS 26.6.2, darwin/arm64) using the Metal backend from upstream
-stable-diffusion.cpp `master-830-50d6405` artifact
-`sd-master-50d6405-bin-Darwin-macOS-26.5.2-arm64.zip` (SHA-256
-`ce2fd86d73c1bf11bb768a9f8c1c334a94d811b64cbd6d0699857bc4b504de8b`).
+stable-diffusion.cpp `master-841-6b3edaa` artifact
+`sd-master-6b3edaa-bin-Darwin-macOS-26.5.2-arm64.zip` (SHA-256
+`1c7d0ddc18752cd88c084e0a636444697a0caea96763dcebdc08089ecf57b72f`).
 The Go benchmarks all run against the extracted
 `lib/libstable-diffusion.dylib` (SHA-256
-`c683f0ddb0e9da5f40e333072f145c82cdc2921f12af24aa37cdf1bda07f7533`).
+`036f5dec4f5e5026469faf990a418c67e1308fc1ee9d9877f9f23078fcee70df`).
 
 Reproduce with:
 
@@ -54,10 +54,10 @@ and digest listed above. All measurements used `make bench BENCHTIME=1x`.
 
 | Workload                | Model/bundle       | Shape   | Steps | b.N | ns/op          | s/img | B/op    | allocs/op |
 |-------------------------|--------------------|---------|------:|----:|---------------:|------:|--------:|----------:|
-| text-to-image           | sd-1.5             | 512x512 |    20 |   1 | 17,665,693,500 | 17.67 | 793,616 |       112 |
-| text-to-image           | sdxl-base-1.0      | 512x512 |    20 |   1 |  8,155,155,792 |  8.16 | 794,400 |       128 |
-| text-to-image           | flux2-klein-9b     | 512x512 |     4 |   1 | 13,439,134,458 | 13.44 | 795,320 |       132 |
-| image-to-image          | sd-1.5             | 512x512 |    16 |   1 | 14,820,781,666 | 14.82 | 794,584 |       132 |
+| text-to-image           | sd-1.5             | 512x512 |    20 |   1 | 17,918,704,292 | 17.92 | 793,616 |       112 |
+| text-to-image           | sdxl-base-1.0      | 512x512 |    20 |   1 |  8,216,457,458 |  8.216 | 794,384 |       128 |
+| text-to-image           | flux2-klein-9b     | 512x512 |     4 |   1 | 13,502,432,916 | 13.50 | 795,336 |       132 |
+| image-to-image          | sd-1.5             | 512x512 |    16 |   1 | 14,785,862,667 | 14.79 | 794,584 |       132 |
 
 Run commands:
 
@@ -114,7 +114,7 @@ make profile-flux2       # BenchmarkGenerateImageFlux2 + pprof artifacts
 make profile             # all three, in sequence
 ```
 
-Override `PROFILE_BENCHTIME` (default `1x`) when you need more samples.
+Override `PROFILE_BENCHTIME` (default `10x`) when you need more samples.
 Pprof samples CPU at 10 ms granularity, so a profile from a single
 multi-second iteration already contains hundreds of samples; bumping to
 `PROFILE_BENCHTIME=3x` gives ~3x more samples at the cost of one extra

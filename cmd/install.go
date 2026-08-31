@@ -18,7 +18,7 @@ var InstallCmd = &cli.Command{
 		&cli.StringFlag{
 			Name:    "version",
 			Aliases: []string{"v"},
-			Usage:   `version of stable-diffusion.cpp to install (e.g. "master-830-50d6405"; default is the malina-pinned version, pass "latest" to query the GitHub releases API)`,
+			Usage:   `version of stable-diffusion.cpp to install (e.g. "master-841-6b3edaa"; default is the malina-pinned version, pass "latest" to query the GitHub releases API)`,
 			Value:   "",
 		},
 		&cli.StringFlag{
