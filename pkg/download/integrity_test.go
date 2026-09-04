@@ -15,9 +15,13 @@ import (
 )
 
 func TestTrustedManifestMatchesDefaultVersion(t *testing.T) {
-	manifest, ok := trustedManifest(DefaultSDVersion)
+	tag, digest, err := ParsePinnedVersion(DefaultSDVersion)
+	if err != nil {
+		t.Fatalf("ParsePinnedVersion(%q): %v", DefaultSDVersion, err)
+	}
+	manifest, ok := trustedManifest(tag)
 	if !ok {
-		t.Fatalf("trustedManifest(%q): got no manifest", DefaultSDVersion)
+		t.Fatalf("trustedManifest(%q): got no manifest", tag)
 	}
 	if len(manifest.Assets) == 0 {
 		t.Fatal("trusted manifest has no assets")
@@ -30,13 +34,17 @@ func TestTrustedManifestMatchesDefaultVersion(t *testing.T) {
 			t.Errorf("asset %q has no installed paths", name)
 		}
 	}
-	if got := trustedManifestHash(DefaultSDVersion); len(got) != sha256.Size*2 {
-		t.Errorf("trustedManifestHash: got %q", got)
+	if got := trustedManifestHash(tag); got != digest {
+		t.Errorf("trustedManifestHash: got %q, want default pin %q", got, digest)
 	}
 }
 
 func TestExpectedAssetDigestUsesTrustedManifest(t *testing.T) {
-	manifest, ok := trustedManifest(DefaultSDVersion)
+	tag, manifestSHA, err := ParsePinnedVersion(DefaultSDVersion)
+	if err != nil {
+		t.Fatalf("ParsePinnedVersion(%q): %v", DefaultSDVersion, err)
+	}
+	manifest, ok := trustedManifest(tag)
 	if !ok {
 		t.Fatal("trusted manifest is unavailable")
 	}
@@ -53,16 +61,29 @@ func TestExpectedAssetDigestUsesTrustedManifest(t *testing.T) {
 		Digest: "sha256:" + entry.SHA256,
 		State:  "uploaded",
 	}
-	got, err := expectedAssetDigest(DefaultSDVersion, asset)
+	got, err := expectedAssetDigest(tag, manifestSHA, asset)
 	if err != nil {
 		t.Fatalf("expectedAssetDigest: %v", err)
 	}
 	if got != entry.SHA256 {
 		t.Errorf("digest: got %q, want %q", got, entry.SHA256)
 	}
+	if _, err := expectedAssetDigest(tag, strings.Repeat("0", sha256.Size*2), asset); !errors.Is(err, ErrDigestMismatch) {
+		t.Errorf("changed manifest pin error = %v, want ErrDigestMismatch", err)
+	}
+	got, err = expectedAssetDigest("master-999-deadbee", "", asset)
+	if err != nil {
+		t.Fatalf("unpinned custom version: %v", err)
+	}
+	if got != entry.SHA256 {
+		t.Errorf("unpinned custom digest: got %q, want GitHub digest %q", got, entry.SHA256)
+	}
+	if _, err := expectedAssetDigest("master-999-deadbee", manifestSHA, asset); !errors.Is(err, ErrNoFileDigests) {
+		t.Errorf("pinned custom version error = %v, want ErrNoFileDigests", err)
+	}
 
 	asset.Size++
-	if _, err := expectedAssetDigest(DefaultSDVersion, asset); !errors.Is(err, ErrRecordMismatch) {
+	if _, err := expectedAssetDigest(tag, manifestSHA, asset); !errors.Is(err, ErrRecordMismatch) {
 		t.Errorf("changed release metadata error = %v, want ErrRecordMismatch", err)
 	}
 }
@@ -71,6 +92,35 @@ func TestVerifyInstallRequiresRecord(t *testing.T) {
 	_, err := VerifyInstall(context.Background(), t.TempDir(), DefaultSDVersion)
 	if !errors.Is(err, ErrNoInstallRecord) {
 		t.Fatalf("VerifyInstall error = %v, want ErrNoInstallRecord", err)
+	}
+}
+
+func TestParsePinnedVersion(t *testing.T) {
+	digest := strings.Repeat("a", sha256.Size*2)
+	tests := []struct {
+		name       string
+		version    string
+		wantTag    string
+		wantDigest string
+		wantErr    error
+	}{
+		{name: "unpinned", version: "master-841-6b3edaa", wantTag: "master-841-6b3edaa"},
+		{name: "pinned", version: "master-841-6b3edaa@sha256:" + digest, wantTag: "master-841-6b3edaa", wantDigest: digest},
+		{name: "short digest", version: "master-841-6b3edaa@sha256:abcd", wantErr: ErrInvalidDigest},
+		{name: "wrong algorithm", version: "master-841-6b3edaa@sha512:" + digest, wantErr: ErrInvalidDigest},
+		{name: "latest pin", version: "latest@sha256:" + digest, wantErr: ErrInvalidVersion},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tag, gotDigest, err := ParsePinnedVersion(tt.version)
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("ParsePinnedVersion error = %v, want %v", err, tt.wantErr)
+			}
+			if tag != tt.wantTag || gotDigest != tt.wantDigest {
+				t.Errorf("ParsePinnedVersion: got %q/%q, want %q/%q", tag, gotDigest, tt.wantTag, tt.wantDigest)
+			}
+		})
 	}
 }
 

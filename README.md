@@ -79,11 +79,11 @@ $ malina system
 ```
 
 Malina verifies an upstream asset's GitHub SHA-256 digest before extracting
-it. For Malina's pinned stable-diffusion.cpp release, it also verifies the
-asset ID and size and every installed shared library against the trusted
-manifest embedded in this module. Installs created before this verification
-metadata was introduced must be refreshed once with
-`malina install -lib ./lib --upgrade`.
+it. `DefaultSDVersion` includes the SHA-256 of the embedded trusted manifest,
+which authenticates the asset ID, size, archive digest, and every installed
+shared library for Malina's pinned stable-diffusion.cpp release. Installs
+created before this verification metadata was introduced must be refreshed
+once with `malina install -lib ./lib --upgrade`.
 
 And pull a model bundle from the bundled catalog:
 

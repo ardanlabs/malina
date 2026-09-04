@@ -9,7 +9,7 @@ import (
 // TestDefaultSDVersion guards the stable-diffusion.cpp release whose ABI
 // Malina supports and installs by default.
 func TestDefaultSDVersion(t *testing.T) {
-	const want = "master-841-6b3edaa"
+	const want = "master-841-6b3edaa@sha256:e5ffe691446c86ab5aad4adde66f2db2df408eab01190d8906968513561888b5"
 
 	if DefaultSDVersion != want {
 		t.Errorf("DefaultSDVersion: got %q, want %q", DefaultSDVersion, want)

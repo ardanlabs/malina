@@ -100,6 +100,11 @@ GitHub release:
 
     make generate-library-manifest VERSION=<STABLE_DIFF_VERSION>
 
+After generation, calculate the SHA-256 of the exact raw manifest bytes and set
+`DefaultSDVersion` to the complete authenticated pin:
+
+    <STABLE_DIFF_VERSION>@sha256:<library_manifest.json SHA-256>
+
 Do not copy the previous manifest forward or update only its tag. The generator
 must download every supported upstream library archive, verify each archive
 against the SHA-256 digest reported by GitHub, and record the target release's

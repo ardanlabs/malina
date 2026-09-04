@@ -27,6 +27,9 @@ var (
 
 	// ErrRecordMismatch means an install record does not match the trusted manifest.
 	ErrRecordMismatch = errors.New("the install record does not agree with the trusted manifest")
+
+	// ErrInvalidDigest means a version pin is not sha256 followed by 64 hexadecimal characters.
+	ErrInvalidDigest = errors.New("invalid digest")
 )
 
 const (
@@ -156,6 +159,10 @@ func ReadInstallRecord(libPath string) (InstallRecord, error) {
 // VerifyInstall checks an installed library directory against Malina's trusted
 // manifest. An empty version uses the release recorded during installation.
 func VerifyInstall(ctx context.Context, libPath string, version string) (*VerifyReport, error) {
+	tag, manifestSHA, err := ParsePinnedVersion(version)
+	if err != nil {
+		return nil, err
+	}
 	record, err := ReadInstallRecord(libPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -163,16 +170,42 @@ func VerifyInstall(ctx context.Context, libPath string, version string) (*Verify
 		}
 		return nil, err
 	}
-	if version != "" && record.Tag != version {
-		return nil, fmt.Errorf("%w: installed %s, requested %s", ErrRecordMismatch, record.Tag, version)
+	if tag != "" && record.Tag != tag {
+		return nil, fmt.Errorf("%w: installed %s, requested %s", ErrRecordMismatch, record.Tag, tag)
+	}
+	if manifestSHA != "" && !strings.EqualFold(record.ManifestHash, manifestSHA) {
+		return nil, fmt.Errorf("%w: installed manifest digest does not match version pin", ErrRecordMismatch)
 	}
 
 	return verifyRecord(ctx, libPath, record)
 }
 
-func expectedAssetDigest(version string, asset releaseAsset) (string, error) {
+// ParsePinnedVersion splits VERSION@sha256:DIGEST into its bare tag and digest.
+// An unpinned version is returned unchanged with an empty digest.
+func ParsePinnedVersion(version string) (tag string, digest string, err error) {
+	tag, pin, found := strings.Cut(version, "@")
+	if !found {
+		return version, "", nil
+	}
+	if tag == "" || tag == "latest" {
+		return "", "", fmt.Errorf("%w: a digest needs an exact version", ErrInvalidVersion)
+	}
+	digest, err = parseSHA256(pin)
+	if err != nil {
+		return "", "", fmt.Errorf("%w: %v", ErrInvalidDigest, err)
+	}
+	if err := VersionIsValid(tag); err != nil {
+		return "", "", err
+	}
+	return tag, digest, nil
+}
+
+func expectedAssetDigest(version string, manifestSHA string, asset releaseAsset) (string, error) {
 	if asset.State != "uploaded" {
 		return "", fmt.Errorf("release asset %s is not uploaded", asset.Name)
+	}
+	if err := authenticateManifest(version, manifestSHA); err != nil {
+		return "", err
 	}
 
 	githubDigest, err := parseSHA256(asset.Digest)
@@ -182,7 +215,7 @@ func expectedAssetDigest(version string, asset releaseAsset) (string, error) {
 
 	manifest, ok := trustedManifest(version)
 	if !ok {
-		if version == DefaultSDVersion {
+		if manifestSHA != "" {
 			return "", fmt.Errorf("%w: %s", ErrNoFileDigests, version)
 		}
 		return githubDigest, nil
@@ -196,6 +229,19 @@ func expectedAssetDigest(version string, asset releaseAsset) (string, error) {
 	}
 
 	return entry.SHA256, nil
+}
+
+func authenticateManifest(version string, manifestSHA string) error {
+	if manifestSHA == "" {
+		return nil
+	}
+	if _, ok := trustedManifest(version); !ok {
+		return fmt.Errorf("%w: %s", ErrNoFileDigests, version)
+	}
+	if !strings.EqualFold(trustedManifestHash(version), manifestSHA) {
+		return fmt.Errorf("%w for the trusted manifest of %s", ErrDigestMismatch, version)
+	}
+	return nil
 }
 
 func trustedManifest(version string) (libraryManifest, bool) {

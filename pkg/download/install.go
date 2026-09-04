@@ -34,14 +34,13 @@ var (
 	ErrDigestMismatch      = errors.New("SHA-256 digest does not match")
 )
 
-// DefaultSDVersion is the leejet/stable-diffusion.cpp release tag malina's
-// FFI struct mirrors (e.g. sd_ctx_params_t's 280-byte layout) are tested
-// against. `malina install` uses this when no -v flag is supplied so first
-// installs and CI runs don't depend on the GitHub releases API. Bumping
-// this value is a deliberate, reviewable change that should be paired with
-// regenerating library_manifest.json and re-running the FFI sizeof tests in
+// DefaultSDVersion is the authenticated leejet/stable-diffusion.cpp release
+// malina's FFI struct mirrors (e.g. sd_ctx_params_t's 280-byte layout) are
+// tested against. The suffix pins the exact bytes of library_manifest.json.
+// Bumping this value is a deliberate, reviewable change that should be paired
+// with regenerating that manifest and re-running the FFI sizeof tests in
 // pkg/sd.
-const DefaultSDVersion = "master-841-6b3edaa"
+const DefaultSDVersion = "master-841-6b3edaa@sha256:e5ffe691446c86ab5aad4adde66f2db2df408eab01190d8906968513561888b5"
 
 // SDRepo is the upstream GitHub repo we fetch prebuilt libraries from.
 const SDRepo = "leejet/stable-diffusion.cpp"
@@ -214,6 +213,12 @@ func GetWithProgress(architecture, osName, processor, version, dest string, prog
 
 // GetWithContext is GetWithProgress with a caller-supplied context.
 func GetWithContext(ctx context.Context, architecture, osName, processor, version, dest string, progress getter.ProgressTracker) error {
+	tag, manifestSHA, err := ParsePinnedVersion(version)
+	if err != nil {
+		return err
+	}
+	version = tag
+
 	arch, err := ParseArch(architecture)
 	if err != nil {
 		return ErrUnknownArch
@@ -229,6 +234,9 @@ func GetWithContext(ctx context.Context, architecture, osName, processor, versio
 	if err := VersionIsValid(version); err != nil {
 		return ErrInvalidVersion
 	}
+	if err := authenticateManifest(version, manifestSHA); err != nil {
+		return err
+	}
 
 	assets, err := resolveAssets(ctx, arch, osVal, prcssr, version)
 	if err != nil {
@@ -237,7 +245,7 @@ func GetWithContext(ctx context.Context, architecture, osName, processor, versio
 
 	installed := make([]InstallAsset, 0, len(assets))
 	for _, asset := range assets {
-		digest, err := expectedAssetDigest(version, asset)
+		digest, err := expectedAssetDigest(version, manifestSHA, asset)
 		if err != nil {
 			return err
 		}
