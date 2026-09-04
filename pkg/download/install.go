@@ -3,6 +3,7 @@ package download
 import (
 	"archive/zip"
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -14,7 +15,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -29,6 +30,8 @@ var (
 	ErrInvalidVersion      = errors.New("invalid version")
 	ErrFileNotFound        = errors.New("could not download file: the requested stable-diffusion.cpp release does not include an asset for this platform")
 	ErrUnsupportedPlatform = errors.New("no prebuilt stable-diffusion.cpp asset for this platform")
+	ErrNoAssetDigest       = errors.New("release asset has no SHA-256 digest")
+	ErrDigestMismatch      = errors.New("SHA-256 digest does not match")
 )
 
 // DefaultSDVersion is the leejet/stable-diffusion.cpp release tag malina's
@@ -36,7 +39,8 @@ var (
 // against. `malina install` uses this when no -v flag is supplied so first
 // installs and CI runs don't depend on the GitHub releases API. Bumping
 // this value is a deliberate, reviewable change that should be paired with
-// re-running the FFI sizeof tests in pkg/sd.
+// regenerating library_manifest.json and re-running the FFI sizeof tests in
+// pkg/sd.
 const DefaultSDVersion = "master-841-6b3edaa"
 
 // SDRepo is the upstream GitHub repo we fetch prebuilt libraries from.
@@ -75,7 +79,7 @@ type sdRelease struct {
 
 func getLatestSDVersion() (string, error) {
 	url := fmt.Sprintf("https://api.github.com/repos/%s/releases?per_page=100", SDRepo)
-	body, err := httpGetJSON(url)
+	body, err := httpGetJSON(context.Background(), url)
 	if err != nil {
 		return "", err
 	}
@@ -226,32 +230,66 @@ func GetWithContext(ctx context.Context, architecture, osName, processor, versio
 		return ErrInvalidVersion
 	}
 
-	urls, err := resolveAssetURLs(ctx, arch, osVal, prcssr, version)
+	assets, err := resolveAssets(ctx, arch, osVal, prcssr, version)
 	if err != nil {
 		return err
 	}
-	for _, url := range urls {
-		if err := downloadAndExtract(ctx, url, dest, osVal, progress); err != nil {
+
+	installed := make([]InstallAsset, 0, len(assets))
+	for _, asset := range assets {
+		digest, err := expectedAssetDigest(version, asset)
+		if err != nil {
 			return err
 		}
+		if err := downloadAndExtract(ctx, asset.DownloadURL, dest, osVal, digest, progress); err != nil {
+			return err
+		}
+		installed = append(installed, InstallAsset{
+			ID:     asset.ID,
+			Name:   asset.Name,
+			Size:   asset.Size,
+			SHA256: digest,
+		})
 	}
+
+	record := InstallRecord{
+		Version:      installRecordVersion,
+		Tag:          version,
+		Arch:         architecture,
+		OS:           osName,
+		Processor:    processor,
+		Installed:    time.Now().UTC(),
+		ManifestHash: trustedManifestHash(version),
+		Assets:       installed,
+	}
+	if err := verifyExpectedFiles(ctx, dest, record); err != nil {
+		return err
+	}
+	if err := writeInstallRecord(dest, record); err != nil {
+		return err
+	}
+
 	return nil
 }
 
 // =============================================================================
 
 type releaseAsset struct {
+	ID          int64  `json:"id"`
 	Name        string `json:"name"`
+	Size        int64  `json:"size"`
+	Digest      string `json:"digest"`
+	State       string `json:"state"`
 	DownloadURL string `json:"browser_download_url"`
 }
 
-// resolveAssetURLs queries the GitHub releases API for the requested tag
+// resolveAssets queries the GitHub releases API for the requested tag
 // and selects the assets matching the platform.
 //
 // leejet asset names contain the commit SHA and the build VM's OS minor
 // version (e.g. ubuntu 24.04, macOS 15.7.7), so we cannot compose the URL
 // from the version tag alone — we have to discover it.
-func resolveAssetURLs(_ context.Context, arch Arch, osVal OS, prcssr Processor, version string) ([]string, error) {
+func resolveAssets(ctx context.Context, arch Arch, osVal OS, prcssr Processor, version string) ([]releaseAsset, error) {
 	if osVal.Equal(Linux) && prcssr.Equal(CUDA) {
 		return nil, fmt.Errorf("%w: leejet/stable-diffusion.cpp publishes no linux/cuda artifact; use -p vulkan or -p rocm, or build stable-diffusion.cpp yourself", ErrUnsupportedPlatform)
 	}
@@ -262,7 +300,7 @@ func resolveAssetURLs(_ context.Context, arch Arch, osVal OS, prcssr Processor, 
 	}
 
 	apiURL := fmt.Sprintf("https://api.github.com/repos/%s/releases/tags/%s", SDRepo, version)
-	body, err := httpGetJSON(apiURL)
+	body, err := httpGetJSON(ctx, apiURL)
 	if err != nil {
 		return nil, fmt.Errorf("fetch release %s: %w", version, err)
 	}
@@ -274,26 +312,28 @@ func resolveAssetURLs(_ context.Context, arch Arch, osVal OS, prcssr Processor, 
 		return nil, fmt.Errorf("parse release %s: %w", version, err)
 	}
 
-	return selectAssetURLs(rel.Assets, pattern, osVal, prcssr, version)
+	return selectAssets(rel.Assets, pattern, osVal, prcssr, version)
 }
 
-func selectAssetURLs(assets []releaseAsset, pattern *regexp.Regexp, osVal OS, prcssr Processor, version string) ([]string, error) {
+func selectAssets(assets []releaseAsset, pattern *regexp.Regexp, osVal OS, prcssr Processor, version string) ([]releaseAsset, error) {
 	// Pick the asset whose name matches the per-platform regex. If multiple
 	// match (e.g. two ROCm variants), prefer the lexicographically-greatest
 	// — for leejet's ROCm-7.13.0 vs ROCm-7.2.1 layout that gets us the
 	// newer build.
-	var matches []string
+	var matches []releaseAsset
 	for _, a := range assets {
 		if pattern.MatchString(a.Name) {
-			matches = append(matches, a.DownloadURL)
+			matches = append(matches, a)
 		}
 	}
 	if len(matches) == 0 {
 		return nil, fmt.Errorf("%w: release %s has no asset matching %q",
 			ErrFileNotFound, version, pattern)
 	}
-	sort.Strings(matches)
-	urls := []string{matches[len(matches)-1]}
+	slices.SortFunc(matches, func(a releaseAsset, b releaseAsset) int {
+		return cmp.Compare(a.Name, b.Name)
+	})
+	selected := []releaseAsset{matches[len(matches)-1]}
 
 	// Current Windows CUDA releases package the CUDA runtime and cuBLAS DLLs
 	// separately from stable-diffusion.dll. Older releases were self-contained,
@@ -301,13 +341,13 @@ func selectAssetURLs(assets []releaseAsset, pattern *regexp.Regexp, osVal OS, pr
 	if osVal.Equal(Windows) && prcssr.Equal(CUDA) {
 		for _, a := range assets {
 			if a.Name == "cudart-sd-bin-win-cu12-x64.zip" {
-				urls = append(urls, a.DownloadURL)
+				selected = append(selected, a)
 				break
 			}
 		}
 	}
 
-	return urls, nil
+	return selected, nil
 }
 
 func assetPattern(arch Arch, osVal OS, prcssr Processor) (*regexp.Regexp, error) {
@@ -363,7 +403,7 @@ func assetPattern(arch Arch, osVal OS, prcssr Processor) (*regexp.Regexp, error)
 // downloadAndExtract fetches the asset zip with go-getter (resumes
 // interrupted downloads via HTTP Range) and extracts every shared library
 // flat into dest.
-func downloadAndExtract(ctx context.Context, url, dest string, osVal OS, progress getter.ProgressTracker) error {
+func downloadAndExtract(ctx context.Context, url, dest string, osVal OS, wantDigest string, progress getter.ProgressTracker) error {
 	if err := os.MkdirAll(dest, 0o755); err != nil {
 		return fmt.Errorf("create destination dir: %w", err)
 	}
@@ -392,6 +432,14 @@ func downloadAndExtract(ctx context.Context, url, dest string, osVal OS, progres
 		return err
 	}
 	defer os.Remove(downloadFile)
+
+	gotDigest, err := hashFile(downloadFile)
+	if err != nil {
+		return fmt.Errorf("hash release asset: %w", err)
+	}
+	if !strings.EqualFold(gotDigest, wantDigest) {
+		return fmt.Errorf("%w for %s: got %s, want %s", ErrDigestMismatch, filepath.Base(url), gotDigest, wantDigest)
+	}
 
 	return extractSharedLibs(downloadFile, dest, osVal)
 }
@@ -501,8 +549,8 @@ func writeZipSymlink(f *zip.File, target string) error {
 
 // =============================================================================
 
-func httpGetJSON(url string) ([]byte, error) {
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+func httpGetJSON(ctx context.Context, url string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}

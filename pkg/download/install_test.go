@@ -284,7 +284,7 @@ func TestAssetPattern(t *testing.T) {
 	}
 }
 
-func TestSelectAssetURLsWindowsCUDA(t *testing.T) {
+func TestSelectAssetsWindowsCUDA(t *testing.T) {
 	pattern, err := assetPattern(AMD64, Windows, CUDA)
 	if err != nil {
 		t.Fatalf("assetPattern: unexpected error: %v", err)
@@ -295,13 +295,13 @@ func TestSelectAssetURLsWindowsCUDA(t *testing.T) {
 		{Name: "cudart-sd-bin-win-cu12-x64.zip", DownloadURL: "https://example.com/cudart.zip"},
 		{Name: "sd-master-6b3edaa-bin-win-cpu-x64.zip", DownloadURL: "https://example.com/cpu.zip"},
 	}
-	want := []string{"https://example.com/stable-diffusion.zip", "https://example.com/cudart.zip"}
+	want := []releaseAsset{assets[0], assets[1]}
 
-	got, err := selectAssetURLs(assets, pattern, Windows, CUDA, "master-841-6b3edaa")
+	got, err := selectAssets(assets, pattern, Windows, CUDA, "master-841-6b3edaa")
 	if err != nil {
-		t.Fatalf("selectAssetURLs: unexpected error: %v", err)
+		t.Fatalf("selectAssets: unexpected error: %v", err)
 	}
 	if !slices.Equal(got, want) {
-		t.Errorf("selectAssetURLs: got %v, want %v", got, want)
+		t.Errorf("selectAssets: got %v, want %v", got, want)
 	}
 }
