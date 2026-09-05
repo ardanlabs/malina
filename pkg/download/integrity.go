@@ -37,6 +37,10 @@ const (
 
 	// InstallRecordName is the metadata file written beside installed libraries.
 	InstallRecordName = "malina-install.json"
+
+	// ReleaseMetadataName is the GitHub Release API response used to select and
+	// authenticate the installed archives.
+	ReleaseMetadataName = "github-release.json"
 )
 
 //go:embed library_manifest.json
@@ -60,10 +64,12 @@ type manifestAsset struct {
 
 // InstallAsset records one stable-diffusion.cpp release asset used by an install.
 type InstallAsset struct {
-	ID     int64  `json:"id"`
-	Name   string `json:"name"`
-	Size   int64  `json:"size"`
-	SHA256 string `json:"sha256"`
+	ID     int64             `json:"id"`
+	Name   string            `json:"name"`
+	Size   int64             `json:"size"`
+	SHA256 string            `json:"sha256"`
+	Files  map[string]string `json:"files,omitempty"`
+	Links  map[string]string `json:"links,omitempty"`
 }
 
 // InstallRecord records the release assets installed in a library directory.
@@ -75,6 +81,7 @@ type InstallRecord struct {
 	Processor    string         `json:"processor"`
 	Installed    time.Time      `json:"installed"`
 	ManifestHash string         `json:"manifest_sha256,omitempty"`
+	ReleaseHash  string         `json:"release_sha256,omitempty"`
 	Assets       []InstallAsset `json:"assets"`
 }
 
@@ -124,13 +131,15 @@ type FileReport struct {
 
 // VerifyReport describes the files checked in an installed library directory.
 type VerifyReport struct {
-	Tag        string       `json:"tag"`
-	LibPath    string       `json:"lib_path"`
-	Files      []FileReport `json:"files"`
-	Verified   int          `json:"verified"`
-	Changed    int          `json:"changed"`
-	Missing    int          `json:"missing"`
-	Unexpected int          `json:"unexpected"`
+	Tag                   string       `json:"tag"`
+	LibPath               string       `json:"lib_path"`
+	ManifestAuthenticated bool         `json:"manifest_authenticated"`
+	Source                string       `json:"source"`
+	Files                 []FileReport `json:"files"`
+	Verified              int          `json:"verified"`
+	Changed               int          `json:"changed"`
+	Missing               int          `json:"missing"`
+	Unexpected            int          `json:"unexpected"`
 }
 
 // OK reports whether every expected installed path is present and unchanged.
@@ -264,9 +273,6 @@ func trustedManifestHash(version string) string {
 }
 
 func verifyExpectedFiles(ctx context.Context, libPath string, record InstallRecord) error {
-	if record.ManifestHash == "" {
-		return nil
-	}
 	report, err := verifyRecord(ctx, libPath, record)
 	if err != nil {
 		return fmt.Errorf("verify installed libraries: %w", err)
@@ -280,16 +286,45 @@ func verifyExpectedFiles(ctx context.Context, libPath string, record InstallReco
 func verifyRecord(ctx context.Context, libPath string, record InstallRecord) (*VerifyReport, error) {
 	manifest, ok := trustedManifest(record.Tag)
 	if !ok {
-		return nil, fmt.Errorf("%w: %s", ErrNoFileDigests, record.Tag)
+		if err := verifyReleaseMetadata(libPath, record); err != nil {
+			return nil, err
+		}
+		manifest = libraryManifest{Tag: record.Tag, Assets: make(map[string]manifestAsset, len(record.Assets))}
+		for _, asset := range record.Assets {
+			manifest.Assets[asset.Name] = manifestAsset{
+				ID:     asset.ID,
+				Size:   asset.Size,
+				SHA256: asset.SHA256,
+				Files:  asset.Files,
+				Links:  asset.Links,
+			}
+		}
+		report, err := verifyFiles(ctx, libPath, record, manifest)
+		if err != nil {
+			return nil, err
+		}
+		report.Source = "install-record"
+		return report, nil
 	}
 	if record.ManifestHash != trustedManifestHash(record.Tag) {
 		return nil, fmt.Errorf("%w: manifest hash", ErrRecordMismatch)
+	}
+	if record.ReleaseHash != "" {
+		if err := verifyReleaseMetadata(libPath, record); err != nil {
+			return nil, err
+		}
 	}
 	if err := verifyRecordAssets(record, manifest); err != nil {
 		return nil, err
 	}
 
-	return verifyFiles(ctx, libPath, record, manifest)
+	report, err := verifyFiles(ctx, libPath, record, manifest)
+	if err != nil {
+		return nil, err
+	}
+	report.ManifestAuthenticated = true
+	report.Source = "embedded-manifest"
+	return report, nil
 }
 
 func verifyRecordAssets(record InstallRecord, manifest libraryManifest) error {
@@ -380,7 +415,7 @@ func verifyFiles(ctx context.Context, libPath string, record InstallRecord, mani
 			return err
 		}
 		name = filepath.ToSlash(name)
-		if name == InstallRecordName {
+		if name == InstallRecordName || name == ReleaseMetadataName {
 			return nil
 		}
 		seen[name] = true
@@ -450,6 +485,59 @@ func writeInstallRecord(libPath string, record InstallRecord) error {
 		return fmt.Errorf("write install record: %w", err)
 	}
 	return nil
+}
+
+func verifyReleaseMetadata(libPath string, record InstallRecord) error {
+	if record.ReleaseHash == "" {
+		return fmt.Errorf("%w: cached release metadata hash", ErrRecordMismatch)
+	}
+	data, err := os.ReadFile(filepath.Join(libPath, ReleaseMetadataName))
+	if err != nil {
+		return fmt.Errorf("%w: read cached release metadata: %v", ErrRecordMismatch, err)
+	}
+	if !strings.EqualFold(hashBytes(data), record.ReleaseHash) {
+		return fmt.Errorf("%w: cached release metadata hash", ErrRecordMismatch)
+	}
+
+	var release struct {
+		TagName string         `json:"tag_name"`
+		Assets  []releaseAsset `json:"assets"`
+	}
+	if err := json.Unmarshal(data, &release); err != nil {
+		return fmt.Errorf("%w: decode cached release metadata: %v", ErrRecordMismatch, err)
+	}
+	if release.TagName != record.Tag {
+		return fmt.Errorf("%w: cached release tag", ErrRecordMismatch)
+	}
+
+	assets := make(map[string]releaseAsset, len(release.Assets))
+	for _, asset := range release.Assets {
+		assets[asset.Name] = asset
+	}
+	for _, installed := range record.Assets {
+		asset, ok := assets[installed.Name]
+		if !ok {
+			return fmt.Errorf("%w: cached release asset %s", ErrRecordMismatch, installed.Name)
+		}
+		digest, err := parseSHA256(asset.Digest)
+		if err != nil || asset.State != "uploaded" || asset.ID != installed.ID || asset.Size != installed.Size || !strings.EqualFold(digest, installed.SHA256) {
+			return fmt.Errorf("%w: cached release asset %s", ErrRecordMismatch, installed.Name)
+		}
+	}
+
+	return nil
+}
+
+func writeReleaseMetadata(libPath string, data []byte) error {
+	if err := os.WriteFile(filepath.Join(libPath, ReleaseMetadataName), data, 0o644); err != nil {
+		return fmt.Errorf("write release metadata: %w", err)
+	}
+	return nil
+}
+
+func hashBytes(data []byte) string {
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:])
 }
 
 func parseSHA256(digest string) (string, error) {

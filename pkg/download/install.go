@@ -238,7 +238,7 @@ func GetWithContext(ctx context.Context, architecture, osName, processor, versio
 		return err
 	}
 
-	assets, err := resolveAssets(ctx, arch, osVal, prcssr, version)
+	assets, releaseMetadata, err := resolveAssets(ctx, arch, osVal, prcssr, version)
 	if err != nil {
 		return err
 	}
@@ -249,7 +249,8 @@ func GetWithContext(ctx context.Context, architecture, osName, processor, versio
 		if err != nil {
 			return err
 		}
-		if err := downloadAndExtract(ctx, asset.DownloadURL, dest, osVal, digest, progress); err != nil {
+		files, links, err := downloadAndExtract(ctx, asset.DownloadURL, dest, osVal, digest, progress)
+		if err != nil {
 			return err
 		}
 		installed = append(installed, InstallAsset{
@@ -257,6 +258,8 @@ func GetWithContext(ctx context.Context, architecture, osName, processor, versio
 			Name:   asset.Name,
 			Size:   asset.Size,
 			SHA256: digest,
+			Files:  files,
+			Links:  links,
 		})
 	}
 
@@ -268,7 +271,11 @@ func GetWithContext(ctx context.Context, architecture, osName, processor, versio
 		Processor:    processor,
 		Installed:    time.Now().UTC(),
 		ManifestHash: trustedManifestHash(version),
+		ReleaseHash:  hashBytes(releaseMetadata),
 		Assets:       installed,
+	}
+	if err := writeReleaseMetadata(dest, releaseMetadata); err != nil {
+		return err
 	}
 	if err := verifyExpectedFiles(ctx, dest, record); err != nil {
 		return err
@@ -297,30 +304,38 @@ type releaseAsset struct {
 // leejet asset names contain the commit SHA and the build VM's OS minor
 // version (e.g. ubuntu 24.04, macOS 15.7.7), so we cannot compose the URL
 // from the version tag alone — we have to discover it.
-func resolveAssets(ctx context.Context, arch Arch, osVal OS, prcssr Processor, version string) ([]releaseAsset, error) {
+func resolveAssets(ctx context.Context, arch Arch, osVal OS, prcssr Processor, version string) ([]releaseAsset, []byte, error) {
 	if osVal.Equal(Linux) && prcssr.Equal(CUDA) {
-		return nil, fmt.Errorf("%w: leejet/stable-diffusion.cpp publishes no linux/cuda artifact; use -p vulkan or -p rocm, or build stable-diffusion.cpp yourself", ErrUnsupportedPlatform)
+		return nil, nil, fmt.Errorf("%w: leejet/stable-diffusion.cpp publishes no linux/cuda artifact; use -p vulkan or -p rocm, or build stable-diffusion.cpp yourself", ErrUnsupportedPlatform)
 	}
 
 	pattern, err := assetPattern(arch, osVal, prcssr)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	apiURL := fmt.Sprintf("https://api.github.com/repos/%s/releases/tags/%s", SDRepo, version)
 	body, err := httpGetJSON(ctx, apiURL)
 	if err != nil {
-		return nil, fmt.Errorf("fetch release %s: %w", version, err)
+		return nil, nil, fmt.Errorf("fetch release %s: %w", version, err)
 	}
 
 	var rel struct {
-		Assets []releaseAsset `json:"assets"`
+		TagName string         `json:"tag_name"`
+		Assets  []releaseAsset `json:"assets"`
 	}
 	if err := json.Unmarshal(body, &rel); err != nil {
-		return nil, fmt.Errorf("parse release %s: %w", version, err)
+		return nil, nil, fmt.Errorf("parse release %s: %w", version, err)
+	}
+	if rel.TagName != version {
+		return nil, nil, fmt.Errorf("release tag mismatch: got %q, want %q", rel.TagName, version)
 	}
 
-	return selectAssets(rel.Assets, pattern, osVal, prcssr, version)
+	assets, err := selectAssets(rel.Assets, pattern, osVal, prcssr, version)
+	if err != nil {
+		return nil, nil, err
+	}
+	return assets, body, nil
 }
 
 func selectAssets(assets []releaseAsset, pattern *regexp.Regexp, osVal OS, prcssr Processor, version string) ([]releaseAsset, error) {
@@ -411,9 +426,9 @@ func assetPattern(arch Arch, osVal OS, prcssr Processor) (*regexp.Regexp, error)
 // downloadAndExtract fetches the asset zip with go-getter (resumes
 // interrupted downloads via HTTP Range) and extracts every shared library
 // flat into dest.
-func downloadAndExtract(ctx context.Context, url, dest string, osVal OS, wantDigest string, progress getter.ProgressTracker) error {
+func downloadAndExtract(ctx context.Context, url, dest string, osVal OS, wantDigest string, progress getter.ProgressTracker) (map[string]string, map[string]string, error) {
 	if err := os.MkdirAll(dest, 0o755); err != nil {
-		return fmt.Errorf("create destination dir: %w", err)
+		return nil, nil, fmt.Errorf("create destination dir: %w", err)
 	}
 
 	downloadFile := filepath.Join(dest, filepath.Base(url))
@@ -435,18 +450,18 @@ func downloadAndExtract(ctx context.Context, url, dest string, osVal OS, wantDig
 	}
 	if err := client.Get(); err != nil {
 		if strings.Contains(err.Error(), "404") {
-			return fmt.Errorf("%w: %s", ErrFileNotFound, url)
+			return nil, nil, fmt.Errorf("%w: %s", ErrFileNotFound, url)
 		}
-		return err
+		return nil, nil, err
 	}
 	defer os.Remove(downloadFile)
 
 	gotDigest, err := hashFile(downloadFile)
 	if err != nil {
-		return fmt.Errorf("hash release asset: %w", err)
+		return nil, nil, fmt.Errorf("hash release asset: %w", err)
 	}
 	if !strings.EqualFold(gotDigest, wantDigest) {
-		return fmt.Errorf("%w for %s: got %s, want %s", ErrDigestMismatch, filepath.Base(url), gotDigest, wantDigest)
+		return nil, nil, fmt.Errorf("%w for %s: got %s, want %s", ErrDigestMismatch, filepath.Base(url), gotDigest, wantDigest)
 	}
 
 	return extractSharedLibs(downloadFile, dest, osVal)
@@ -455,15 +470,16 @@ func downloadAndExtract(ctx context.Context, url, dest string, osVal OS, wantDig
 // extractSharedLibs walks the release zip and writes every shared library
 // (.so / .dylib / .dll) and SONAME symlink flat into dest. Inner directory
 // structure is discarded.
-func extractSharedLibs(zipPath, dest string, osVal OS) error {
+func extractSharedLibs(zipPath, dest string, osVal OS) (map[string]string, map[string]string, error) {
 	zr, err := zip.OpenReader(zipPath)
 	if err != nil {
-		return fmt.Errorf("open zip %s: %w", zipPath, err)
+		return nil, nil, fmt.Errorf("open zip %s: %w", zipPath, err)
 	}
 	defer zr.Close()
 
 	suffixes := libSuffixes(osVal)
-	any := false
+	files := make(map[string]string)
+	links := make(map[string]string)
 	for _, f := range zr.File {
 		base := filepath.Base(f.Name)
 		if !matchesAny(strings.ToLower(base), suffixes) {
@@ -477,22 +493,30 @@ func extractSharedLibs(zipPath, dest string, osVal OS) error {
 		// must be preserved or dlopen will fail at runtime.
 		if mode&os.ModeSymlink != 0 {
 			if err := writeZipSymlink(f, target); err != nil {
-				return err
+				return nil, nil, err
 			}
-			any = true
+			link, err := os.Readlink(target)
+			if err != nil {
+				return nil, nil, fmt.Errorf("read installed symlink %s: %w", target, err)
+			}
+			links[base] = link
 			continue
 		}
 
 		if err := writeZipRegular(f, target); err != nil {
-			return err
+			return nil, nil, err
 		}
-		any = true
+		digest, err := hashFile(target)
+		if err != nil {
+			return nil, nil, fmt.Errorf("hash installed library %s: %w", target, err)
+		}
+		files[base] = digest
 	}
 
-	if !any {
-		return fmt.Errorf("%s contained no shared library files for %s", zipPath, osVal)
+	if len(files) == 0 && len(links) == 0 {
+		return nil, nil, fmt.Errorf("%s contained no shared library files for %s", zipPath, osVal)
 	}
-	return nil
+	return files, links, nil
 }
 
 func libSuffixes(osVal OS) []string {

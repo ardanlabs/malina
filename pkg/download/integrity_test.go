@@ -95,6 +95,72 @@ func TestVerifyInstallRequiresRecord(t *testing.T) {
 	}
 }
 
+func TestVerifyInstallUsesCustomInstallRecordOffline(t *testing.T) {
+	const (
+		tag      = "master-999-deadbee"
+		filename = "libstable-diffusion.dylib"
+		contents = "custom native library"
+	)
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, filename)
+	if err := os.WriteFile(path, []byte(contents), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	digest := sha256.Sum256([]byte(contents))
+	releaseMetadata := []byte(`{"tag_name":"` + tag + `","assets":[{"id":1,"name":"custom.zip","size":10,"digest":"sha256:` + strings.Repeat("a", sha256.Size*2) + `","state":"uploaded"}]}`)
+	record := InstallRecord{
+		Version:     installRecordVersion,
+		Tag:         tag,
+		Arch:        "arm64",
+		OS:          "darwin",
+		Processor:   "metal",
+		ReleaseHash: hashBytes(releaseMetadata),
+		Assets: []InstallAsset{{
+			ID:     1,
+			Name:   "custom.zip",
+			Size:   10,
+			SHA256: strings.Repeat("a", sha256.Size*2),
+			Files:  map[string]string{filename: hex.EncodeToString(digest[:])},
+		}},
+	}
+	if err := writeReleaseMetadata(dir, releaseMetadata); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeInstallRecord(dir, record); err != nil {
+		t.Fatal(err)
+	}
+
+	report, err := VerifyInstall(context.Background(), dir, "")
+	if err != nil {
+		t.Fatalf("VerifyInstall: %v", err)
+	}
+	if !report.OK() || report.Source != "install-record" || report.ManifestAuthenticated || report.Verified != 1 {
+		t.Errorf("report = %+v, want one locally verified file", report)
+	}
+
+	if err := os.WriteFile(filepath.Join(dir, ReleaseMetadataName), []byte("changed"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := VerifyInstall(context.Background(), dir, ""); !errors.Is(err, ErrRecordMismatch) {
+		t.Fatalf("VerifyInstall changed release metadata error = %v, want ErrRecordMismatch", err)
+	}
+	if err := writeReleaseMetadata(dir, releaseMetadata); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.WriteFile(path, []byte("changed"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	report, err = VerifyInstall(context.Background(), dir, "")
+	if err != nil {
+		t.Fatalf("VerifyInstall changed file: %v", err)
+	}
+	if report.OK() || report.Changed != 1 {
+		t.Errorf("changed report = %+v, want one changed file", report)
+	}
+}
+
 func TestParsePinnedVersion(t *testing.T) {
 	digest := strings.Repeat("a", sha256.Size*2)
 	tests := []struct {
@@ -189,7 +255,7 @@ func TestDownloadAndExtractChecksDigest(t *testing.T) {
 	defer server.Close()
 
 	dir := t.TempDir()
-	err := downloadAndExtract(context.Background(), server.URL+"/libraries.zip", dir, Darwin, strings.Repeat("0", sha256.Size*2), nil)
+	_, _, err := downloadAndExtract(context.Background(), server.URL+"/libraries.zip", dir, Darwin, strings.Repeat("0", sha256.Size*2), nil)
 	if !errors.Is(err, ErrDigestMismatch) {
 		t.Fatalf("downloadAndExtract error = %v, want ErrDigestMismatch", err)
 	}
@@ -198,9 +264,13 @@ func TestDownloadAndExtractChecksDigest(t *testing.T) {
 	}
 
 	digest := sha256.Sum256(archive)
-	err = downloadAndExtract(context.Background(), server.URL+"/libraries.zip", dir, Darwin, hex.EncodeToString(digest[:]), nil)
+	files, links, err := downloadAndExtract(context.Background(), server.URL+"/libraries.zip", dir, Darwin, hex.EncodeToString(digest[:]), nil)
 	if err != nil {
 		t.Fatalf("downloadAndExtract: %v", err)
+	}
+	libraryDigest := sha256.Sum256([]byte("native library"))
+	if files["libstable-diffusion.dylib"] != hex.EncodeToString(libraryDigest[:]) || len(links) != 0 {
+		t.Errorf("recorded paths: got files=%v links=%v", files, links)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "libstable-diffusion.dylib")); err != nil {
 		t.Errorf("verified library was not extracted: %v", err)
