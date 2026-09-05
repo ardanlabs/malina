@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"runtime"
 	"strings"
 	"sync"
 	"unsafe"
 
 	"github.com/ardanlabs/malina/pkg/utils"
+	"github.com/ebitengine/purego"
 	"github.com/jupiterrider/ffi"
 )
 
@@ -28,16 +28,10 @@ var (
 	// such as ggml_metal_* from bypassing the stable-diffusion callback.
 	ggmlLogSetFunc ffi.Fun
 
-	// Persistent state for the C-callable trampoline. libffi requires
-	// these to outlive the FFI call, so they are package-scoped.
-	logCifCallback  ffi.Cif
-	logClosure      *ffi.Closure
-	logCallbackCode unsafe.Pointer
-	logCallbackFun  uintptr
-	ggmlLogCif      ffi.Cif
-	ggmlLogClosure  *ffi.Closure
-	ggmlLogCode     unsafe.Pointer
-	ggmlLogFun      uintptr
+	// Persistent C-callable function pointers. purego keeps the Go callback
+	// functions rooted for the life of the process.
+	logCallbackCode uintptr
+	ggmlLogCode     uintptr
 
 	logMu          sync.Mutex
 	logUserHandler LogCallback
@@ -73,103 +67,43 @@ func loadGGMLLogFunc(lib ffi.Lib) {
 }
 
 // installLogCallback registers a process-wide log handler with the C
-// library. Called once from Load. Safe to call again; the closure is reused.
+// library. Called once from Load. Safe to call again; the callback is reused.
 func installLogCallback() error {
 	if setLogCallbackFunc == (ffi.Fun{}) {
 		return nil
 	}
-	if logClosure == nil {
-		closure, code, callback, err := prepareLogClosure("sd_log_cb_t", &logCifCallback, logTrampoline)
-		if err != nil {
-			return err
-		}
-		logClosure = closure
-		logCallbackCode = code
-		logCallbackFun = callback
+	if logCallbackCode == 0 {
+		logCallbackCode = purego.NewCallback(logTrampoline)
 	}
 
 	if ggmlLogSetFunc != (ffi.Fun{}) {
-		if err := installGGMLLogCallback(); err != nil {
-			return err
+		if ggmlLogCode == 0 {
+			ggmlLogCode = purego.NewCallback(ggmlLogTrampoline)
 		}
 	}
 
-	var nilData unsafe.Pointer
+	var nilData uintptr
 	setLogCallbackFunc.Call(nil, unsafe.Pointer(&logCallbackCode), unsafe.Pointer(&nilData))
 	if ggmlLogSetFunc != (ffi.Fun{}) {
 		ggmlLogSetFunc.Call(nil, unsafe.Pointer(&ggmlLogCode), unsafe.Pointer(&nilData))
 	}
-	runtime.KeepAlive(logCallbackFun)
-	runtime.KeepAlive(ggmlLogFun)
 
 	return nil
 }
 
-func installGGMLLogCallback() error {
-	if ggmlLogClosure != nil {
-		return nil
-	}
-
-	closure, code, callback, err := prepareLogClosure("ggml_log_callback", &ggmlLogCif, ggmlLogTrampoline)
-	if err != nil {
-		return err
-	}
-	ggmlLogClosure = closure
-	ggmlLogCode = code
-	ggmlLogFun = callback
-
-	return nil
-}
-
-func prepareLogClosure(name string, cif *ffi.Cif, callback ffi.Callback) (*ffi.Closure, unsafe.Pointer, uintptr, error) {
-	// Both native callbacks have the signature:
-	// void (*)(int32_t level, const char* text, void* user_data).
-	if status := ffi.PrepCif(cif, ffi.DefaultAbi, 3,
-		&ffi.TypeVoid,
-		&ffi.TypeSint32,
-		&ffi.TypePointer,
-		&ffi.TypePointer,
-	); status != ffi.OK {
-		return nil, nil, 0, fmt.Errorf("PrepCif %s: %v", name, status)
-	}
-
-	var code unsafe.Pointer
-	closure := ffi.ClosureAlloc(unsafe.Sizeof(ffi.Closure{}), &code)
-	if closure == nil {
-		return nil, nil, 0, fmt.Errorf("ffi.ClosureAlloc for %s returned nil", name)
-	}
-
-	callbackFunc := ffi.NewCallback(callback)
-	if status := ffi.PrepClosureLoc(closure, cif, callbackFunc, nil, code); status != ffi.OK {
-		ffi.ClosureFree(closure)
-		return nil, nil, 0, fmt.Errorf("PrepClosureLoc %s: %v", name, status)
-	}
-
-	return closure, code, callbackFunc, nil
-}
-
-// logTrampoline is the C-callable function libffi invokes for every log line.
-// args is &[3]unsafe.Pointer{ &level, &textPtr, &dataPtr }.
-func logTrampoline(_ *ffi.Cif, _ unsafe.Pointer, args *unsafe.Pointer, _ unsafe.Pointer) uintptr {
-	argsArr := (*[3]unsafe.Pointer)(unsafe.Pointer(args))
-	level := LogLevel(*(*int32)(argsArr[0]))
-	textPtr := *(**byte)(argsArr[1])
-
-	dispatchLog(level, strings.TrimRight(utils.BytePtrToString(textPtr), "\n"))
+// logTrampoline is the C-callable stable-diffusion.cpp log callback.
+func logTrampoline(level int32, text *byte, _ unsafe.Pointer) uintptr {
+	dispatchLog(LogLevel(level), strings.TrimRight(utils.BytePtrToString(text), "\n"))
 	return 0
 }
 
-func ggmlLogTrampoline(_ *ffi.Cif, _ unsafe.Pointer, args *unsafe.Pointer, _ unsafe.Pointer) uintptr {
-	argsArr := (*[3]unsafe.Pointer)(unsafe.Pointer(args))
-	rawLevel := *(*int32)(argsArr[0])
-	textPtr := *(**byte)(argsArr[1])
-
+func ggmlLogTrampoline(rawLevel int32, text *byte, _ unsafe.Pointer) uintptr {
 	logMu.Lock()
 	ggmlLastLevel = mapGGMLLogLevel(rawLevel, ggmlLastLevel)
 	level := ggmlLastLevel
 	logMu.Unlock()
 
-	dispatchLog(level, strings.TrimRight(utils.BytePtrToString(textPtr), "\n"))
+	dispatchLog(level, strings.TrimRight(utils.BytePtrToString(text), "\n"))
 	return 0
 }
 
