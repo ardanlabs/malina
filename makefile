@@ -38,6 +38,12 @@ clean-stable-diffusion.cpp:
 download-stable-diffusion.cpp:
 	go run . install -lib $(MALINA_LIB) -u $(if $(VERSION),-v $(VERSION))
 
+# Regenerate the trusted archive and installed-file hashes when changing
+# download.DefaultSDVersion. This downloads every supported upstream artifact.
+generate-library-manifest:
+	test -n "$(VERSION)" || (echo "VERSION is required" && exit 1)
+	cd pkg/download && go run generate_manifest.go -version $(VERSION)
+
 install:
 	go install .
 

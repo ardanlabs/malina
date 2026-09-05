@@ -18,7 +18,8 @@ versioning, and release notes. Do not only change version strings.
 1. Inspect git status and preserve unrelated worktree changes.
 2. Inspect local and remote Malina tags.
 3. Identify the currently pinned stable-diffusion.cpp release in
-   `pkg/download.DefaultSDVersion`.
+   `pkg/download.DefaultSDVersion` and the corresponding trusted release in
+   `pkg/download/library_manifest.json`.
 4. Resolve <STABLE_DIFF_VERSION> to its exact upstream commit and compare it
    with the currently pinned release.
 5. Inspect the complete GitHub release asset list for
@@ -92,10 +93,43 @@ notes.
 
 ## Pinned version and download matrix
 
+Treat `pkg/download.DefaultSDVersion` and
+`pkg/download/library_manifest.json` as one atomic version pin. Before testing
+or installing the new default, regenerate the trusted manifest from the target
+GitHub release:
+
+    make generate-library-manifest VERSION=<STABLE_DIFF_VERSION>
+
+After generation, calculate the SHA-256 of the exact raw manifest bytes and set
+`DefaultSDVersion` to the complete authenticated pin:
+
+    <STABLE_DIFF_VERSION>@sha256:<library_manifest.json SHA-256>
+
+Do not copy the previous manifest forward or update only its tag. The generator
+must download every supported upstream library archive, verify each archive
+against the SHA-256 digest reported by GitHub, and record the target release's
+asset ID, size, archive SHA-256, extracted shared-library hashes, and symlink
+targets. Review the generated diff and confirm:
+
+- the manifest repository and tag exactly match leejet/stable-diffusion.cpp
+  <STABLE_DIFF_VERSION>
+- every platform/backend combination Malina advertises is covered
+- every selected asset's ID, size, and SHA-256 match the target release's live
+  GitHub API metadata
+- split dependency archives, such as the Windows CUDA runtime/cuBLAS bundle,
+  are included when required
+- extracted files and SONAME symlinks match the archive layouts inspected in
+  preflight
+
+If generation, archive verification, or coverage validation fails, do not bump
+`DefaultSDVersion`. Never weaken or bypass manifest verification to complete an
+upgrade.
+
 Update all active places that establish, test, or describe the default
 stable-diffusion.cpp version, including:
 
 - `pkg/download.DefaultSDVersion`
+- `pkg/download/library_manifest.json`
 - downloader asset-selection patterns and platform matrix tests
 - installer CLI help
 - Makefile examples
@@ -122,7 +156,9 @@ mapping accurate and retain older rows when they remain useful compatibility
 references.
 
 Add or update an exact regression test asserting that `DefaultSDVersion`
-equals <STABLE_DIFF_VERSION>.
+equals <STABLE_DIFF_VERSION>. Also verify that the embedded manifest tag equals
+`DefaultSDVersion`, contains complete metadata and installed-file coverage for
+all selected assets, and rejects changed GitHub asset metadata.
 
 Use the target release's real asset names in regression tests. For releases
 that split dependencies into companion archives, ensure the installer
@@ -151,6 +187,9 @@ the appropriate processor for the current host. On Apple Silicon, for example:
 Verify:
 
 - the selected asset belongs to <STABLE_DIFF_VERSION>
+- the install record references the regenerated trusted manifest and records
+  the selected asset ID, size, and archive SHA-256
+- `download.VerifyInstall` succeeds immediately after installation
 - the local library and all sibling dependencies were replaced
 - all required symbols resolve through `sd.Load`
 - `malina system` succeeds against the installed library
@@ -226,6 +265,10 @@ After all changes, run:
     go test ./...
     gopls check <changed Go files>
     git diff --check
+
+Confirm `pkg/download/library_manifest.json` is tracked in the final diff, its
+tag equals `pkg/download.DefaultSDVersion`, and it contains no metadata or file
+hashes carried over from the previous release.
 
 Also run `pkg/sd` tests with `MALINA_LIB="$PWD/lib"` and the available model
 environment variables so they exercise the newly installed target library.

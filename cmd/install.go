@@ -18,7 +18,7 @@ var InstallCmd = &cli.Command{
 		&cli.StringFlag{
 			Name:    "version",
 			Aliases: []string{"v"},
-			Usage:   `version of stable-diffusion.cpp to install (e.g. "master-841-6b3edaa"; default is the malina-pinned version, pass "latest" to query the GitHub releases API)`,
+			Usage:   `version of stable-diffusion.cpp to install (VERSION or VERSION@sha256:<manifest-digest>; default is the authenticated malina-pinned version, pass "latest" to query the GitHub releases API)`,
 			Value:   "",
 		},
 		&cli.StringFlag{
@@ -68,11 +68,6 @@ func runInstall(c *cli.Context) error {
 		return fmt.Errorf("missing -lib flag or MALINA_LIB env var")
 	}
 
-	if !upgrade && download.AlreadyInstalled(libPath) {
-		fmt.Println("stable-diffusion.cpp already installed at", libPath)
-		return nil
-	}
-
 	switch version {
 	case "":
 		// Use the malina-pinned default. Avoids hitting the GitHub
@@ -84,6 +79,18 @@ func runInstall(c *cli.Context) error {
 			return fmt.Errorf("could not obtain latest version: %w", err)
 		}
 		version = v
+	}
+
+	if !upgrade && download.AlreadyInstalled(libPath) {
+		report, err := download.VerifyInstall(c.Context, libPath, version)
+		if err != nil {
+			return fmt.Errorf("verify existing stable-diffusion.cpp installation (reinstall with --upgrade): %w", err)
+		}
+		if !report.OK() {
+			return fmt.Errorf("verify existing stable-diffusion.cpp installation: %d changed and %d missing files", report.Changed, report.Missing)
+		}
+		fmt.Println("stable-diffusion.cpp already installed and verified at", libPath)
+		return nil
 	}
 
 	if !quiet {

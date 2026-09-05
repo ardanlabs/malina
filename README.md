@@ -78,6 +78,13 @@ $ export MALINA_LIB=$(pwd)/lib
 $ malina system
 ```
 
+Malina verifies an upstream asset's GitHub SHA-256 digest before extracting
+it. `DefaultSDVersion` includes the SHA-256 of the embedded trusted manifest,
+which authenticates the asset ID, size, archive digest, and every installed
+shared library for Malina's pinned stable-diffusion.cpp release. Installs
+created before this verification metadata was introduced must be refreshed
+once with `malina install -lib ./lib --upgrade`.
+
 And pull a model bundle from the bundled catalog:
 
 ```shell
@@ -149,7 +156,7 @@ Each bundle drops every required file into `$HOME/models/<bundle>/` along with a
 
 ## Support
 
-Malina uses the prebuilt stable-diffusion.cpp release artifacts from [leejet/stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp/releases) directly — there is no companion builder repo. The pinned version is captured in [`pkg/download/install.go`](pkg/download/install.go) as `DefaultSDVersion`.
+Malina uses the prebuilt stable-diffusion.cpp release artifacts from [leejet/stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp/releases) directly — there is no companion builder repo. The pinned version is captured in [`pkg/download/install.go`](pkg/download/install.go) as `DefaultSDVersion`; its trusted release metadata, archive hashes, installed-file hashes, and symlink targets are captured in [`pkg/download/library_manifest.json`](pkg/download/library_manifest.json). A dynamically selected release such as `-v latest` still receives archive-level verification from GitHub. Malina saves that GitHub Release API response and the resulting extracted-file hashes beside the installed libraries, so later offline checks can detect changed metadata or local corruption. Only the pinned release has an authenticated post-install baseline embedded in the Malina binary.
 
 | OS      | CPU   | Backend       | Upstream artifact pattern                                      |
 | ------- | ----- | ------------- | -------------------------------------------------------------- |
@@ -161,7 +168,7 @@ Malina uses the prebuilt stable-diffusion.cpp release artifacts from [leejet/sta
 | Linux   | amd64 | CPU           | `sd-master-…-bin-Linux-Ubuntu-…-x86_64.zip`                    |
 | Linux   | amd64 | Vulkan / ROCm | CPU pattern plus `-vulkan.zip` or `-rocm-….zip`                |
 
-Whenever there is a new release of stable-diffusion.cpp, the FFI struct mirrors in `pkg/sd` and the version constant in `pkg/download` may need a refresh. Bump `DefaultSDVersion`, regenerate any struct-size assertions in `pkg/sd/*_test.go`, and let CI verify.
+Whenever there is a new release of stable-diffusion.cpp, the FFI struct mirrors in `pkg/sd` and the version constant in `pkg/download` may need a refresh. Generate and review the new trusted manifest with `make generate-library-manifest VERSION=master-N-shortsha`, bump `DefaultSDVersion`, regenerate any struct-size assertions in `pkg/sd/*_test.go`, and let CI verify. Manifest generation downloads and hashes every supported release asset, so it can take several minutes and several gigabytes of transfer.
 
 The `malina_model_tests` suite exercises the standard SD 1.5, SDXL, and
 FLUX.2 fixtures configured by the Makefile. Additional wrapped APIs have
