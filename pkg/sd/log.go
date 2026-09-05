@@ -91,20 +91,26 @@ func installLogCallback() error {
 	return nil
 }
 
-// logTrampoline is the C-callable stable-diffusion.cpp log callback.
-func logTrampoline(level int32, text *byte, _ unsafe.Pointer) uintptr {
-	dispatchLog(LogLevel(level), strings.TrimRight(utils.BytePtrToString(text), "\n"))
+// logTrampoline is the C-callable stable-diffusion.cpp log callback. Native
+// pointers enter Go as uintptr values so purego does not expose them as
+// GC-visible pointers while constructing the callback arguments.
+func logTrampoline(level int32, text, _ uintptr) uintptr {
+	dispatchLog(LogLevel(level), strings.TrimRight(utils.BytePtrToString(bytePointer(text)), "\n"))
 	return 0
 }
 
-func ggmlLogTrampoline(rawLevel int32, text *byte, _ unsafe.Pointer) uintptr {
+func ggmlLogTrampoline(rawLevel int32, text, _ uintptr) uintptr {
 	logMu.Lock()
 	ggmlLastLevel = mapGGMLLogLevel(rawLevel, ggmlLastLevel)
 	level := ggmlLastLevel
 	logMu.Unlock()
 
-	dispatchLog(level, strings.TrimRight(utils.BytePtrToString(text), "\n"))
+	dispatchLog(level, strings.TrimRight(utils.BytePtrToString(bytePointer(text)), "\n"))
 	return 0
+}
+
+func bytePointer(value uintptr) *byte {
+	return *(**byte)(unsafe.Pointer(&value))
 }
 
 func mapGGMLLogLevel(rawLevel int32, previous LogLevel) LogLevel {
