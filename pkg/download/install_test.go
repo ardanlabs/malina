@@ -1,6 +1,7 @@
 package download
 
 import (
+	"context"
 	"errors"
 	"slices"
 	"testing"
@@ -303,5 +304,41 @@ func TestSelectAssetsWindowsCUDA(t *testing.T) {
 	}
 	if !slices.Equal(got, want) {
 		t.Errorf("selectAssets: got %v, want %v", got, want)
+	}
+}
+
+func TestResolveAssetsUsesTrustedManifest(t *testing.T) {
+	tag, _, err := ParsePinnedVersion(DefaultSDVersion)
+	if err != nil {
+		t.Fatalf("ParsePinnedVersion: unexpected error: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	assets, releaseMetadata, err := resolveAssets(ctx, AMD64, Linux, CPU, tag)
+	if err != nil {
+		t.Fatalf("resolveAssets: unexpected error: %v", err)
+	}
+	if len(assets) != 1 {
+		t.Fatalf("resolveAssets: got %d assets, want 1", len(assets))
+	}
+	asset := assets[0]
+	manifest, ok := trustedManifest(tag)
+	if !ok {
+		t.Fatalf("trustedManifest(%q): got no manifest", tag)
+	}
+	entry, ok := manifest.Assets[asset.Name]
+	if !ok {
+		t.Fatalf("resolveAssets name: got unknown asset %q", asset.Name)
+	}
+	wantURL := "https://github.com/" + SDRepo + "/releases/download/" + tag + "/" + asset.Name
+	if asset.DownloadURL != wantURL {
+		t.Errorf("resolveAssets URL: got %q, want %q", asset.DownloadURL, wantURL)
+	}
+	if asset.Digest != "sha256:"+entry.SHA256 {
+		t.Errorf("resolveAssets digest: got %q, want %q", asset.Digest, "sha256:"+entry.SHA256)
+	}
+	if len(releaseMetadata) != 0 {
+		t.Errorf("resolveAssets metadata: got %d bytes, want none", len(releaseMetadata))
 	}
 }

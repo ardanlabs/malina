@@ -271,11 +271,13 @@ func GetWithContext(ctx context.Context, architecture, osName, processor, versio
 		Processor:    processor,
 		Installed:    time.Now().UTC(),
 		ManifestHash: trustedManifestHash(version),
-		ReleaseHash:  hashBytes(releaseMetadata),
 		Assets:       installed,
 	}
-	if err := writeReleaseMetadata(dest, releaseMetadata); err != nil {
-		return err
+	if len(releaseMetadata) > 0 {
+		record.ReleaseHash = hashBytes(releaseMetadata)
+		if err := writeReleaseMetadata(dest, releaseMetadata); err != nil {
+			return err
+		}
 	}
 	if err := verifyExpectedFiles(ctx, dest, record); err != nil {
 		return err
@@ -298,12 +300,13 @@ type releaseAsset struct {
 	DownloadURL string `json:"browser_download_url"`
 }
 
-// resolveAssets queries the GitHub releases API for the requested tag
-// and selects the assets matching the platform.
+// resolveAssets selects assets from the embedded manifest when it covers the
+// requested version. Other versions are resolved through the GitHub releases
+// API, whose response is returned for caching beside the installed libraries.
 //
 // leejet asset names contain the commit SHA and the build VM's OS minor
-// version (e.g. ubuntu 24.04, macOS 15.7.7), so we cannot compose the URL
-// from the version tag alone — we have to discover it.
+// version (e.g. ubuntu 24.04, macOS 15.7.7), so custom versions must be
+// discovered through release metadata.
 func resolveAssets(ctx context.Context, arch Arch, osVal OS, prcssr Processor, version string) ([]releaseAsset, []byte, error) {
 	if osVal.Equal(Linux) && prcssr.Equal(CUDA) {
 		return nil, nil, fmt.Errorf("%w: leejet/stable-diffusion.cpp publishes no linux/cuda artifact; use -p vulkan or -p rocm, or build stable-diffusion.cpp yourself", ErrUnsupportedPlatform)
@@ -312,6 +315,22 @@ func resolveAssets(ctx context.Context, arch Arch, osVal OS, prcssr Processor, v
 	pattern, err := assetPattern(arch, osVal, prcssr)
 	if err != nil {
 		return nil, nil, err
+	}
+
+	if manifest, ok := trustedManifest(version); ok {
+		assets := make([]releaseAsset, 0, len(manifest.Assets))
+		for name, asset := range manifest.Assets {
+			assets = append(assets, releaseAsset{
+				ID:          asset.ID,
+				Name:        name,
+				Size:        asset.Size,
+				Digest:      "sha256:" + asset.SHA256,
+				State:       "uploaded",
+				DownloadURL: fmt.Sprintf("https://github.com/%s/releases/download/%s/%s", SDRepo, version, name),
+			})
+		}
+		selected, err := selectAssets(assets, pattern, osVal, prcssr, version)
+		return selected, nil, err
 	}
 
 	apiURL := fmt.Sprintf("https://api.github.com/repos/%s/releases/tags/%s", SDRepo, version)
