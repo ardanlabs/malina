@@ -28,7 +28,6 @@ $ go run ./examples/hello "a lovely cat"
 ## Project Status
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/ardanlabs/malina.svg)](https://pkg.go.dev/github.com/ardanlabs/malina)
-[![Go Report Card](https://goreportcard.com/badge/github.com/ardanlabs/malina?style=flat-square)](https://goreportcard.com/report/github.com/ardanlabs/malina)
 [![go.mod Go version](https://img.shields.io/github/go-mod/go-version/ardanlabs/malina)](https://github.com/ardanlabs/malina)
 [![stable-diffusion.cpp Release](https://img.shields.io/github/v/release/leejet/stable-diffusion.cpp?label=stable-diffusion.cpp)](https://github.com/leejet/stable-diffusion.cpp/releases)
 
