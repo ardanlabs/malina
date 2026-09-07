@@ -18,7 +18,7 @@ import (
 // binary-compatible struct on darwin/arm64, darwin/amd64, linux/amd64 and
 // windows/amd64.
 //
-// Total size: 280 bytes.
+// Total size: 288 bytes.
 type cContextParams struct {
 	ModelPath                   uintptr // 0..8
 	ClipLPath                   uintptr // 8..16
@@ -51,27 +51,29 @@ type cContextParams struct {
 	Prediction     int32 // 192..196
 	LoraApplyMode  int32 // 196..200
 
-	EnableMmap            uint8 // 200
-	FlashAttn             uint8 // 201
-	DiffusionFlashAttn    uint8 // 202
-	TaePreviewOnly        uint8 // 203
-	DiffusionConvDirect   uint8 // 204
-	VAEConvDirect         uint8 // 205
-	ForceSDXLVAEConvScale uint8 // 206
-	_                     [1]byte
-	VaeFormat             int32   // 208..212
-	_                     [4]byte // 212..216
-	MaxVram               uintptr // 216..224
-	StreamLayers          uint8   // 224
-	EagerLoad             uint8   // 225
-	_                     [6]byte // 226..232
-	Backend               uintptr // 232..240
-	ParamsBackend         uintptr // 240..248
-	SplitMode             uintptr // 248..256
-	AutoFit               uint8   // 256
-	_                     [7]byte // 257..264
-	RPCServers            uintptr // 264..272
-	ModelArgs             uintptr // 272..280
+	EnableMmap              uint8 // 200
+	FlashAttn               uint8 // 201
+	DiffusionFlashAttn      uint8 // 202
+	TaePreviewOnly          uint8 // 203
+	DiffusionConvDirect     uint8 // 204
+	VAEConvDirect           uint8 // 205
+	ForceSDXLVAEConvScale   uint8 // 206
+	_                       [1]byte
+	VaeFormat               int32   // 208..212
+	_                       [4]byte // 212..216
+	MaxVram                 uintptr // 216..224
+	DisablePrefetch         uint8   // 224
+	EagerLoad               uint8   // 225
+	_                       [6]byte // 226..232
+	Backend                 uintptr // 232..240
+	ParamsBackend           uintptr // 240..248
+	SplitMode               uintptr // 248..256
+	AutoFit                 uint8   // 256
+	_                       [7]byte // 257..264
+	RPCServers              uintptr // 264..272
+	ModelArgs               uintptr // 272..280
+	DisableSegmentedCompute uint8   // 280
+	_                       [7]byte // 281..288
 }
 
 // cEmbedding mirrors sd_embedding_t. Size: 16 bytes.
@@ -138,12 +140,12 @@ type ContextParams struct {
 	// format based on the loaded model checkpoint.
 	VaeFormat SDVaeFormat
 
-	// MaxVram sets the GiB budget or backend assignment specification for
-	// graph-cut segmented parameter offload. Empty disables it; "-1" selects
-	// automatic sizing.
-	MaxVram      string
-	StreamLayers bool
-	EagerLoad    bool
+	// MaxVram sets an optional per-device GiB budget for managed weights and
+	// runner buffers. Empty uses the live free VRAM without an explicit budget.
+	MaxVram                 string
+	DisablePrefetch         bool
+	EagerLoad               bool
+	DisableSegmentedCompute bool
 
 	// Backend selects the ggml backend by name (e.g. "cuda", "metal",
 	// "vulkan"). Empty means use the library default.
@@ -192,23 +194,24 @@ func ContextParamsInit() ContextParams {
 	ctxParamsInitFunc.Call(nil, unsafe.Pointer(&rawPtr))
 
 	return ContextParams{
-		NThreads:              raw.NThreads,
-		Wtype:                 SDType(raw.Wtype),
-		RngType:               RngType(raw.RngType),
-		SamplerRngType:        RngType(raw.SamplerRngType),
-		Prediction:            Prediction(raw.Prediction),
-		LoraApplyMode:         LoraApplyMode(raw.LoraApplyMode),
-		EnableMmap:            raw.EnableMmap != 0,
-		FlashAttn:             raw.FlashAttn != 0,
-		DiffusionFlashAttn:    raw.DiffusionFlashAttn != 0,
-		TaePreviewOnly:        raw.TaePreviewOnly != 0,
-		DiffusionConvDirect:   raw.DiffusionConvDirect != 0,
-		VAEConvDirect:         raw.VAEConvDirect != 0,
-		ForceSDXLVAEConvScale: raw.ForceSDXLVAEConvScale != 0,
-		VaeFormat:             SDVaeFormat(raw.VaeFormat),
-		StreamLayers:          raw.StreamLayers != 0,
-		EagerLoad:             raw.EagerLoad != 0,
-		AutoFit:               raw.AutoFit != 0,
+		NThreads:                raw.NThreads,
+		Wtype:                   SDType(raw.Wtype),
+		RngType:                 RngType(raw.RngType),
+		SamplerRngType:          RngType(raw.SamplerRngType),
+		Prediction:              Prediction(raw.Prediction),
+		LoraApplyMode:           LoraApplyMode(raw.LoraApplyMode),
+		EnableMmap:              raw.EnableMmap != 0,
+		FlashAttn:               raw.FlashAttn != 0,
+		DiffusionFlashAttn:      raw.DiffusionFlashAttn != 0,
+		TaePreviewOnly:          raw.TaePreviewOnly != 0,
+		DiffusionConvDirect:     raw.DiffusionConvDirect != 0,
+		VAEConvDirect:           raw.VAEConvDirect != 0,
+		ForceSDXLVAEConvScale:   raw.ForceSDXLVAEConvScale != 0,
+		VaeFormat:               SDVaeFormat(raw.VaeFormat),
+		DisablePrefetch:         raw.DisablePrefetch != 0,
+		EagerLoad:               raw.EagerLoad != 0,
+		AutoFit:                 raw.AutoFit != 0,
+		DisableSegmentedCompute: raw.DisableSegmentedCompute != 0,
 	}
 }
 
@@ -250,23 +253,24 @@ func marshalContextParams(params ContextParams) (*marshaledContextParams, error)
 	state := &marshaledContextParams{}
 	raw := &state.raw
 	*raw = cContextParams{
-		NThreads:              params.NThreads,
-		Wtype:                 int32(params.Wtype),
-		RngType:               int32(params.RngType),
-		SamplerRngType:        int32(params.SamplerRngType),
-		Prediction:            int32(params.Prediction),
-		LoraApplyMode:         int32(params.LoraApplyMode),
-		EnableMmap:            boolToU8(params.EnableMmap),
-		FlashAttn:             boolToU8(params.FlashAttn),
-		DiffusionFlashAttn:    boolToU8(params.DiffusionFlashAttn),
-		TaePreviewOnly:        boolToU8(params.TaePreviewOnly),
-		DiffusionConvDirect:   boolToU8(params.DiffusionConvDirect),
-		VAEConvDirect:         boolToU8(params.VAEConvDirect),
-		ForceSDXLVAEConvScale: boolToU8(params.ForceSDXLVAEConvScale),
-		VaeFormat:             int32(params.VaeFormat),
-		StreamLayers:          boolToU8(params.StreamLayers),
-		EagerLoad:             boolToU8(params.EagerLoad),
-		AutoFit:               boolToU8(params.AutoFit),
+		NThreads:                params.NThreads,
+		Wtype:                   int32(params.Wtype),
+		RngType:                 int32(params.RngType),
+		SamplerRngType:          int32(params.SamplerRngType),
+		Prediction:              int32(params.Prediction),
+		LoraApplyMode:           int32(params.LoraApplyMode),
+		EnableMmap:              boolToU8(params.EnableMmap),
+		FlashAttn:               boolToU8(params.FlashAttn),
+		DiffusionFlashAttn:      boolToU8(params.DiffusionFlashAttn),
+		TaePreviewOnly:          boolToU8(params.TaePreviewOnly),
+		DiffusionConvDirect:     boolToU8(params.DiffusionConvDirect),
+		VAEConvDirect:           boolToU8(params.VAEConvDirect),
+		ForceSDXLVAEConvScale:   boolToU8(params.ForceSDXLVAEConvScale),
+		VaeFormat:               int32(params.VaeFormat),
+		DisablePrefetch:         boolToU8(params.DisablePrefetch),
+		EagerLoad:               boolToU8(params.EagerLoad),
+		AutoFit:                 boolToU8(params.AutoFit),
+		DisableSegmentedCompute: boolToU8(params.DisableSegmentedCompute),
 	}
 
 	for _, m := range []struct {

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"runtime"
 
+	"github.com/ardanlabs/malina/pkg/download"
 	"github.com/ardanlabs/malina/pkg/sd"
 	"github.com/urfave/cli/v2"
 )
@@ -15,10 +16,11 @@ var SystemCmd = &cli.Command{
 	Usage: "Show stable-diffusion.cpp / system information",
 	Flags: []cli.Flag{
 		&cli.StringFlag{
-			Name:    "lib",
-			Aliases: []string{"l"},
-			Usage:   "path to stable-diffusion.cpp compiled library files",
-			EnvVars: []string{"MALINA_LIB"},
+			Name:        "lib",
+			Aliases:     []string{"l"},
+			Usage:       "path to stable-diffusion.cpp compiled library files",
+			Value:       download.DefaultLibrariesDir(),
+			DefaultText: "~/.kronk/malina-libraries/<os>/<arch>/<backend>",
 		},
 	},
 	Action: func(c *cli.Context) error {
@@ -36,10 +38,6 @@ func runSystemInfo(c *cli.Context) error {
 	fmt.Println()
 
 	fmt.Println("-- Library --")
-	if libPath == "" {
-		fmt.Println("MALINA_LIB not set; pass -lib or set the env var")
-		return nil
-	}
 	fmt.Println("path:", libPath)
 
 	if err := sd.Load(libPath); err != nil {

@@ -17,11 +17,8 @@ To install malina, fetch the stable-diffusion.cpp shared libraries, and generate
 ```shell
 $ go install github.com/ardanlabs/malina@latest
 
-$ malina install -lib ./lib
-$ export MALINA_LIB=$(pwd)/lib
-
+$ malina install -u
 $ malina model pull sd-1.5
-$ export MALINA_TEST_MODEL=$HOME/models/sd-1.5/v1-5-pruned-emaonly.safetensors
 $ go run ./examples/hello "a lovely cat"
 ```
 
@@ -38,14 +35,15 @@ Sometimes there are breaking changes to stable-diffusion.cpp that require an upd
 
 | stable-diffusion.cpp | malina      |
 | -------------------- | ----------- |
-| master-841-6b3edaa   | 1.0.6       |
+| master-846-d8fb10c   | 1.0.9       |
+| master-841-6b3edaa   | 1.0.6–1.0.8 |
 | master-830-50d6405   | 1.0.5       |
 | master-827-97d2990   | 1.0.4       |
 | master-820-de298c2   | 1.0.2–1.0.3 |
 | master-813-bfbef5b   | 1.0.1       |
 | master-669-2d40a8b   | 0.1.x       |
 
-The FFI binding includes image and native video generation, upscaling, ADetailer, ControlNet hot-swap, conversion, Canny preprocessing, cancellation, preview/backend callbacks, device listing, and every generation parameter in the target header. Pure-Go PNG/JPEG decode + Motion-JPEG AVI mux, the CLI (`install`, `system`, `info`, `model list|pull`), and examples (`hello`, `system`, `sd-encode`, `flux2`) have also landed. Kronk integration (an OpenAI-compatible `POST /v1/images/generations` endpoint) lives in the [kronk](https://github.com/ardanlabs/kronk) repo.
+The FFI binding includes image and native video generation, upscaling, ADetailer, ControlNet hot-swap, conversion, Canny preprocessing, cancellation, preview/backend callbacks, device listing, and every generation parameter in the target header. Pure-Go PNG/JPEG decode + Motion-JPEG AVI mux, the CLI (`install`, `system`, `info`, `model list|pull`), and runnable examples for the generation APIs have also landed. Kronk integration (an OpenAI-compatible `POST /v1/images/generations` endpoint) lives in the [kronk](https://github.com/ardanlabs/kronk) repo.
 
 ## Owner Information
 
@@ -72,8 +70,7 @@ $ malina --help
 Then fetch the stable-diffusion.cpp shared library bundle (dylib on macOS, DLLs on Windows, and `.so` files on Linux, all distributed in ZIP archives from the upstream [leejet/stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp/releases) releases):
 
 ```shell
-$ malina install -lib ./lib
-$ export MALINA_LIB=$(pwd)/lib
+$ malina install
 $ malina system
 ```
 
@@ -82,14 +79,14 @@ it. `DefaultSDVersion` includes the SHA-256 of the embedded trusted manifest,
 which authenticates the asset ID, size, archive digest, and every installed
 shared library for Malina's pinned stable-diffusion.cpp release. Installs
 created before this verification metadata was introduced must be refreshed
-once with `malina install -lib ./lib --upgrade`.
+once with `malina install --upgrade`.
 
 And pull a model bundle from the bundled catalog:
 
 ```shell
 $ malina model list
 $ malina model pull sd-1.5
-$ malina model info -m ~/models/sd-1.5/v1-5-pruned-emaonly.safetensors
+$ malina model info -m ~/.kronk/malina-models/sd-1.5/v1-5-pruned-emaonly.safetensors
 ```
 
 ## Issues/Features
@@ -110,14 +107,14 @@ The architecture of malina mirrors bucky and yzma file-for-file so anyone who kn
 │               (image/video generation, upscaler, callbacks, │
 │                conversion, image I/O, log, system)          │
 │  pkg/download go-getter-driven release-archive resolver +   │
-│               bundle catalog (sd-1.5, sdxl, flux2)          │
+│               curated generation and tool-model catalog     │
 │  pkg/loader   MALINA_LIB-aware purego library loader        │
 │  pkg/utils    cross-platform Go ↔ C string helpers          │
 └─────────────────────────────────────────────────────────────┘
                           │
                           ▼
             libstable-diffusion.{dylib|so|dll}
-              (stable-diffusion.cpp master-841)
+              (stable-diffusion.cpp master-846)
 ```
 
 ### FFI API coverage
@@ -137,21 +134,31 @@ matched free API. The exported `sample_method_to_str` and `scheduler_to_str`
 data arrays are represented by the safe name and parse functions instead of
 directly exposing C global memory.
 
+The `master-846-d8fb10c` ABI replaces `ContextParams.StreamLayers` with
+`ContextParams.DisablePrefetch`, adds `ContextParams.DisableSegmentedCompute`,
+and inserts the `LogVerbose` level. Code setting `StreamLayers` must migrate to
+the new controls; the old field's storage now has the opposite meaning.
+
 ## Models
 
 Malina works with any model stable-diffusion.cpp accepts: `.safetensors` and `.gguf` checkpoints for SD 1.x / SD 2.x / SDXL, plus the multi-file FLUX and SD3 layouts (separate diffusion model + VAE + text-encoder files). Recommended hosts are [stable-diffusion-v1-5/stable-diffusion-v1-5](https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5) and the GGUF quants under [city96](https://huggingface.co/city96).
 
-Malina ships a small bundled catalog so you can `malina model pull sd-1.5` instead of pasting URLs:
+Malina ships a curated catalog so you can pull complete generation workflows
+and standalone tool models instead of pasting URLs:
 
 ```shell
 $ malina model list
 $ malina model pull sd-1.5
+$ malina model pull controlnet-canny-sd1.5
+$ malina model pull realesrgan-x4-anime
+$ malina model pull adetailer-face-yolov8n
+$ malina model pull animatediff-sd1.5
 $ malina model pull sdxl-base-1.0
 $ malina model pull flux2-klein-4b   # license-gated; export HF_TOKEN first
 $ malina model pull flux2-klein-9b   # license-gated; export HF_TOKEN first
 ```
 
-Each bundle drops every required file into `$HOME/models/<bundle>/` along with a `manifest.json` the examples use to resolve paths.
+Each bundle drops every required file into `$HOME/.kronk/malina-models/<bundle>/` along with a `manifest.json` the examples use to resolve paths.
 
 ## Support
 
@@ -169,29 +176,34 @@ Malina uses the prebuilt stable-diffusion.cpp release artifacts from [leejet/sta
 
 Whenever there is a new release of stable-diffusion.cpp, the FFI struct mirrors in `pkg/sd` and the version constant in `pkg/download` may need a refresh. Generate and review the new trusted manifest with `make generate-library-manifest VERSION=master-N-shortsha`, bump `DefaultSDVersion`, regenerate any struct-size assertions in `pkg/sd/*_test.go`, and let CI verify. Manifest generation downloads and hashes every supported release asset, so it can take several minutes and several gigabytes of transfer.
 
-The `malina_model_tests` suite exercises the standard SD 1.5, SDXL, and
-FLUX.2 fixtures configured by the Makefile. Additional wrapped APIs have
-fixture-gated smoke tests; set the applicable model path before `make test`:
+The `malina_model_tests` suite exercises SD 1.5, SDXL, and the advanced APIs
+against real models configured by the Makefile. The license-gated FLUX.2 Klein
+bundles remain available as opt-in catalog entries, but are deliberately not
+used by tests, benchmarks, examples, or `make download-models`.
 
-| Environment variable           | Smoke test                                |
-| ------------------------------ | ----------------------------------------- |
-| `MALINA_CONTROLNET_TEST_MODEL` | ControlNet load, query, and unload        |
-| `MALINA_UPSCALER_TEST_MODEL`   | ESRGAN context, factor query, and upscale |
-| `MALINA_ADETAILER_TEST_MODEL`  | Detector context and ADetailer pass       |
-| `MALINA_VIDEO_TEST_MODEL`      | Native video frame and audio generation   |
+| Environment variable           | Catalog bundle / functional test                    |
+| ------------------------------ | --------------------------------------------------- |
+| `MALINA_CONTROLNET_TEST_DIR`   | `controlnet-canny-sd1.5` controlled image generation |
+| `MALINA_UPSCALER_TEST_DIR`     | `realesrgan-x4-anime` 4× image upscaling             |
+| `MALINA_ADETAILER_TEST_DIR`    | `adetailer-face-yolov8n` face detection/refinement   |
+| `MALINA_VIDEO_TEST_DIR`        | `animatediff-sd1.5` multi-frame video generation     |
 
-Each advanced test reports the exact missing variable and skips when its
-fixture is unavailable.
+Each advanced test skips when its fixture variable is unset and fails when a
+configured fixture is missing. GitHub Actions downloads and caches each
+advanced bundle before running its corresponding native functional test on
+Linux.
 
 ## API Examples
 
-There are examples in the [examples/](./examples) directory. Each one
-expects `MALINA_LIB` and (for the model-loading examples) `MALINA_TEST_MODEL`
-to be set:
+There are examples in the [examples/](./examples) directory. They always load
+libraries and models from Malina's default locations under `~/.kronk`; no
+library or model path configuration is required or accepted. Before loading,
+each example verifies that the installed libraries exactly match the
+authenticated `download.DefaultSDVersion` pin:
 
 ```shell
-$ export MALINA_LIB=$(pwd)/lib
-$ export MALINA_TEST_MODEL=$HOME/models/sd-1.5/v1-5-pruned-emaonly.safetensors
+$ malina install -u
+$ malina model pull sd-1.5
 ```
 
 [SYSTEM](examples/system/main.go) — the smallest possible malina program: load libstable-diffusion and print the library version, system info, and GGML backend device count. No model required.
@@ -219,12 +231,32 @@ $ make example-hello       # writes hello.png
 $ make example-img2img     # writes img2img.png in oil-painting style
 ```
 
-[FLUX2](examples/flux2/main.go) — multi-file FLUX.2 [klein] 9B pipeline using a quantized diffusion model + VAE + Qwen3 LLM text encoder. The example reads the bundle's `manifest.json` to resolve each file's on-disk path.
+[CONTROLNET](examples/controlnet/main.go) — derive Canny edges from an input image and use them to constrain the generated image's composition.
 
 ```shell
-$ export HF_TOKEN=hf_...              # FLUX.2 license must be accepted
-$ malina model pull flux2-klein-9b    # one-time
-$ make example-flux2
+$ malina model pull controlnet-canny-sd1.5
+$ make example-controlnet
+```
+
+[UPSCALE](examples/upscale/main.go) — enlarge an image 4× with the compact Real-ESRGAN anime model.
+
+```shell
+$ malina model pull realesrgan-x4-anime
+$ make example-upscale
+```
+
+[ADETAILER](examples/adetailer/main.go) — detect faces with YOLOv8n and refine each detected region with Stable Diffusion inpainting.
+
+```shell
+$ malina model pull adetailer-face-yolov8n
+$ make example-adetailer
+```
+
+[ANIMATEDIFF](examples/animatediff/main.go) — generate a temporally conditioned sequence with an AnimateDiff motion module and save it as an AVI.
+
+```shell
+$ malina model pull animatediff-sd1.5
+$ make example-animatediff
 ```
 
 [SD-ENCODE](examples/sd-encode/main.go) — mux a directory of PNG / JPEG frames into a Motion-JPEG AVI. No model is loaded; this is the pure-Go encoder built on top of `pkg/sd`'s `SaveAVI` helper.
@@ -244,8 +276,10 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"time"
 
+	"github.com/ardanlabs/malina/pkg/download"
 	"github.com/ardanlabs/malina/pkg/sd"
 )
 
@@ -255,15 +289,13 @@ func main() {
 		prompt = os.Args[1]
 	}
 
-	libPath := os.Getenv("MALINA_LIB")
-	if libPath == "" {
-		log.Fatal("MALINA_LIB must point to the directory containing libstable-diffusion")
+	libPath := download.DefaultLibrariesDir()
+	bundleDir := filepath.Join(download.DefaultModelsDir(), "sd-1.5")
+	manifest, err := download.LoadManifest(bundleDir)
+	if err != nil {
+		log.Fatalf("load model bundle from %s: %v (did you run `malina model pull sd-1.5`?)", bundleDir, err)
 	}
-
-	modelPath := os.Getenv("MALINA_TEST_MODEL")
-	if modelPath == "" {
-		log.Fatal("MALINA_TEST_MODEL must point to a stable-diffusion model file (.gguf or .safetensors)")
-	}
+	modelPath := manifest.Files[string(download.RoleModel)]
 
 	if err := sd.Load(libPath); err != nil {
 		log.Fatalf("sd.Load: %v", err)
@@ -306,7 +338,7 @@ This example produces the following output:
 ```shell
 $ make example-hello
 go run ./examples/hello "a lovely cat"
-loading model from /Users/bill/models/sd-1.5/v1-5-pruned-emaonly.safetensors ...
+loading model from /Users/bill/.kronk/malina-models/sd-1.5/v1-5-pruned-emaonly.safetensors ...
 generating image for prompt: a lovely cat
 wrote hello.png (512x512, 3 channels) in 6.842s
 ```

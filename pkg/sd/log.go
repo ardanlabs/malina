@@ -155,6 +155,8 @@ func levelTag(l LogLevel) string {
 	switch l {
 	case LogDebug:
 		return "debug"
+	case LogVerbose:
+		return "verbose"
 	case LogInfo:
 		return "info"
 	case LogWarn:

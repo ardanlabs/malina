@@ -3,23 +3,20 @@
 //
 // Run it from the repo root with:
 //
-//	make download-stable-diffusion.cpp   # one-time: populate ./lib
-//	make pull-sd-1.5                     # one-time: download the SD 1.5 bundle into ~/models
+//	make download-stable-diffusion.cpp   # one-time: install the default libraries
+//	go run . model pull -y sd-1.5        # one-time: install the default SD 1.5 model
 //	make example-hello
-//
-// The makefile target wires MALINA_LIB to ./lib and MALINA_TEST_MODEL to
-// ~/models/sd-1.5/v1-5-pruned-emaonly.safetensors, then invokes
-// `go run ./examples/hello "a lovely cat"`. Pass a custom prompt by
-// running `go run ./examples/hello "your prompt"` directly after the
-// environment variables are set.
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"time"
 
+	"github.com/ardanlabs/malina/pkg/download"
 	"github.com/ardanlabs/malina/pkg/sd"
 )
 
@@ -29,16 +26,17 @@ func main() {
 		prompt = os.Args[1]
 	}
 
-	libPath := os.Getenv("MALINA_LIB")
-	if libPath == "" {
-		log.Fatal("MALINA_LIB must point to the directory containing libstable-diffusion")
+	libPath := download.DefaultLibrariesDir()
+	bundleDir := filepath.Join(download.DefaultModelsDir(), "sd-1.5")
+	manifest, err := download.LoadManifest(bundleDir)
+	if err != nil {
+		log.Fatalf("load model bundle from %s: %v (did you run `malina model pull sd-1.5`?)", bundleDir, err)
 	}
+	modelPath := manifest.Files[string(download.RoleModel)]
 
-	modelPath := os.Getenv("MALINA_TEST_MODEL")
-	if modelPath == "" {
-		log.Fatal("MALINA_TEST_MODEL must point to a stable-diffusion model file (.gguf or .safetensors)")
+	if err := download.VerifyDefaultInstall(context.Background(), libPath); err != nil {
+		log.Fatalf("verify default libraries: %v (did you run `malina install -u`?)", err)
 	}
-
 	if err := sd.Load(libPath); err != nil {
 		log.Fatalf("sd.Load: %v", err)
 	}

@@ -11,10 +11,10 @@ import (
 
 // ModelCmd manages stable-diffusion model bundles (list / info / pull).
 //
-// A "bundle" is the set of files (diffusion model, VAE, text encoders, etc.)
-// that stable-diffusion.cpp needs to construct a single Context. Curation
-// lives in pkg/download/bundle.go; kronk and other downstream consumers may
-// layer their own catalog on top of this one.
+// A "bundle" is the set of files stable-diffusion.cpp needs for a model
+// workflow, including generation contexts and standalone tools. Curation lives
+// in pkg/download/bundle.go; downstream consumers may layer their own catalog
+// on top of this one.
 var ModelCmd = &cli.Command{
 	Name:  "model",
 	Usage: "Manage stable-diffusion model bundles",
@@ -34,16 +34,16 @@ var modelListCmd = &cli.Command{
 }
 
 func runModelList(_ *cli.Context) error {
-	fmt.Printf("%-18s %-7s %s\n", "NAME", "GATED", "DESCRIPTION")
+	fmt.Printf("%-24s %-7s %s\n", "NAME", "GATED", "DESCRIPTION")
 	for _, b := range download.Catalog() {
 		gated := "no"
 		if b.Gated {
 			gated = "YES"
 		}
-		fmt.Printf("%-18s %-7s %s\n", b.Name, gated, b.Description)
+		fmt.Printf("%-24s %-7s %s\n", b.Name, gated, b.Description)
 	}
 	fmt.Println()
-	fmt.Println("Use `malina model pull <name>` to download into ~/models (override with -o).")
+	fmt.Println("Use `malina model pull <name>` to download into ~/.kronk/malina-models (override with -o).")
 	fmt.Println("Use `malina model info <name>` to see the file list for a bundle.")
 	return nil
 }
@@ -105,7 +105,7 @@ Examples:
 			Aliases:     []string{"o"},
 			Usage:       "directory to save the bundle into (a subdir per bundle is created)",
 			Value:       download.DefaultModelsDir(),
-			DefaultText: "~/models",
+			DefaultText: "~/.kronk/malina-models",
 		},
 		&cli.BoolFlag{
 			Name:    "yes",
@@ -149,14 +149,14 @@ func runModelPull(c *cli.Context) error {
 		fmt.Printf("Created directory %s\n", output)
 	}
 
-	fmt.Printf("Downloading bundle %q into %s ...\n", name, output)
+	fmt.Printf("Checking bundle %q in %s ...\n", name, output)
 
 	m, err := download.GetBundle(c.Context, name, output)
 	if err != nil {
 		return fmt.Errorf("download bundle: %w", err)
 	}
 
-	fmt.Println("Download completed successfully.")
+	fmt.Println("Bundle is ready.")
 	fmt.Println("Bundle manifest:")
 	for role, path := range m.Files {
 		fmt.Printf("  %-12s %s\n", role, path)

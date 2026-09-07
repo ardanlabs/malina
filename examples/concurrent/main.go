@@ -4,10 +4,13 @@
 //
 // Run it from the repo root with:
 //
+//	make download-stable-diffusion.cpp
+//	go run . model pull -y sd-1.5
 //	make example-concurrent
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
@@ -16,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ardanlabs/malina/pkg/download"
 	"github.com/ardanlabs/malina/pkg/sd"
 )
 
@@ -37,15 +41,17 @@ func main() {
 		log.Fatal("workers must be at least 2 to test concurrency")
 	}
 
-	libPath := os.Getenv("MALINA_LIB")
-	if libPath == "" {
-		log.Fatal("MALINA_LIB must point to the directory containing libstable-diffusion")
+	libPath := download.DefaultLibrariesDir()
+	bundleDir := filepath.Join(download.DefaultModelsDir(), "sd-1.5")
+	manifest, err := download.LoadManifest(bundleDir)
+	if err != nil {
+		log.Fatalf("load model bundle from %s: %v (did you run `malina model pull sd-1.5`?)", bundleDir, err)
 	}
-	modelPath := os.Getenv("MALINA_TEST_MODEL")
-	if modelPath == "" {
-		log.Fatal("MALINA_TEST_MODEL must point to a stable-diffusion model file (.gguf or .safetensors)")
-	}
+	modelPath := manifest.Files[string(download.RoleModel)]
 
+	if err := download.VerifyDefaultInstall(context.Background(), libPath); err != nil {
+		log.Fatalf("verify default libraries: %v (did you run `malina install -u`?)", err)
+	}
 	if err := sd.Load(libPath); err != nil {
 		log.Fatalf("sd.Load: %v", err)
 	}

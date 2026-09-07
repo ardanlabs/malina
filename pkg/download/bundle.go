@@ -6,13 +6,12 @@ import (
 	"strings"
 )
 
-// FileRole identifies which slot in sd.ContextParams a bundle file populates.
-// kronk (and any downstream consumer) reads the bundle manifest and uses
-// these roles to wire each downloaded file into the matching ContextParams
-// field.
+// FileRole identifies how a bundle file is consumed by pkg/sd. Most roles map
+// to ContextParams fields; standalone tools use their matching constructors.
+// Kronk and other downstream consumers read these roles from bundle manifests.
 type FileRole string
 
-// File roles map 1:1 onto sd.ContextParams path fields.
+// File roles identify ContextParams fields and standalone model constructors.
 const (
 	RoleModel          FileRole = "model"           // ModelPath  (all-in-one checkpoints: SD 1.x/2.x/SDXL)
 	RoleDiffusion      FileRole = "diffusion"       // DiffusionModelPath
@@ -28,18 +27,21 @@ const (
 	RoleClipVision     FileRole = "clip_vision"     // ClipVisionPath
 	RoleHighNoise      FileRole = "high_noise"      // HighNoiseDiffusionModelPath
 	RoleEmbeddingsConn FileRole = "embeddings_conn" // EmbeddingsConnectorsPath
+	RoleMotionModule   FileRole = "motion_module"   // MotionModulePath
+	RoleUpscaler       FileRole = "upscaler"        // NewUpscalerContext
+	RoleADetailer      FileRole = "adetailer"       // NewADetailerContext
 )
 
 // BundleFile describes a single file inside a bundle.
 type BundleFile struct {
-	Role     FileRole // which ContextParams slot this file populates
+	Role     FileRole // how pkg/sd consumes this file
 	Filename string   // local filename to write under the bundle directory
 	URL      string   // direct HTTPS download URL (resolve via Hugging Face)
 	Size     string   // human-readable size for catalog listings
 }
 
-// Bundle is a curated set of files required to construct one
-// stable-diffusion.cpp Context. Use Get to download a bundle.
+// Bundle is a curated set of files required for one stable-diffusion.cpp
+// model workflow. Use GetBundle to download a bundle.
 type Bundle struct {
 	Name        string
 	Description string
@@ -53,11 +55,8 @@ type Bundle struct {
 
 // Catalog returns the curated set of bundles malina ships with.
 //
-// These bundles span the practical complexity range:
-//   - sd-1.5: smallest, single-file, fully open
-//   - sdxl-base-1.0: mainstream quality baseline, single-file
-//   - flux2-klein-4b: smaller multi-file FLUX.2 option
-//   - flux2-klein-9b: multi-file (diffusion + VAE + LLM), license-gated
+// The catalog covers image generation, ControlNet, upscaling, ADetailer,
+// AnimateDiff video generation, SDXL, and multi-file FLUX.2 pipelines.
 func Catalog() []Bundle {
 	return []Bundle{
 		{
@@ -68,8 +67,78 @@ func Catalog() []Bundle {
 				{
 					Role:     RoleModel,
 					Filename: "v1-5-pruned-emaonly.safetensors",
-					URL:      "https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5/resolve/main/v1-5-pruned-emaonly.safetensors",
+					URL:      "https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5/resolve/451f4fe16113bff5a5d2269ed5ad43b0592e9a14/v1-5-pruned-emaonly.safetensors",
 					Size:     "4.3 GB",
+				},
+			},
+		},
+		{
+			Name:        "controlnet-canny-sd1.5",
+			Description: "Quantized SD 1.5 with fp16 Canny ControlNet conditioning. Two files (~2.3 GB total).",
+			License:     "CreativeML Open RAIL-M / OpenRAIL",
+			Files: []BundleFile{
+				{
+					Role:     RoleModel,
+					Filename: "stable-diffusion-v1-5-pruned-emaonly-Q4_0.gguf",
+					URL:      "https://huggingface.co/second-state/stable-diffusion-v1-5-GGUF/resolve/031b5f5df991f511b3f5fa8fed6d99048ababb69/stable-diffusion-v1-5-pruned-emaonly-Q4_0.gguf",
+					Size:     "1.6 GB",
+				},
+				{
+					Role:     RoleControlNet,
+					Filename: "control_canny-fp16.safetensors",
+					URL:      "https://huggingface.co/webui/ControlNet-modules-safetensors/resolve/5194dff6fe5e3d26310a12c527eae8bc02d3a482/control_canny-fp16.safetensors",
+					Size:     "723 MB",
+				},
+			},
+		},
+		{
+			Name:        "realesrgan-x4-anime",
+			Description: "Real-ESRGAN 4x anime image upscaler (~18 MB).",
+			License:     "BSD-3-Clause",
+			Files: []BundleFile{
+				{
+					Role:     RoleUpscaler,
+					Filename: "RealESRGAN_x4plus_anime_6B.pth",
+					URL:      "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.2.4/RealESRGAN_x4plus_anime_6B.pth",
+					Size:     "18 MB",
+				},
+			},
+		},
+		{
+			Name:        "adetailer-face-yolov8n",
+			Description: "Quantized SD 1.5 with a converted YOLOv8n ADetailer face detector. Two files (~1.6 GB total).",
+			License:     "CreativeML Open RAIL-M / AGPL-3.0",
+			Files: []BundleFile{
+				{
+					Role:     RoleModel,
+					Filename: "stable-diffusion-v1-5-pruned-emaonly-Q4_0.gguf",
+					URL:      "https://huggingface.co/second-state/stable-diffusion-v1-5-GGUF/resolve/031b5f5df991f511b3f5fa8fed6d99048ababb69/stable-diffusion-v1-5-pruned-emaonly-Q4_0.gguf",
+					Size:     "1.6 GB",
+				},
+				{
+					Role:     RoleADetailer,
+					Filename: "face_yolov8n.safetensors",
+					URL:      "https://huggingface.co/exeterminal/adetailer-yolov8-safetensors/resolve/07ca0bd47f67955bf49e26c24d5aff8d161d81f2/face_yolov8n.safetensors",
+					Size:     "6 MB",
+				},
+			},
+		},
+		{
+			Name:        "animatediff-sd1.5",
+			Description: "Quantized SD 1.5 with the fp16 AnimateDiff v3 motion module. Two files (~2.4 GB total).",
+			License:     "CreativeML Open RAIL-M / Apache-2.0",
+			Files: []BundleFile{
+				{
+					Role:     RoleModel,
+					Filename: "stable-diffusion-v1-5-pruned-emaonly-Q4_0.gguf",
+					URL:      "https://huggingface.co/second-state/stable-diffusion-v1-5-GGUF/resolve/031b5f5df991f511b3f5fa8fed6d99048ababb69/stable-diffusion-v1-5-pruned-emaonly-Q4_0.gguf",
+					Size:     "1.6 GB",
+				},
+				{
+					Role:     RoleMotionModule,
+					Filename: "mm_sd15_v3.safetensors",
+					URL:      "https://huggingface.co/conrevo/AnimateDiff-A1111/resolve/aa4a0ef5bd366a0ec898e7a64b6fc0f612e37444/motion_module/mm_sd15_v3.safetensors",
+					Size:     "837 MB",
 				},
 			},
 		},

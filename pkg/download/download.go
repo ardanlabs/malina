@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	getter "github.com/hashicorp/go-getter"
@@ -17,16 +18,37 @@ import (
 // curated catalog.
 var ErrBundleNotFound = errors.New("bundle not found")
 
-// DefaultModelsDir returns the default malina models directory under the
-// user's home (~/models). Bundles are written to a subdirectory named after
-// the bundle (e.g. ~/models/sd-1.5/). Mirrors bucky's layout so a single
-// ~/models tree can serve both packages.
+// DefaultModelsDir returns the default Malina models directory under the
+// Kronk data directory (~/.kronk/malina-models). Bundles are written to a
+// subdirectory named after the bundle.
 func DefaultModelsDir() string {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		return filepath.Join(".", "models")
+		return filepath.Join(".", ".kronk", "malina-models")
 	}
-	return filepath.Join(homeDir, "models")
+	return filepath.Join(homeDir, ".kronk", "malina-models")
+}
+
+// DefaultLibrariesDir returns the default stable-diffusion.cpp library
+// directory for the current platform.
+func DefaultLibrariesDir() string {
+	processor := CPU.String()
+	if runtime.GOOS == Darwin.String() {
+		processor = Metal.String()
+	}
+
+	return LibrariesDir(runtime.GOARCH, runtime.GOOS, processor)
+}
+
+// LibrariesDir returns the stable-diffusion.cpp library directory for the
+// specified platform and backend.
+func LibrariesDir(arch, opSys, processor string) string {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		homeDir = "."
+	}
+
+	return filepath.Join(homeDir, ".kronk", "malina-libraries", opSys, arch, processor)
 }
 
 // Manifest is the JSON written alongside a downloaded bundle so consumers
@@ -82,7 +104,14 @@ func GetBundleWithProgress(ctx context.Context, name, dest string, progress gett
 		target := filepath.Join(bundleDir, f.Filename)
 		abs, _ := filepath.Abs(target)
 		manifest.Files[string(f.Role)] = abs
+	}
 
+	if bundleInstalled(bundleDir, manifest) {
+		return manifest, nil
+	}
+
+	for _, f := range b.Files {
+		target := filepath.Join(bundleDir, f.Filename)
 		if err := getFile(ctx, f, target, progress); err != nil {
 			return Manifest{}, fmt.Errorf("get-bundle %q: %s (%s): %w", b.Name, f.Filename, f.Role, err)
 		}
@@ -111,6 +140,27 @@ func LoadManifest(bundleDir string) (Manifest, error) {
 		return Manifest{}, fmt.Errorf("load-manifest: parse %s: %w", manifestPath, err)
 	}
 	return m, nil
+}
+
+func bundleInstalled(bundleDir string, expected Manifest) bool {
+	installed, err := LoadManifest(bundleDir)
+	if err != nil || installed.Bundle != expected.Bundle || len(installed.Files) != len(expected.Files) {
+		return false
+	}
+
+	for role, expectedPath := range expected.Files {
+		installedPath := installed.Files[role]
+		if installedPath == "" || filepath.Clean(installedPath) != filepath.Clean(expectedPath) {
+			return false
+		}
+
+		info, err := os.Lstat(expectedPath)
+		if err != nil || !info.Mode().IsRegular() || info.Size() == 0 {
+			return false
+		}
+	}
+
+	return true
 }
 
 // =============================================================================

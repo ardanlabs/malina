@@ -1,5 +1,5 @@
-STABLE_DIFF_VERSION = master-841-6b3edaa
-MALINA_VERSION = v1.0.6
+STABLE_DIFF_VERSION = master-846-d8fb10c
+MALINA_VERSION = v1.0.9
 
 Upgrade this Malina repository to stable-diffusion.cpp
 <STABLE_DIFF_VERSION> and prepare Malina release <MALINA_VERSION>.
@@ -155,10 +155,10 @@ For a non-breaking upstream upgrade, keep the existing Malina release-line
 mapping accurate and retain older rows when they remain useful compatibility
 references.
 
-Add or update an exact regression test asserting that `DefaultSDVersion`
-equals <STABLE_DIFF_VERSION>. Also verify that the embedded manifest tag equals
-`DefaultSDVersion`, contains complete metadata and installed-file coverage for
-all selected assets, and rejects changed GitHub asset metadata.
+Do not add a test that merely asserts `DefaultSDVersion` equals
+<STABLE_DIFF_VERSION>. Instead, verify behavior: the embedded manifest tag
+must match `DefaultSDVersion`, contain complete metadata and installed-file
+coverage for all selected assets, and reject changed GitHub asset metadata.
 
 Use the target release's real asset names in regression tests. For releases
 that split dependencies into companion archives, ensure the installer
@@ -174,15 +174,10 @@ claims unless those measurements are actually rerun.
 ## Local runtime validation
 
 The repository's `lib/` directory is ignored and may be upgraded as part of
-this task. Install the exact target release through Malina's installer, using
-the appropriate processor for the current host. On Apple Silicon, for example:
+this task. After updating `DefaultSDVersion`, install that default through the
+Make target. Do not pass a separate version setting for tests or examples:
 
-    go run . install \
-        -lib "$PWD/lib" \
-        -p metal \
-        -v <STABLE_DIFF_VERSION> \
-        -u \
-        -q
+    make download-stable-diffusion.cpp MALINA_LIB="$PWD/lib"
 
 Verify:
 
@@ -202,12 +197,12 @@ Verify:
 Use the standard local model locations when available:
 
     export MALINA_LIB="$PWD/lib"
-    export MALINA_TEST_MODEL="$HOME/models/sd-1.5/v1-5-pruned-emaonly.safetensors"
-    export MALINA_SDXL_TEST_MODEL="$HOME/models/sdxl-base-1.0/sd_xl_base_1.0.safetensors"
-    export MALINA_FLUX2_TEST_DIR="$HOME/models/flux2-klein-9b"
+    export MALINA_TEST_MODEL="$HOME/.kronk/malina-models/sd-1.5/v1-5-pruned-emaonly.safetensors"
+    export MALINA_SDXL_TEST_MODEL="$HOME/.kronk/malina-models/sdxl-base-1.0/sd_xl_base_1.0.safetensors"
 
-Run the SD 1.5, SDXL, FLUX.2, and img2img smoke tests when their fixtures are
-available. If models are missing, report exactly which tests skipped. Do not
+Run the SD 1.5, SDXL, img2img, and advanced functional tests when their
+fixtures are available. Do not use license-gated models in tests, benchmarks,
+or examples. If models are missing, report exactly which tests skipped. Do not
 claim runtime compatibility based only on struct-size tests or a differently
 packaged Homebrew library when the upstream release can be installed.
 
@@ -222,7 +217,6 @@ This currently includes:
 
 - `BenchmarkGenerateImageSD15`
 - `BenchmarkGenerateImageSDXL`
-- `BenchmarkGenerateImageFlux2`
 - `BenchmarkGenerateImageImg2ImgSD15`
 
 Use a larger `BENCHTIME` only when practical; model loading and image
@@ -248,8 +242,8 @@ the previous library.
 Set Malina's reported version to <MALINA_VERSION> without the leading `v` in
 `version.go`.
 
-Update `version_test.go` to assert the exact expected value rather than merely
-checking that `Version()` is non-empty.
+Do not create or update `version_test.go`; testing a release constant directly
+does not provide useful behavior coverage.
 
 Do not create, move, force-update, or push a Git tag without explicit
 approval.
@@ -300,7 +294,7 @@ Include, when applicable:
 - FFI/API/ABI changes or explicit compatibility confirmation
 - memory-ownership changes
 - dependency upgrades
-- model smoke-test results
+- model-backed functional test results
 - benchmark results
 - regression coverage
 - Malina version reporting

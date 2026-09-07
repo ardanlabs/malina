@@ -160,10 +160,11 @@ const (
 type LogLevel int32
 
 const (
-	LogDebug LogLevel = 0
-	LogInfo  LogLevel = 1
-	LogWarn  LogLevel = 2
-	LogError LogLevel = 3
+	LogDebug   LogLevel = 0
+	LogVerbose LogLevel = 1
+	LogInfo    LogLevel = 2
+	LogWarn    LogLevel = 3
+	LogError   LogLevel = 4
 )
 
 // SDVaeFormat mirrors enum sd_vae_format_t. The C library uses this to

@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 	"runtime"
 
 	"github.com/ardanlabs/malina/pkg/download"
@@ -22,10 +21,10 @@ var InstallCmd = &cli.Command{
 			Value:   "",
 		},
 		&cli.StringFlag{
-			Name:    "lib",
-			Aliases: []string{"l"},
-			Usage:   "path to stable-diffusion.cpp compiled library files",
-			EnvVars: []string{"MALINA_LIB"},
+			Name:        "lib",
+			Aliases:     []string{"l"},
+			Usage:       "path to stable-diffusion.cpp compiled library files",
+			DefaultText: "~/.kronk/malina-libraries/<os>/<arch>/<backend>",
 		},
 		&cli.StringFlag{
 			Name:    "processor",
@@ -64,8 +63,11 @@ func runInstall(c *cli.Context) error {
 	upgrade := c.Bool("upgrade")
 	quiet := c.Bool("quiet")
 
+	if processor == "" {
+		processor = defaultProcessor(osInstall, quiet)
+	}
 	if libPath == "" {
-		return fmt.Errorf("missing -lib flag or MALINA_LIB env var")
+		libPath = download.LibrariesDir(runtime.GOARCH, osInstall, processor)
 	}
 
 	switch version {
@@ -99,17 +101,12 @@ func runInstall(c *cli.Context) error {
 		download.ProgressTracker = nil
 	}
 
-	if processor == "" {
-		processor = defaultProcessor(osInstall, quiet)
-	}
-
 	if err := download.Get(runtime.GOARCH, osInstall, processor, version, libPath); err != nil {
 		return fmt.Errorf("failed to download stable-diffusion.cpp: %w", err)
 	}
 
 	if !quiet {
 		fmt.Println("done.")
-		showInstallRequirements(libPath)
 	}
 	return nil
 }
@@ -136,23 +133,5 @@ func defaultProcessor(osInstall string, quiet bool) string {
 		return "cpu"
 	default:
 		return "cpu"
-	}
-}
-
-func showInstallRequirements(libPath string) {
-	if os.Getenv("MALINA_LIB") == libPath {
-		return
-	}
-	switch runtime.GOOS {
-	case "linux", "darwin":
-		fmt.Println(`
-You may want to set the MALINA_LIB environment variable to the directory with your stable-diffusion.cpp library files. For example:
-
-    export MALINA_LIB=` + libPath)
-	case "windows":
-		fmt.Println(`
-You may want to set the MALINA_LIB environment variable to the directory with your stable-diffusion.cpp library files. For example:
-
-    set MALINA_LIB=` + libPath)
 	}
 }
