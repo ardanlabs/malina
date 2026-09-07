@@ -184,7 +184,9 @@ func ADetailImage(adetailerCtx ADetailerContext, ctx Context, input *SDImage, pa
 		}
 		*item.dst = ptr
 	}
-	images, err := callImageArray(adetailImageFunc, unsafe.Pointer(&adetailerCtx), unsafe.Pointer(&ctx), unsafe.Pointer(&rawImage), unsafe.Pointer(&rawParams), unsafe.Pointer(&inpaint.raw))
+	rawParamsPtr := &rawParams
+	inpaintPtr := &inpaint.raw
+	images, err := callImageArray(adetailImageFunc, unsafe.Pointer(&adetailerCtx), unsafe.Pointer(&ctx), unsafe.Pointer(&rawImage), unsafe.Pointer(&rawParamsPtr), unsafe.Pointer(&inpaintPtr))
 	runtime.KeepAlive(input)
 	runtime.KeepAlive(inpaint)
 	runtime.KeepAlive(inpaintParams)

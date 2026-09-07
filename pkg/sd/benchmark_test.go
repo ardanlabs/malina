@@ -1,8 +1,8 @@
 package sd
 
 import (
+	"context"
 	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/ardanlabs/malina/pkg/download"
@@ -52,39 +52,6 @@ func BenchmarkGenerateImageSDXL(b *testing.B) {
 	cparams.ModelPath = modelPath
 
 	runGenerateBench(b, cparams, ImgGenParamsInit())
-}
-
-// BenchmarkGenerateImageFlux2 exercises the multi-file FLUX.2 [klein] 9B
-// bundle: read manifest.json, wire DiffusionModelPath + VAEPath + LLMPath
-// from the manifest, and generate one image per iteration. FLUX.2 [klein]
-// is 4-step distilled so 4 steps is the lowest meaningful Steps value;
-// the default 512x512 resolution keeps a single iteration in the ~30 s
-// range on Apple Silicon Metal.
-//
-// Requires: MALINA_LIB and one of (MALINA_BENCH_FLUX2_DIR or
-// MALINA_FLUX2_TEST_DIR), a directory containing the bundle's three
-// files plus the manifest.json that `malina model pull flux2-klein-9b`
-// writes.
-func BenchmarkGenerateImageFlux2(b *testing.B) {
-	benchSetup(b)
-	bundleDir := benchEnvBundleDir(b, "MALINA_BENCH_FLUX2_DIR", "MALINA_FLUX2_TEST_DIR")
-
-	manifest, err := download.LoadManifest(bundleDir)
-	if err != nil {
-		b.Fatalf("LoadManifest: %v", err)
-	}
-
-	cparams := benchContextParams()
-	cparams.DiffusionModelPath = manifest.Files[string(download.RoleDiffusion)]
-	cparams.VAEPath = manifest.Files[string(download.RoleVAE)]
-	cparams.LLMPath = manifest.Files[string(download.RoleLLM)]
-
-	params := ImgGenParamsInit()
-	params.Width = 512
-	params.Height = 512
-	params.Steps = 4
-
-	runGenerateBench(b, cparams, params)
 }
 
 // BenchmarkGenerateImageImg2ImgSD15 measures end-to-end image-to-image
@@ -182,6 +149,9 @@ func benchSetup(b *testing.B) {
 	if libPath == "" {
 		b.Skip("MALINA_LIB not set; skipping stable-diffusion FFI benchmark")
 	}
+	if err := download.VerifyDefaultInstall(context.Background(), libPath); err != nil {
+		b.Fatalf("MALINA_LIB must contain download.DefaultSDVersion: %v", err)
+	}
 
 	loadOnce.Do(func() {
 		if loadErr = Load(libPath); loadErr != nil {
@@ -218,38 +188,4 @@ func benchEnvModelFile(b *testing.B, envs ...string) string {
 		b.Skipf("%s=%q not present: %v", env, model, err)
 	}
 	return model
-}
-
-// benchEnvBundleDir returns the bundle directory stored in the first
-// non-empty of envs. Skipped (not failed) when no env is set, when the
-// directory is missing, or when manifest.json is absent. Mirrors
-// testEnvBundleDir for the multi-file FLUX.2 bundle.
-func benchEnvBundleDir(b *testing.B, envs ...string) string {
-	b.Helper()
-
-	var (
-		env, dir string
-	)
-	for _, e := range envs {
-		if v := os.Getenv(e); v != "" {
-			env = e
-			dir = v
-			break
-		}
-	}
-	if dir == "" {
-		b.Skipf("%v not set; skipping benchmark that requires a model bundle", envs)
-	}
-	info, err := os.Stat(dir)
-	if err != nil {
-		b.Skipf("%s=%q not present: %v", env, dir, err)
-	}
-	if !info.IsDir() {
-		b.Skipf("%s=%q is not a directory", env, dir)
-	}
-	manifest := filepath.Join(dir, "manifest.json")
-	if _, err := os.Stat(manifest); err != nil {
-		b.Skipf("bundle manifest %q not present: %v (did you run `malina model pull`?)", manifest, err)
-	}
-	return dir
 }

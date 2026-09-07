@@ -17,8 +17,8 @@ func TestMarshalContextParams(t *testing.T) {
 		Wtype: SDTypeQ5K, RngType: RngCPU, SamplerRngType: RngCuda, Prediction: PredictionFlow, LoraApplyMode: LoraApplyAtRuntime,
 		EnableMmap: true, FlashAttn: true, DiffusionFlashAttn: true, TaePreviewOnly: true,
 		DiffusionConvDirect: true, VAEConvDirect: true, ForceSDXLVAEConvScale: true, VaeFormat: SDVaeFormatFlux2,
-		MaxVram: "12", StreamLayers: true, EagerLoad: true, Backend: "metal", ParamsBackend: "cpu",
-		SplitMode: "layer", AutoFit: true, RPCServers: "rpc", ModelArgs: "args",
+		MaxVram: "12", DisablePrefetch: true, EagerLoad: true, Backend: "metal", ParamsBackend: "cpu",
+		SplitMode: "layer", AutoFit: true, RPCServers: "rpc", ModelArgs: "args", DisableSegmentedCompute: true,
 	}
 
 	state, err := marshalContextParams(params)
@@ -70,7 +70,8 @@ func TestMarshalContextParams(t *testing.T) {
 		{"DiffusionFlashAttn", raw.DiffusionFlashAttn, uint8(1)}, {"TaePreviewOnly", raw.TaePreviewOnly, uint8(1)},
 		{"DiffusionConvDirect", raw.DiffusionConvDirect, uint8(1)}, {"VAEConvDirect", raw.VAEConvDirect, uint8(1)},
 		{"ForceSDXLVAEConvScale", raw.ForceSDXLVAEConvScale, uint8(1)}, {"VaeFormat", raw.VaeFormat, int32(params.VaeFormat)},
-		{"StreamLayers", raw.StreamLayers, uint8(1)}, {"EagerLoad", raw.EagerLoad, uint8(1)}, {"AutoFit", raw.AutoFit, uint8(1)},
+		{"DisablePrefetch", raw.DisablePrefetch, uint8(1)}, {"EagerLoad", raw.EagerLoad, uint8(1)}, {"AutoFit", raw.AutoFit, uint8(1)},
+		{"DisableSegmentedCompute", raw.DisableSegmentedCompute, uint8(1)},
 		{"EmbeddingCount", raw.EmbeddingCount, uint32(len(params.Embeddings))},
 	}
 	for _, item := range values {

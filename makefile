@@ -1,19 +1,24 @@
 # Get the absolute path of the current Makefile.
 MAKEFILE_PATH := $(realpath $(lastword $(MAKEFILE_LIST)))
 MAKEFILE_DIR  := $(dir $(MAKEFILE_PATH))
-MALINA_LIB    ?= $(MAKEFILE_DIR)lib
-MODELS_DIR    ?= $(HOME)/models
+GOOS           = $(shell go env GOOS)
+GOARCH         = $(shell go env GOARCH)
+MALINA_BACKEND = $(if $(filter darwin,$(GOOS)),metal,cpu)
+MALINA_LIB    ?= $(HOME)/.kronk/malina-libraries/$(GOOS)/$(GOARCH)/$(MALINA_BACKEND)
+MODELS_DIR    ?= $(HOME)/.kronk/malina-models
 
 # -----------------------------------------------------------------------------
-# Bundle downloads. Each target invokes `malina model pull` which downloads
-# every file in the named bundle into $(MODELS_DIR)/<bundle>/ along with a
-# manifest.json. The FLUX bundles are license-gated; set HF_TOKEN first.
+# Bundle downloads. This target invokes `malina model pull` with its default
+# model root, creating one subdirectory and manifest per bundle. License-gated
+# bundles are intentionally excluded.
 
 download-models:
-	go run . model pull -y -o $(MODELS_DIR) sd-1.5
-	go run . model pull -y -o $(MODELS_DIR) sdxl-base-1.0
-	go run . model pull -y -o $(MODELS_DIR) flux2-klein-4b
-	go run . model pull -y -o $(MODELS_DIR) flux2-klein-9b	
+	go run . model pull -y sd-1.5
+	go run . model pull -y controlnet-canny-sd1.5
+	go run . model pull -y realesrgan-x4-anime
+	go run . model pull -y adetailer-face-yolov8n
+	go run . model pull -y animatediff-sd1.5
+	go run . model pull -y sdxl-base-1.0
 
 
 clean-stable-diffusion.cpp:
@@ -31,12 +36,10 @@ clean-stable-diffusion.cpp:
 # This target always passes -u (upgrade) so an existing install in
 # $(MALINA_LIB) is replaced rather than silently skipped.
 #
-#   make download-stable-diffusion.cpp                          # malina-pinned version (see pkg/download.DefaultSDVersion)
-#   make download-stable-diffusion.cpp VERSION=latest           # greatest leejet master-N-shortsha release
-#   make download-stable-diffusion.cpp VERSION=master-841-6b3edaa
-#   make download-stable-diffusion.cpp VERSION=v0.9.0
+# This target always installs download.DefaultSDVersion. There is no separate
+# Make setting for the library version used by tests and examples.
 download-stable-diffusion.cpp:
-	go run . install -lib $(MALINA_LIB) -u $(if $(VERSION),-v $(VERSION))
+	go run . install -lib $(MALINA_LIB) -u
 
 # Regenerate the trusted archive and installed-file hashes when changing
 # download.DefaultSDVersion. This downloads every supported upstream artifact.
@@ -59,27 +62,32 @@ diff:
 
 # make test runs all package tests, including the model-backed tests guarded
 # by the malina_model_tests build tag. MALINA_LIB must point at a directory
-# with libstable-diffusion (see download-stable-diffusion.cpp). The pkg/sd
-# end-to-end smoke test additionally requires MALINA_TEST_MODEL to point at
-# a stable-diffusion checkpoint; when unset it is skipped, not failed. GitHub
-# Actions intentionally runs go test without this tag so no model is needed.
+# containing the verified download.DefaultSDVersion install. The pkg/sd model
+# tests additionally require their model paths; an unset path skips its test.
+# GitHub Actions keeps the primary job model-free and runs the advanced model
+# tests in separately cached Linux jobs.
 #
 # Default the per-bundle test env vars to the layout `malina model pull`
-# writes under $(MODELS_DIR). When a contributor has downloaded all three
-# bundles via `make download-models` (or `make pull-test-assets` for just
-# sd-1.5), `make test` exercises every per-bundle smoke test in pkg/sd.
-# Each test independently skips (not fails) when its env var is unset or
-# the file/directory is missing, so contributors who only have a subset
-# of the bundles never see false failures.
+# writes under $(MODELS_DIR). When a contributor has downloaded the bundles
+# via `make download-models`, `make test` exercises every per-bundle model test
+# in pkg/sd. A test skips when its environment variable is unset, but fails
+# when a configured file or directory is missing so CI cannot silently pass
+# without the requested fixture.
 MALINA_TEST_MODEL      ?= $(MODELS_DIR)/sd-1.5/v1-5-pruned-emaonly.safetensors
 MALINA_SDXL_TEST_MODEL ?= $(MODELS_DIR)/sdxl-base-1.0/sd_xl_base_1.0.safetensors
-MALINA_FLUX2_TEST_DIR  ?= $(MODELS_DIR)/flux2-klein-9b
+MALINA_CONTROLNET_TEST_DIR ?= $(MODELS_DIR)/controlnet-canny-sd1.5
+MALINA_UPSCALER_TEST_DIR   ?= $(MODELS_DIR)/realesrgan-x4-anime
+MALINA_ADETAILER_TEST_DIR  ?= $(MODELS_DIR)/adetailer-face-yolov8n
+MALINA_VIDEO_TEST_DIR      ?= $(MODELS_DIR)/animatediff-sd1.5
 
 test-only:
 	export MALINA_LIB=$(abspath $(MALINA_LIB)) && \
 	export MALINA_TEST_MODEL=$(abspath $(MALINA_TEST_MODEL)) && \
 	export MALINA_SDXL_TEST_MODEL=$(abspath $(MALINA_SDXL_TEST_MODEL)) && \
-	export MALINA_FLUX2_TEST_DIR=$(abspath $(MALINA_FLUX2_TEST_DIR)) && \
+	export MALINA_CONTROLNET_TEST_DIR=$(abspath $(MALINA_CONTROLNET_TEST_DIR)) && \
+	export MALINA_UPSCALER_TEST_DIR=$(abspath $(MALINA_UPSCALER_TEST_DIR)) && \
+	export MALINA_ADETAILER_TEST_DIR=$(abspath $(MALINA_ADETAILER_TEST_DIR)) && \
+	export MALINA_VIDEO_TEST_DIR=$(abspath $(MALINA_VIDEO_TEST_DIR)) && \
 	go test -count=1 -tags=malina_model_tests ./...
 
 # test-race re-runs the suite under the race detector. The FFI helpers are
@@ -90,20 +98,22 @@ test-race:
 	export MALINA_LIB=$(abspath $(MALINA_LIB)) && \
 	export MALINA_TEST_MODEL=$(abspath $(MALINA_TEST_MODEL)) && \
 	export MALINA_SDXL_TEST_MODEL=$(abspath $(MALINA_SDXL_TEST_MODEL)) && \
-	export MALINA_FLUX2_TEST_DIR=$(abspath $(MALINA_FLUX2_TEST_DIR)) && \
+	export MALINA_CONTROLNET_TEST_DIR=$(abspath $(MALINA_CONTROLNET_TEST_DIR)) && \
+	export MALINA_UPSCALER_TEST_DIR=$(abspath $(MALINA_UPSCALER_TEST_DIR)) && \
+	export MALINA_ADETAILER_TEST_DIR=$(abspath $(MALINA_ADETAILER_TEST_DIR)) && \
+	export MALINA_VIDEO_TEST_DIR=$(abspath $(MALINA_VIDEO_TEST_DIR)) && \
 	go test -count=1 -race -tags=malina_model_tests ./...
 
 test: test-only lint vuln-check diff
 
 # pull-test-assets downloads everything `make test` needs to exercise the
-# end-to-end paths: the stable-diffusion shared libraries and the SD 1.5
-# bundle the pkg/sd smoke test loads. Both halves are idempotent — the
-# install command skips when libstable-diffusion is already present in
-# $(MALINA_LIB), and pkg/download.GetBundle skips fully-present files and
-# HTTP-Range-resumes partial ones.
+# end-to-end paths: the stable-diffusion shared libraries and every ungated
+# bundle used by pkg/sd tests. The installer always refreshes
+# download.DefaultSDVersion, while pkg/download.GetBundle skips fully-present
+# files and HTTP-Range-resumes partial ones.
 pull-test-assets:
-	go run . install -lib $(MALINA_LIB)
-	go run . model pull -y -o $(MODELS_DIR) sd-1.5
+	go run . install -lib $(MALINA_LIB) -u
+	$(MAKE) download-models
 
 tidy:
 	go mod tidy
@@ -137,7 +147,6 @@ BENCHTIME               ?= 1x
 PROFILE_BENCHTIME       ?= 10x
 MALINA_BENCH_MODEL      ?= $(MODELS_DIR)/sd-1.5/v1-5-pruned-emaonly.safetensors
 MALINA_BENCH_SDXL_MODEL ?= $(MODELS_DIR)/sdxl-base-1.0/sd_xl_base_1.0.safetensors
-MALINA_BENCH_FLUX2_DIR  ?= $(MODELS_DIR)/flux2-klein-9b
 
 # make bench-sd-1.5 runs BenchmarkGenerateImageSD15 against MALINA_BENCH_MODEL.
 # Override with `make bench-sd-1.5 MALINA_BENCH_MODEL=...` to benchmark a
@@ -153,12 +162,6 @@ bench-sdxl:
 	export MALINA_BENCH_SDXL_MODEL=$(abspath $(MALINA_BENCH_SDXL_MODEL)) && \
 	go test -bench=BenchmarkGenerateImageSDXL -benchtime=$(BENCHTIME) -benchmem -run='^$$' ./pkg/sd/
 
-# make bench-flux2 runs BenchmarkGenerateImageFlux2 against MALINA_BENCH_FLUX2_DIR.
-bench-flux2:
-	export MALINA_LIB=$(abspath $(MALINA_LIB)) && \
-	export MALINA_BENCH_FLUX2_DIR=$(abspath $(MALINA_BENCH_FLUX2_DIR)) && \
-	go test -bench=BenchmarkGenerateImageFlux2 -benchtime=$(BENCHTIME) -benchmem -run='^$$' ./pkg/sd/
-
 # make bench-img2img-sd-1.5 runs BenchmarkGenerateImageImg2ImgSD15 against
 # MALINA_BENCH_MODEL. The benchmark uses an in-process synthesized 512x512
 # init image (no file I/O) so it has the same env requirements as
@@ -171,7 +174,7 @@ bench-img2img-sd-1.5:
 # make bench runs every per-bundle benchmark. Each one skips (not fails)
 # when its model env points at a missing file, so a partial local layout
 # still produces useful output.
-bench: bench-sd-1.5 bench-sdxl bench-flux2 bench-img2img-sd-1.5
+bench: bench-sd-1.5 bench-sdxl bench-img2img-sd-1.5
 
 # make profile-sd-1.5 captures CPU + memory profiles for the SD 1.5 bench
 # and writes them to ./profiles/. The Go-side profile is dominated by
@@ -233,24 +236,8 @@ profile-img2img-sd-1.5:
 	@echo "  go tool pprof -text profiles/img2img-sd-1.5.cpu.prof"
 	@echo "  go tool pprof -text profiles/img2img-sd-1.5.mem.prof"
 
-# make profile-flux2 captures CPU + memory profiles for the FLUX.2 bench.
-profile-flux2:
-	mkdir -p profiles
-	export MALINA_LIB=$(abspath $(MALINA_LIB)) && \
-	export MALINA_BENCH_FLUX2_DIR=$(abspath $(MALINA_BENCH_FLUX2_DIR)) && \
-	go test -bench=BenchmarkGenerateImageFlux2 -benchtime=$(PROFILE_BENCHTIME) -run='^$$' \
-	    -cpuprofile=profiles/flux2.cpu.prof \
-	    -memprofile=profiles/flux2.mem.prof \
-	    -benchmem \
-	    -o profiles/flux2.test \
-	    ./pkg/sd/
-	@echo
-	@echo "Profiles written to ./profiles/. Inspect with:"
-	@echo "  go tool pprof -text profiles/flux2.cpu.prof"
-	@echo "  go tool pprof -text profiles/flux2.mem.prof"
-
 # make profile runs every profiler in sequence.
-profile: profile-sd-1.5 profile-sdxl profile-flux2 profile-img2img-sd-1.5
+profile: profile-sd-1.5 profile-sdxl profile-img2img-sd-1.5
 
 # -----------------------------------------------------------------------------
 # Text profile reports
@@ -266,8 +253,7 @@ profile: profile-sd-1.5 profile-sdxl profile-flux2 profile-img2img-sd-1.5
 #   4. Memory profile, top entries by allocated object count
 #
 # Override REPORT_NODES to widen or narrow the entry count (default 60).
-# Pattern targets: report-sd-1.5, report-sdxl, report-flux2,
-# report-img2img-sd-1.5.
+# Pattern targets: report-sd-1.5, report-sdxl, and report-img2img-sd-1.5.
 
 REPORT_NODES ?= 60
 
@@ -302,27 +288,21 @@ report-%: profile-%
 	@echo "Share with: cat profiles/$*.report.txt"
 
 # make report runs every text reporter in sequence.
-report: report-sd-1.5 report-sdxl report-flux2 report-img2img-sd-1.5
+report: report-sd-1.5 report-sdxl report-img2img-sd-1.5
 
 # -----------------------------------------------------------------------------
-# Example runners. Each target wires up MALINA_LIB + the model paths the
-# example needs and invokes `go run`.
+# Example runners use Malina's default library and model locations directly.
 
 example-system:
-	export MALINA_LIB=$(MALINA_LIB) && \
 	go run ./examples/system
 
-# example-hello requires the sd-1.5 bundle (make pull-sd-1.5).
+# example-hello requires the default sd-1.5 bundle.
 example-hello:
-	export MALINA_LIB=$(MALINA_LIB) && \
-	export MALINA_TEST_MODEL=$(MODELS_DIR)/sd-1.5/v1-5-pruned-emaonly.safetensors && \
 	go run ./examples/hello "a lovely cat"
 
 # example-concurrent measures serial and concurrent generation using two
 # independent native contexts. Each context loads its own model weights.
 example-concurrent:
-	export MALINA_LIB=$(MALINA_LIB) && \
-	export MALINA_TEST_MODEL=$(MODELS_DIR)/sd-1.5/v1-5-pruned-emaonly.safetensors && \
 	go run ./examples/concurrent
 
 # example-img2img requires the sd-1.5 bundle and a source PNG. By default
@@ -340,20 +320,24 @@ IMG2IMG_OUT      ?= img2img.png
 IMG2IMG_PROMPT   ?= produce an oil painting of the fields you see in the provided image.
 IMG2IMG_STRENGTH ?= 0.6
 example-img2img:
-	export MALINA_LIB=$(MALINA_LIB) && \
-	export MALINA_TEST_MODEL=$(MODELS_DIR)/sd-1.5/v1-5-pruned-emaonly.safetensors && \
 	go run ./examples/img2img \
 	    -in $(IMG2IMG_IN) \
 	    -out $(IMG2IMG_OUT) \
 	    -prompt "$(IMG2IMG_PROMPT)" \
 	    -strength $(IMG2IMG_STRENGTH)
 
-# example-flux2 requires the flux2-klein-9b bundle (make pull-flux2-klein-9b).
-# The example reads $(MODELS_DIR)/flux2-klein-9b/manifest.json for paths.
-example-flux2:
-	export MALINA_LIB=$(MALINA_LIB) && \
-	export MALINA_FLUX2_DIR=$(MODELS_DIR)/flux2-klein-9b && \
-	go run ./examples/flux2 "An orange cat on palm beach playing with oranges."
+# Advanced examples each use the smallest catalog bundle for that feature.
+example-controlnet:
+	go run ./examples/controlnet
+
+example-upscale:
+	go run ./examples/upscale
+
+example-adetailer:
+	go run ./examples/adetailer
+
+example-animatediff:
+	go run ./examples/animatediff
 
 # example-sd-encode demonstrates encoding a directory of PNG frames into a
 # Motion-JPEG AVI. No model is loaded; this is a pure-Go encoder. Override

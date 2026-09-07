@@ -16,6 +16,10 @@ func TestBundleByName(t *testing.T) {
 		want bool
 	}{
 		{"sd-1.5", true},
+		{"controlnet-canny-sd1.5", true},
+		{"realesrgan-x4-anime", true},
+		{"adetailer-face-yolov8n", true},
+		{"animatediff-sd1.5", true},
 		{"sdxl-base-1.0", true},
 		{"flux2-klein-4b", true},
 		{"flux2-klein-9b", true},
@@ -35,7 +39,7 @@ func TestBundleByName(t *testing.T) {
 
 func TestBundleNames(t *testing.T) {
 	got := BundleNames()
-	want := []string{"flux2-klein-4b", "flux2-klein-9b", "sd-1.5", "sdxl-base-1.0"}
+	want := []string{"adetailer-face-yolov8n", "animatediff-sd1.5", "controlnet-canny-sd1.5", "flux2-klein-4b", "flux2-klein-9b", "realesrgan-x4-anime", "sd-1.5", "sdxl-base-1.0"}
 	if len(got) != len(want) {
 		t.Fatalf("BundleNames: got %v, want %v", got, want)
 	}
@@ -48,10 +52,8 @@ func TestBundleNames(t *testing.T) {
 
 // TestBundleShapes pins the structural contract of every bundle in the
 // catalog: gated status, license non-empty, expected file count, and the
-// (role, filename) pair for each file. The example header in
-// examples/hello/main.go (and the FLUX example in examples/flux2/main.go)
-// hard-code these filenames; a typo in the catalog would silently break
-// the examples and CI without this test catching it.
+// (role, filename) pair for each file. A typo in these roles would silently
+// break the examples and model-backed CI jobs without this test catching it.
 func TestBundleShapes(t *testing.T) {
 	type wantFile struct {
 		role     FileRole
@@ -67,6 +69,37 @@ func TestBundleShapes(t *testing.T) {
 			gated: false,
 			files: []wantFile{
 				{RoleModel, "v1-5-pruned-emaonly.safetensors"},
+			},
+		},
+		{
+			name:  "controlnet-canny-sd1.5",
+			gated: false,
+			files: []wantFile{
+				{RoleModel, "stable-diffusion-v1-5-pruned-emaonly-Q4_0.gguf"},
+				{RoleControlNet, "control_canny-fp16.safetensors"},
+			},
+		},
+		{
+			name:  "realesrgan-x4-anime",
+			gated: false,
+			files: []wantFile{
+				{RoleUpscaler, "RealESRGAN_x4plus_anime_6B.pth"},
+			},
+		},
+		{
+			name:  "adetailer-face-yolov8n",
+			gated: false,
+			files: []wantFile{
+				{RoleModel, "stable-diffusion-v1-5-pruned-emaonly-Q4_0.gguf"},
+				{RoleADetailer, "face_yolov8n.safetensors"},
+			},
+		},
+		{
+			name:  "animatediff-sd1.5",
+			gated: false,
+			files: []wantFile{
+				{RoleModel, "stable-diffusion-v1-5-pruned-emaonly-Q4_0.gguf"},
+				{RoleMotionModule, "mm_sd15_v3.safetensors"},
 			},
 		},
 		{

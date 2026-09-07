@@ -70,7 +70,7 @@ func TestEnumValues(t *testing.T) {
 		{"SampleMethod", enumInts([]SampleMethod{SampleEuler, SampleEulerA, SampleHeun, SampleDPM2, SampleDPMPP2SA, SampleDPMPP2M, SampleDPMPP2Mv2, SampleIPNDM, SampleIPNDMV, SampleLCM, SampleDDIMTrailing, SampleTCD, SampleResMultistep, SampleRes2S, SampleERSDE, SampleEulerCFGPP, SampleEulerACFGPP, SampleEulerGE, SampleDPMPP2MSDE, SampleDPMPP2MSDEBT, SampleLMS, SampleMethodCount}), sequence(0, 22)},
 		{"Scheduler", enumInts([]Scheduler{SchedulerDiscrete, SchedulerKarras, SchedulerExponential, SchedulerAys, SchedulerGits, SchedulerSgmUniform, SchedulerSimple, SchedulerSmoothstep, SchedulerKLOptimal, SchedulerLCM, SchedulerBongTangent, SchedulerLTX2, SchedulerLogitNormal, SchedulerFlux2, SchedulerFlux, SchedulerBeta, SchedulerCount}), sequence(0, 17)},
 		{"Prediction", enumInts([]Prediction{PredictionEPS, PredictionV, PredictionEDMV, PredictionFlow, PredictionFluxFlow, PredictionSeFiFlow, PredictionMinit2IFlow, PredictionCount}), sequence(0, 8)},
-		{"LogLevel", enumInts([]LogLevel{LogDebug, LogInfo, LogWarn, LogError}), sequence(0, 4)},
+		{"LogLevel", enumInts([]LogLevel{LogDebug, LogVerbose, LogInfo, LogWarn, LogError}), sequence(0, 5)},
 		{"SDVaeFormat", enumInts([]SDVaeFormat{SDVaeFormatAuto, SDVaeFormatFlux, SDVaeFormatSD3, SDVaeFormatFlux2, SDVaeFormatWan, SDVaeFormatCount}), []int32{-1, 0, 1, 2, 3, 4}},
 		{"LoraApplyMode", enumInts([]LoraApplyMode{LoraApplyAuto, LoraApplyImmediately, LoraApplyAtRuntime, LoraApplyModeCount}), sequence(0, 4)},
 		{"PreviewMode", enumInts([]PreviewMode{PreviewNone, PreviewProj, PreviewTAE, PreviewVAE, PreviewCount}), sequence(0, 5)},

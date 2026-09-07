@@ -11,16 +11,13 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
-
-	"github.com/ardanlabs/malina/pkg/download"
 )
 
-// testEnvModelFile returns the path stored in env. The test is skipped
-// when env is unset and skipped (not failed) when the file is missing,
-// so a stale env var on a contributor's machine never breaks the suite.
-// Used by the per-bundle smoke tests so each bundle binds to its own
-// env var (MALINA_TEST_MODEL for sd-1.5, MALINA_SDXL_TEST_MODEL for
-// sdxl-base-1.0) independently.
+// testEnvModelFile returns the path stored in env. The test is skipped when
+// env is unset and fails when the configured file is missing. Used by the
+// per-bundle smoke tests so each bundle binds to its own env var
+// (MALINA_TEST_MODEL for sd-1.5, MALINA_SDXL_TEST_MODEL for sdxl-base-1.0)
+// independently.
 func testEnvModelFile(t *testing.T, env string) string {
 	t.Helper()
 
@@ -29,16 +26,15 @@ func testEnvModelFile(t *testing.T, env string) string {
 		t.Skipf("%s not set; skipping test that requires a model", env)
 	}
 	if _, err := os.Stat(model); err != nil {
-		t.Skipf("model file %q not present: %v", model, err)
+		t.Fatalf("model file %q configured by %s is not present: %v", model, env, err)
 	}
 	return model
 }
 
-// testEnvBundleDir returns the bundle directory stored in env. The test
-// is skipped when env is unset and skipped (not failed) when the
-// directory or manifest.json inside it are missing. Used by the flux2
-// smoke test which loads three files (diffusion + VAE + LLM) via the
-// bundle's manifest.json rather than a single model path.
+// testEnvBundleDir returns the bundle directory stored in env. The test is
+// skipped when env is unset and fails when the configured directory or its
+// manifest.json is missing. Multi-file smoke tests use the manifest to map
+// bundle roles to model paths.
 func testEnvBundleDir(t *testing.T, env string) string {
 	t.Helper()
 
@@ -48,14 +44,14 @@ func testEnvBundleDir(t *testing.T, env string) string {
 	}
 	info, err := os.Stat(dir)
 	if err != nil {
-		t.Skipf("bundle dir %q not present: %v", dir, err)
+		t.Fatalf("bundle dir %q configured by %s is not present: %v", dir, env, err)
 	}
 	if !info.IsDir() {
-		t.Skipf("bundle path %q is not a directory", dir)
+		t.Fatalf("bundle path %q configured by %s is not a directory", dir, env)
 	}
 	manifest := filepath.Join(dir, "manifest.json")
 	if _, err := os.Stat(manifest); err != nil {
-		t.Skipf("bundle manifest %q not present: %v (did you run `malina model pull`?)", manifest, err)
+		t.Fatalf("bundle manifest %q configured by %s is not present: %v (did you run `malina model pull`?)", manifest, env, err)
 	}
 	return dir
 }
@@ -278,39 +274,6 @@ func TestGenerateImageSDXLSmoke(t *testing.T) {
 
 	params := ImgGenParamsInit()
 	params.Steps = 1
-
-	assertGenerateSmoke(t, cparams, params)
-}
-
-// TestGenerateImageFlux2Smoke exercises the multi-file FLUX.2 [klein] 9B
-// bundle: read manifest.json, wire DiffusionModelPath + VAEPath + LLMPath
-// from the manifest, and generate one image. FLUX.2 [klein] is 4-step
-// distilled so 4 is the lowest meaningful Steps value; we still bring
-// width and height down to 256x256 to keep the test bounded on CPU. On
-// Apple Silicon with Metal the whole thing completes in well under a
-// minute.
-//
-// Requires MALINA_LIB and MALINA_FLUX2_TEST_DIR (a directory containing
-// the bundle's three files plus the manifest.json that `malina model
-// pull flux2-klein-9b` writes). Skipped otherwise.
-func TestGenerateImageFlux2Smoke(t *testing.T) {
-	testSetup(t)
-	bundleDir := testEnvBundleDir(t, "MALINA_FLUX2_TEST_DIR")
-
-	manifest, err := download.LoadManifest(bundleDir)
-	if err != nil {
-		t.Fatalf("LoadManifest: %v", err)
-	}
-
-	cparams := ContextParamsInit()
-	cparams.DiffusionModelPath = manifest.Files[string(download.RoleDiffusion)]
-	cparams.VAEPath = manifest.Files[string(download.RoleVAE)]
-	cparams.LLMPath = manifest.Files[string(download.RoleLLM)]
-
-	params := ImgGenParamsInit()
-	params.Width = 256
-	params.Height = 256
-	params.Steps = 4
 
 	assertGenerateSmoke(t, cparams, params)
 }

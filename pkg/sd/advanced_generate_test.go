@@ -3,23 +3,31 @@
 package sd
 
 import (
+	"bytes"
+	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/ardanlabs/malina/pkg/download"
 )
 
-func TestControlNetHotSwapSmoke(t *testing.T) {
+func TestControlNetGeneration(t *testing.T) {
 	testSetup(t)
-	modelPath := testEnvModelFile(t, "MALINA_TEST_MODEL")
-	controlPath := testEnvModelFile(t, "MALINA_CONTROLNET_TEST_MODEL")
+	bundleDir := testEnvBundleDir(t, "MALINA_CONTROLNET_TEST_DIR")
+	manifest, err := download.LoadManifest(bundleDir)
+	if err != nil {
+		t.Fatalf("LoadManifest: %v", err)
+	}
 
 	cparams := ContextParamsInit()
-	cparams.ModelPath = modelPath
+	cparams.ModelPath = manifest.Files[string(download.RoleModel)]
 	ctx, err := NewContext(cparams)
 	if err != nil {
 		t.Fatalf("NewContext: %v", err)
 	}
 	defer FreeContext(ctx)
 
-	if err := LoadControlNet(ctx, controlPath); err != nil {
+	if err := LoadControlNet(ctx, manifest.Files[string(download.RoleControlNet)]); err != nil {
 		t.Fatalf("LoadControlNet: %v", err)
 	}
 	hasControl, err := HasControlNet(ctx)
@@ -29,6 +37,37 @@ func TestControlNetHotSwapSmoke(t *testing.T) {
 	if !hasControl {
 		t.Fatal("HasControlNet: got false after loading ControlNet")
 	}
+
+	control := &SDImage{Width: 64, Height: 64, Channel: 3, Data: make([]byte, 64*64*3)}
+	for y := range 64 {
+		for x := range 64 {
+			if x == 16 || x == 47 || y == 16 || y == 47 {
+				i := (y*64 + x) * 3
+				control.Data[i] = 255
+				control.Data[i+1] = 255
+				control.Data[i+2] = 255
+			}
+		}
+	}
+	if err := PreprocessCanny(control, CannyParams{HighThreshold: 0.08, LowThreshold: 0.08, Weak: 0.8, Strong: 1}); err != nil {
+		t.Fatalf("PreprocessCanny: %v", err)
+	}
+	params := ImgGenParamsInit()
+	params.Prompt = "a framed landscape"
+	params.Width = 64
+	params.Height = 64
+	params.Steps = 1
+	params.Seed = 42
+	params.ControlImage = control
+	params.ControlStrength = 1
+	image, err := GenerateImage(ctx, params)
+	if err != nil {
+		t.Fatalf("GenerateImage with ControlNet: %v", err)
+	}
+	if image == nil || image.Width != 64 || image.Height != 64 || len(image.Data) != 64*64*3 {
+		t.Fatalf("GenerateImage with ControlNet returned invalid image: %#v", image)
+	}
+
 	if err := UnloadControlNet(ctx); err != nil {
 		t.Fatalf("UnloadControlNet: %v", err)
 	}
@@ -41,11 +80,15 @@ func TestControlNetHotSwapSmoke(t *testing.T) {
 	}
 }
 
-func TestUpscalerSmoke(t *testing.T) {
+func TestUpscaleImage(t *testing.T) {
 	testSetup(t)
-	modelPath := testEnvModelFile(t, "MALINA_UPSCALER_TEST_MODEL")
+	bundleDir := testEnvBundleDir(t, "MALINA_UPSCALER_TEST_DIR")
+	manifest, err := download.LoadManifest(bundleDir)
+	if err != nil {
+		t.Fatalf("LoadManifest: %v", err)
+	}
 
-	ctx, err := NewUpscalerContext(modelPath, false, NumPhysicalCores(), 0, "", "")
+	ctx, err := NewUpscalerContext(manifest.Files[string(download.RoleUpscaler)], false, NumPhysicalCores(), 0, "", "")
 	if err != nil {
 		t.Fatalf("NewUpscalerContext: %v", err)
 	}
@@ -74,49 +117,77 @@ func TestUpscalerSmoke(t *testing.T) {
 	}
 }
 
-func TestADetailerSmoke(t *testing.T) {
+func TestADetailImage(t *testing.T) {
 	testSetup(t)
-	modelPath := testEnvModelFile(t, "MALINA_TEST_MODEL")
-	detectorPath := testEnvModelFile(t, "MALINA_ADETAILER_TEST_MODEL")
+	var logs []string
+	SetLogCallback(func(_ LogLevel, text string) {
+		if strings.Contains(text, "ADetailer") {
+			logs = append(logs, text)
+		}
+	})
+	t.Cleanup(func() { SetLogCallback(nil) })
+
+	bundleDir := testEnvBundleDir(t, "MALINA_ADETAILER_TEST_DIR")
+	manifest, err := download.LoadManifest(bundleDir)
+	if err != nil {
+		t.Fatalf("LoadManifest: %v", err)
+	}
 
 	cparams := ContextParamsInit()
-	cparams.ModelPath = modelPath
+	cparams.ModelPath = manifest.Files[string(download.RoleModel)]
 	ctx, err := NewContext(cparams)
 	if err != nil {
 		t.Fatalf("NewContext: %v", err)
 	}
 	defer FreeContext(ctx)
 
-	detailer, err := NewADetailerContext(detectorPath, NumPhysicalCores(), "", "")
+	detailer, err := NewADetailerContext(manifest.Files[string(download.RoleADetailer)], NumPhysicalCores(), "cpu", "")
 	if err != nil {
 		t.Fatalf("NewADetailerContext: %v", err)
 	}
 	defer FreeADetailerContext(detailer)
 
-	input := &SDImage{Width: 64, Height: 64, Channel: 3, Data: make([]byte, 64*64*3)}
+	input, err := LoadPNG(filepath.Join("..", "..", "samples", "adetailer-face.png"))
+	if err != nil {
+		t.Fatalf("LoadPNG: %v", err)
+	}
+	before := append([]byte(nil), input.Data...)
 	params := ImgGenParamsInit()
-	params.Prompt = "a face"
-	params.Width = 64
-	params.Height = 64
+	params.Prompt = "a detailed portrait photo"
+	params.Width = int32(input.Width)
+	params.Height = int32(input.Height)
 	params.Steps = 1
 	params.Seed = 42
-	images, err := ADetailImage(detailer, ctx, input, ADetailerParams{Prompt: "a face"}, params)
+	images, err := ADetailImage(detailer, ctx, input, ADetailerParams{
+		Prompt:    "a detailed portrait photo",
+		ExtraArgs: "input_size=640,confidence=0.3,inpaint_width=64,inpaint_height=64",
+	}, params)
 	if err != nil {
 		t.Fatalf("ADetailImage: %v", err)
 	}
-	for i, image := range images {
-		if image == nil || len(image.Data) == 0 {
-			t.Fatalf("ADetailImage result %d is empty", i)
-		}
+	if len(images) == 0 {
+		t.Fatal("ADetailImage returned no images")
+	}
+	image := images[len(images)-1]
+	if image == nil || image.Width != input.Width || image.Height != input.Height || len(image.Data) != len(input.Data) {
+		t.Fatalf("ADetailImage returned invalid final image: %#v", image)
+	}
+	if bytes.Equal(image.Data, before) {
+		t.Fatalf("ADetailImage did not refine the detected face; logs: %v", logs)
 	}
 }
 
-func TestGenerateVideoSmoke(t *testing.T) {
+func TestGenerateVideoAnimateDiff(t *testing.T) {
 	testSetup(t)
-	modelPath := testEnvModelFile(t, "MALINA_VIDEO_TEST_MODEL")
+	bundleDir := testEnvBundleDir(t, "MALINA_VIDEO_TEST_DIR")
+	manifest, err := download.LoadManifest(bundleDir)
+	if err != nil {
+		t.Fatalf("LoadManifest: %v", err)
+	}
 
 	cparams := ContextParamsInit()
-	cparams.ModelPath = modelPath
+	cparams.ModelPath = manifest.Files[string(download.RoleModel)]
+	cparams.MotionModulePath = manifest.Files[string(download.RoleMotionModule)]
 	ctx, err := NewContext(cparams)
 	if err != nil {
 		t.Fatalf("NewContext: %v", err)
@@ -135,18 +206,23 @@ func TestGenerateVideoSmoke(t *testing.T) {
 		t.Fatalf("VideoGenParamsInit: %v", err)
 	}
 	params.Prompt = "a cat walking"
-	params.Width = 64
-	params.Height = 64
-	params.Sample.Steps = 1
-	params.VideoFrames = 1
+	params.Width = 128
+	params.Height = 128
+	params.Sample.Steps = 4
+	params.VideoFrames = 4
 	params.FPS = 1
 	params.Seed = 42
 	frames, audio, err := GenerateVideo(ctx, params)
 	if err != nil {
 		t.Fatalf("GenerateVideo: %v", err)
 	}
-	if len(frames) == 0 || frames[0] == nil || len(frames[0].Data) == 0 {
-		t.Fatal("GenerateVideo returned no copied frame pixels")
+	if len(frames) != int(params.VideoFrames) {
+		t.Fatalf("GenerateVideo returned %d frames, want %d", len(frames), params.VideoFrames)
+	}
+	for i, frame := range frames {
+		if frame == nil || frame.Width != uint32(params.Width) || frame.Height != uint32(params.Height) || len(frame.Data) != int(params.Width*params.Height*3) {
+			t.Fatalf("GenerateVideo frame %d is invalid: %#v", i, frame)
+		}
 	}
 	if audio != nil && audio.Channels > 0 && len(audio.Data)%int(audio.Channels) != 0 {
 		t.Fatalf("audio samples %d are not divisible by %d channels", len(audio.Data), audio.Channels)

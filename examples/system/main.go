@@ -3,27 +3,25 @@
 //
 // Run it from the repo root with:
 //
-//	make download-stable-diffusion.cpp   # one-time: populate ./lib
+//	make download-stable-diffusion.cpp   # one-time: install the default libraries
 //	make example-system
-//
-// The makefile target wires MALINA_LIB to ./lib before invoking
-// `go run ./examples/system`.
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
-	"os"
 
+	"github.com/ardanlabs/malina/pkg/download"
 	"github.com/ardanlabs/malina/pkg/sd"
 )
 
 func main() {
-	libPath := os.Getenv("MALINA_LIB")
-	if libPath == "" {
-		log.Fatal("MALINA_LIB must point to the directory containing libstable-diffusion")
-	}
+	libPath := download.DefaultLibrariesDir()
 
+	if err := download.VerifyDefaultInstall(context.Background(), libPath); err != nil {
+		log.Fatalf("verify default libraries: %v (did you run `malina install -u`?)", err)
+	}
 	if err := sd.Load(libPath); err != nil {
 		log.Fatalf("sd.Load: %v", err)
 	}

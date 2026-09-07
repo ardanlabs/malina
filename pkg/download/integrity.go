@@ -189,6 +189,19 @@ func VerifyInstall(ctx context.Context, libPath string, version string) (*Verify
 	return verifyRecord(ctx, libPath, record)
 }
 
+// VerifyDefaultInstall verifies that libPath contains the exact authenticated
+// stable-diffusion.cpp release Malina's current FFI targets.
+func VerifyDefaultInstall(ctx context.Context, libPath string) error {
+	report, err := VerifyInstall(ctx, libPath, DefaultSDVersion)
+	if err != nil {
+		return err
+	}
+	if !report.OK() {
+		return fmt.Errorf("default stable-diffusion.cpp install has %d changed and %d missing files", report.Changed, report.Missing)
+	}
+	return nil
+}
+
 // ParsePinnedVersion splits VERSION@sha256:DIGEST into its bare tag and digest.
 // An unpinned version is returned unchanged with an empty digest.
 func ParsePinnedVersion(version string) (tag string, digest string, err error) {

@@ -10,7 +10,7 @@ import (
 // means struct fields will misalign and NewContext will produce garbage
 // pointers.
 func TestContextParamsStructSize(t *testing.T) {
-	const expectedSize = 280
+	const expectedSize = 288
 	got := unsafe.Sizeof(cContextParams{})
 	if got != expectedSize {
 		t.Fatalf("cContextParams size: got %d, want %d", got, expectedSize)
@@ -48,9 +48,10 @@ func TestContextParamsInitDefaults(t *testing.T) {
 		{"VAEConvDirect", p.VAEConvDirect, false},
 		{"ForceSDXLVAEConvScale", p.ForceSDXLVAEConvScale, false},
 		{"VaeFormat", p.VaeFormat, SDVaeFormatAuto},
-		{"StreamLayers", p.StreamLayers, false},
+		{"DisablePrefetch", p.DisablePrefetch, false},
 		{"EagerLoad", p.EagerLoad, false},
-		{"AutoFit", p.AutoFit, false},
+		{"AutoFit", p.AutoFit, true},
+		{"DisableSegmentedCompute", p.DisableSegmentedCompute, false},
 	}
 
 	for _, c := range cases {

@@ -16,9 +16,9 @@ concurrency:
 # so libstable-diffusion.so can resolve its libggml*.so dependencies
 # regardless of the RUNPATH the upstream binary was built with.
 #
-# leejet currently publishes no linux/cuda asset, so this job tests the
-# CPU build. Model-backed tests use the malina_model_tests build tag and are
-# intentionally excluded from GitHub Actions.
+# leejet currently publishes no linux/cuda asset, so these jobs test the CPU
+# build. The primary job excludes model-backed tests; the model-test matrix
+# downloads and caches each advanced fixture independently.
 
 jobs:
   test:
@@ -94,3 +94,70 @@ jobs:
 
       - name: Run sd-encode example
         run: go run ./examples/sd-encode -i samples/frames -fps 24 -secs 1 -o /tmp/out.avi
+
+  model-test:
+    name: Model / ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: ControlNet
+            bundles: controlnet-canny-sd1.5
+            environment: MALINA_CONTROLNET_TEST_DIR
+            fixture: controlnet-canny-sd1.5
+            test: TestControlNetGeneration
+          - name: Real-ESRGAN
+            bundles: realesrgan-x4-anime
+            environment: MALINA_UPSCALER_TEST_DIR
+            fixture: realesrgan-x4-anime
+            test: TestUpscaleImage
+          - name: ADetailer
+            bundles: adetailer-face-yolov8n
+            environment: MALINA_ADETAILER_TEST_DIR
+            fixture: adetailer-face-yolov8n
+            test: TestADetailImage
+          - name: AnimateDiff
+            bundles: animatediff-sd1.5
+            environment: MALINA_VIDEO_TEST_DIR
+            fixture: animatediff-sd1.5
+            test: TestGenerateVideoAnimateDiff
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Cache model fixture
+        uses: actions/cache@v5
+        with:
+          path: ${{ github.workspace }}/models
+          key: model-${{ runner.os }}-${{ matrix.name }}-${{ hashFiles('pkg/download/bundle.go') }}
+
+      - name: Install malina command
+        run: go install .
+
+      - name: Download model fixture
+        env:
+          MODELS_DIR: ${{ github.workspace }}/models
+        run: |
+          for bundle in ${{ matrix.bundles }}; do
+            malina model pull -y -o "$MODELS_DIR" "$bundle"
+          done
+
+      - name: Install stable-diffusion.cpp libraries
+        run: malina install -lib $GITHUB_WORKSPACE/lib
+
+      - name: Run model test
+        env:
+          MALINA_LIB: ${{ github.workspace }}/lib
+          LD_LIBRARY_PATH: ${{ github.workspace }}/lib
+          FIXTURE_ENVIRONMENT: ${{ matrix.environment }}
+          FIXTURE_PATH: ${{ github.workspace }}/models/${{ matrix.fixture }}
+          TEST_NAME: ${{ matrix.test }}
+        run: |
+          export "$FIXTURE_ENVIRONMENT=$FIXTURE_PATH"
+          go test -count=1 -v -tags=malina_model_tests -run "^${TEST_NAME}$" ./pkg/sd

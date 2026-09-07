@@ -39,6 +39,44 @@ func TestTrustedManifestMatchesDefaultVersion(t *testing.T) {
 	}
 }
 
+func TestTrustedManifestCoversSupportedMatrix(t *testing.T) {
+	tag, _, err := ParsePinnedVersion(DefaultSDVersion)
+	if err != nil {
+		t.Fatalf("ParsePinnedVersion(%q): %v", DefaultSDVersion, err)
+	}
+
+	tests := []struct {
+		name       string
+		arch       Arch
+		os         OS
+		processor  Processor
+		wantAssets int
+	}{
+		{"darwin metal", ARM64, Darwin, Metal, 1},
+		{"windows cpu", AMD64, Windows, CPU, 1},
+		{"windows cuda", AMD64, Windows, CUDA, 2},
+		{"windows vulkan", AMD64, Windows, Vulkan, 1},
+		{"windows rocm", AMD64, Windows, ROCm, 1},
+		{"linux cpu", AMD64, Linux, CPU, 1},
+		{"linux vulkan", AMD64, Linux, Vulkan, 1},
+		{"linux rocm", AMD64, Linux, ROCm, 1},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assets, releaseMetadata, err := resolveAssets(context.Background(), test.arch, test.os, test.processor, tag)
+			if err != nil {
+				t.Fatalf("resolveAssets: %v", err)
+			}
+			if len(assets) != test.wantAssets {
+				t.Errorf("asset count: got %d, want %d", len(assets), test.wantAssets)
+			}
+			if len(releaseMetadata) != 0 {
+				t.Errorf("release metadata: got %d bytes, want none for trusted manifest", len(releaseMetadata))
+			}
+		})
+	}
+}
+
 func TestExpectedAssetDigestUsesTrustedManifest(t *testing.T) {
 	tag, manifestSHA, err := ParsePinnedVersion(DefaultSDVersion)
 	if err != nil {

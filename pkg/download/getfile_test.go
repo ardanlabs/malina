@@ -9,11 +9,82 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 )
+
+func TestDefaultModelsDir(t *testing.T) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatalf("UserHomeDir: %v", err)
+	}
+
+	want := filepath.Join(homeDir, ".kronk", "malina-models")
+	if got := DefaultModelsDir(); got != want {
+		t.Errorf("DefaultModelsDir: got %q, want %q", got, want)
+	}
+}
+
+func TestDefaultLibrariesDir(t *testing.T) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatalf("UserHomeDir: %v", err)
+	}
+
+	processor := CPU.String()
+	if runtime.GOOS == Darwin.String() {
+		processor = Metal.String()
+	}
+	want := filepath.Join(homeDir, ".kronk", "malina-libraries", runtime.GOOS, runtime.GOARCH, processor)
+	if got := DefaultLibrariesDir(); got != want {
+		t.Errorf("DefaultLibrariesDir: got %q, want %q", got, want)
+	}
+}
+
+func TestGetBundleSkipsInstalledBundle(t *testing.T) {
+	bundle, ok := BundleByName("sd-1.5")
+	if !ok {
+		t.Fatal("BundleByName: sd-1.5 not found")
+	}
+
+	dest := t.TempDir()
+	bundleDir := filepath.Join(dest, bundle.Name)
+	if err := os.MkdirAll(bundleDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+
+	modelPath := filepath.Join(bundleDir, bundle.Files[0].Filename)
+	if err := os.WriteFile(modelPath, []byte("installed"), 0o644); err != nil {
+		t.Fatalf("WriteFile model: %v", err)
+	}
+
+	manifest := Manifest{
+		Bundle:  bundle.Name,
+		License: bundle.License,
+		Gated:   bundle.Gated,
+		Files: map[string]string{
+			string(bundle.Files[0].Role): modelPath,
+		},
+	}
+	data, err := json.Marshal(manifest)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(bundleDir, ManifestFilename), data, 0o644); err != nil {
+		t.Fatalf("WriteFile manifest: %v", err)
+	}
+
+	got, err := GetBundleWithProgress(context.Background(), bundle.Name, dest, nil)
+	if err != nil {
+		t.Fatalf("GetBundleWithProgress: %v", err)
+	}
+	if !reflect.DeepEqual(got, manifest) {
+		t.Errorf("manifest: got %#v, want %#v", got, manifest)
+	}
+}
 
 // TestGetFileSuccess drives getFile against an in-process server and
 // verifies the bytes land on disk intact.
@@ -139,18 +210,17 @@ func TestGetFileGatedError(t *testing.T) {
 
 // TestLoadManifestRoundTrip writes a manifest JSON to disk, reads it back
 // via LoadManifest, and asserts every field round-trips. This is the
-// boundary downstream consumers (kronk, examples/flux2) rely on to wire
-// bundle paths into sd.ContextParams.
+// boundary downstream consumers and examples rely on to wire bundle paths
+// into pkg/sd.
 func TestLoadManifestRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	want := Manifest{
-		Bundle:  "flux2-klein-9b",
-		License: "FLUX Non-Commercial",
-		Gated:   true,
+		Bundle:  "animatediff-sd1.5",
+		License: "CreativeML Open RAIL-M / Apache-2.0",
+		Gated:   false,
 		Files: map[string]string{
-			"diffusion": filepath.Join(dir, "flux-2-klein-9b-Q4_0.gguf"),
-			"vae":       filepath.Join(dir, "ae.safetensors"),
-			"llm":       filepath.Join(dir, "Qwen3-8B-Q4_K_M.gguf"),
+			"model":         filepath.Join(dir, "stable-diffusion-v1-5-pruned-emaonly-Q4_0.gguf"),
+			"motion_module": filepath.Join(dir, "mm_sd15_v3.safetensors"),
 		},
 	}
 
