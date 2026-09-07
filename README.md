@@ -38,10 +38,6 @@ Sometimes there are breaking changes to stable-diffusion.cpp that require an upd
 | master-846-d8fb10c   | 1.0.9       |
 | master-841-6b3edaa   | 1.0.6–1.0.8 |
 | master-830-50d6405   | 1.0.5       |
-| master-827-97d2990   | 1.0.4       |
-| master-820-de298c2   | 1.0.2–1.0.3 |
-| master-813-bfbef5b   | 1.0.1       |
-| master-669-2d40a8b   | 0.1.x       |
 
 The FFI binding includes image and native video generation, upscaling, ADetailer, ControlNet hot-swap, conversion, Canny preprocessing, cancellation, preview/backend callbacks, device listing, and every generation parameter in the target header. Pure-Go PNG/JPEG decode + Motion-JPEG AVI mux, the CLI (`install`, `system`, `info`, `model list|pull`), and runnable examples for the generation APIs have also landed. Kronk integration (an OpenAI-compatible `POST /v1/images/generations` endpoint) lives in the [kronk](https://github.com/ardanlabs/kronk) repo.
 
@@ -181,12 +177,12 @@ against real models configured by the Makefile. The license-gated FLUX.2 Klein
 bundles remain available as opt-in catalog entries, but are deliberately not
 used by tests, benchmarks, examples, or `make download-models`.
 
-| Environment variable           | Catalog bundle / functional test                    |
-| ------------------------------ | --------------------------------------------------- |
-| `MALINA_CONTROLNET_TEST_DIR`   | `controlnet-canny-sd1.5` controlled image generation |
-| `MALINA_UPSCALER_TEST_DIR`     | `realesrgan-x4-anime` 4× image upscaling             |
-| `MALINA_ADETAILER_TEST_DIR`    | `adetailer-face-yolov8n` face detection/refinement   |
-| `MALINA_VIDEO_TEST_DIR`        | `animatediff-sd1.5` multi-frame video generation     |
+| Environment variable         | Catalog bundle / functional test                     |
+| ---------------------------- | ---------------------------------------------------- |
+| `MALINA_CONTROLNET_TEST_DIR` | `controlnet-canny-sd1.5` controlled image generation |
+| `MALINA_UPSCALER_TEST_DIR`   | `realesrgan-x4-anime` 4× image upscaling             |
+| `MALINA_ADETAILER_TEST_DIR`  | `adetailer-face-yolov8n` face detection/refinement   |
+| `MALINA_VIDEO_TEST_DIR`      | `animatediff-sd1.5` multi-frame video generation     |
 
 Each advanced test skips when its fixture variable is unset and fails when a
 configured fixture is missing. GitHub Actions downloads and caches each
@@ -273,6 +269,7 @@ $ make example-sd-encode
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -297,6 +294,9 @@ func main() {
 	}
 	modelPath := manifest.Files[string(download.RoleModel)]
 
+	if err := download.VerifyDefaultInstall(context.Background(), libPath); err != nil {
+		log.Fatalf("verify default libraries: %v (did you run `malina install -u`?)", err)
+	}
 	if err := sd.Load(libPath); err != nil {
 		log.Fatalf("sd.Load: %v", err)
 	}
