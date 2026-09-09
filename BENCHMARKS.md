@@ -3,19 +3,19 @@
 Performance numbers for `pkg/sd` against the SD 1.5 and SDXL model bundles.
 Recorded on an Apple M5 Max with
 128 GiB RAM (macOS 26.6.2, darwin/arm64) using the Metal backend from upstream
-stable-diffusion.cpp `master-846-d8fb10c` artifact
-`sd-master-d8fb10c-bin-Darwin-macOS-26.6.2-arm64.zip` (SHA-256
-`1d0c39f0258a028df3bb2ed91c08eb2eeb771a707c5232d01fbac169592fdab4`).
+stable-diffusion.cpp `master-849-d04e895` artifact
+`sd-master-d04e895-bin-Darwin-macOS-26.6.2-arm64.zip` (SHA-256
+`7dc34b46ea5299d248ca67ab6d3538575a9638fd2a24e013c6dc979cce9ca1d4`).
 The Go benchmarks all run against the extracted
-`~/.kronk/malina-libraries/darwin/arm64/metal/libstable-diffusion.dylib` (SHA-256
-`e6d94137ce80f7cb9c9c4522b871cc888f41670df4d8e1ce09694e7353521691`).
+`./lib/libstable-diffusion.dylib` (SHA-256
+`a943a46929d5bf3b6a53f0c3e88a2a77801c37b0e5e743cb9f082e6172fab92e`).
 
 Reproduce with:
 
 ```
-make download-stable-diffusion.cpp   # populates ~/.kronk/malina-libraries
+make download-stable-diffusion.cpp MALINA_LIB="$PWD/lib"
 make download-models                 # populates ~/.kronk/malina-models
-make bench BENCHTIME=1x              # runs all three generation benchmarks
+make bench BENCHTIME=1x MALINA_LIB="$PWD/lib"
 ```
 
 ## Methodology
@@ -52,9 +52,9 @@ and digest listed above. All measurements used `make bench BENCHTIME=1x`.
 
 | Workload                | Model/bundle       | Shape   | Steps | b.N | ns/op          | s/img | B/op    | allocs/op |
 |-------------------------|--------------------|---------|------:|----:|---------------:|------:|--------:|----------:|
-| text-to-image           | sd-1.5             | 512x512 |    20 |   1 | 17,832,453,917 | 17.83 | 800,128 |       277 |
-| text-to-image           | sdxl-base-1.0      | 512x512 |    20 |   1 |  8,446,292,000 |  8.446 | 801,048 |       297 |
-| image-to-image          | sd-1.5             | 512x512 |    16 |   1 | 14,928,385,458 | 14.93 | 799,824 |       269 |
+| text-to-image           | sd-1.5             | 512x512 |    20 |   1 | 31,702,937,333 | 31.70 | 800,128 |       277 |
+| text-to-image           | sdxl-base-1.0      | 512x512 |    20 |   1 | 12,657,601,958 | 12.66 | 801,048 |       297 |
+| image-to-image          | sd-1.5             | 512x512 |    16 |   1 | 22,253,164,417 | 22.25 | 799,824 |       269 |
 
 Run commands:
 

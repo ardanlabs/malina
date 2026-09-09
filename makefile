@@ -33,8 +33,8 @@ clean-stable-diffusion.cpp:
 #     attached, which is why "master-N-shortsha" can be queried and
 #     downloaded just like a versioned tag.
 #
-# This target always passes -u (upgrade) so an existing install in
-# $(MALINA_LIB) is replaced rather than silently skipped.
+# This target always passes -u (upgrade) so a stale or damaged install in
+# $(MALINA_LIB) is replaced. A verified current install is reused.
 #
 # This target always installs download.DefaultSDVersion. There is no separate
 # Make setting for the library version used by tests and examples.
@@ -60,12 +60,12 @@ vuln-check:
 diff:
 	go fix -diff ./...
 
-# make test runs all package tests, including the model-backed tests guarded
-# by the malina_model_tests build tag. MALINA_LIB must point at a directory
-# containing the verified download.DefaultSDVersion install. The pkg/sd model
-# tests additionally require their model paths; an unset path skips its test.
-# GitHub Actions keeps the primary job model-free and runs the advanced model
-# tests in separately cached Linux jobs.
+# make test first installs the repository's download.DefaultSDVersion into
+# MALINA_LIB, then runs all package tests, including the model-backed tests
+# guarded by the malina_model_tests build tag. The pkg/sd model tests
+# additionally require their model paths; an unset path skips its test. GitHub
+# Actions keeps the primary job model-free and runs the advanced model tests in
+# separately cached Linux jobs.
 #
 # Default the per-bundle test env vars to the layout `malina model pull`
 # writes under $(MODELS_DIR). When a contributor has downloaded the bundles
@@ -104,7 +104,7 @@ test-race:
 	export MALINA_VIDEO_TEST_DIR=$(abspath $(MALINA_VIDEO_TEST_DIR)) && \
 	go test -count=1 -race -tags=malina_model_tests ./...
 
-test: test-only lint vuln-check diff
+test: download-stable-diffusion.cpp test-only lint vuln-check diff
 
 # pull-test-assets downloads everything `make test` needs to exercise the
 # end-to-end paths: the stable-diffusion shared libraries and every ungated
