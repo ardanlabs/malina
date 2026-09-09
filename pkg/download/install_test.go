@@ -10,7 +10,7 @@ import (
 func TestLatestSDVersionSelectsGreatestBuild(t *testing.T) {
 	releases := []sdRelease{
 		{TagName: "master-845-0a565f2"},
-		{TagName: "master-846-d8fb10c"},
+		{TagName: "master-849-d04e895"},
 		{TagName: "master-900-deadbee", Draft: true},
 		{TagName: "master-901-deadbee", Prerelease: true},
 		{TagName: "v1.0.0"},
@@ -20,7 +20,7 @@ func TestLatestSDVersionSelectsGreatestBuild(t *testing.T) {
 	if err != nil {
 		t.Fatalf("latestSDVersion: unexpected error: %v", err)
 	}
-	const want = "master-846-d8fb10c"
+	const want = "master-849-d04e895"
 	if got != want {
 		t.Errorf("latestSDVersion: got %q, want %q", got, want)
 	}
@@ -133,7 +133,7 @@ func TestAssetPattern(t *testing.T) {
 			matches: []string{
 				"sd-master-656-0e4ee04-bin-Darwin-15.7.7-arm64.zip",
 				"sd-master-700-deadbee-bin-Darwin-14.6.1-arm64.zip",
-				"sd-master-d8fb10c-bin-Darwin-macOS-26.6.2-arm64.zip",
+				"sd-master-d04e895-bin-Darwin-macOS-26.6.2-arm64.zip",
 			},
 			rejects: []string{
 				"sd-master-656-0e4ee04-bin-Darwin-15.7.7-x86_64.zip",
@@ -143,14 +143,14 @@ func TestAssetPattern(t *testing.T) {
 		{
 			name: "darwin arm64 metal",
 			arch: ARM64, os: Darwin, proc: Metal,
-			matches: []string{"sd-master-d8fb10c-bin-Darwin-macOS-26.6.2-arm64.zip"},
+			matches: []string{"sd-master-d04e895-bin-Darwin-macOS-26.6.2-arm64.zip"},
 		},
 		{
 			name: "windows amd64 cpu",
 			arch: AMD64, os: Windows, proc: CPU,
 			matches: []string{
 				"sd-master-656-0e4ee04-bin-win-avx2-x64.zip",
-				"sd-master-d8fb10c-bin-win-cpu-x64.zip",
+				"sd-master-d04e895-bin-win-cpu-x64.zip",
 			},
 			rejects: []string{
 				"sd-master-656-0e4ee04-bin-win-cuda12-x64.zip",
@@ -160,26 +160,26 @@ func TestAssetPattern(t *testing.T) {
 		{
 			name: "windows amd64 cuda",
 			arch: AMD64, os: Windows, proc: CUDA,
-			matches: []string{"sd-master-d8fb10c-bin-win-cuda12-x64.zip"},
+			matches: []string{"sd-master-d04e895-bin-win-cuda12-x64.zip"},
 			rejects: []string{"sd-master-656-0e4ee04-bin-win-avx2-x64.zip"},
 		},
 		{
 			name: "windows amd64 vulkan",
 			arch: AMD64, os: Windows, proc: Vulkan,
-			matches: []string{"sd-master-d8fb10c-bin-win-vulkan-x64.zip"},
+			matches: []string{"sd-master-d04e895-bin-win-vulkan-x64.zip"},
 		},
 		{
 			name: "windows amd64 rocm",
 			arch: AMD64, os: Windows, proc: ROCm,
 			matches: []string{
-				"sd-master-d8fb10c-bin-win-rocm-7.14.0-x64.zip",
+				"sd-master-d04e895-bin-win-rocm-7.14.0-x64.zip",
 				"sd-master-656-0e4ee04-bin-win-rocm-7.2.1-x64.zip",
 			},
 		},
 		{
 			name: "linux amd64 cpu",
 			arch: AMD64, os: Linux, proc: CPU,
-			matches: []string{"sd-master-d8fb10c-bin-Linux-Ubuntu-24.04-x86_64.zip"},
+			matches: []string{"sd-master-d04e895-bin-Linux-Ubuntu-24.04-x86_64.zip"},
 			rejects: []string{
 				"sd-master-656-0e4ee04-bin-Linux-Ubuntu-24.04-x86_64-vulkan.zip",
 				"sd-master-656-0e4ee04-bin-Linux-Ubuntu-24.04-x86_64-rocm-7.2.1.zip",
@@ -188,14 +188,14 @@ func TestAssetPattern(t *testing.T) {
 		{
 			name: "linux amd64 vulkan",
 			arch: AMD64, os: Linux, proc: Vulkan,
-			matches: []string{"sd-master-d8fb10c-bin-Linux-Ubuntu-24.04-x86_64-vulkan.zip"},
+			matches: []string{"sd-master-d04e895-bin-Linux-Ubuntu-24.04-x86_64-vulkan.zip"},
 			rejects: []string{"sd-master-656-0e4ee04-bin-Linux-Ubuntu-24.04-x86_64.zip"},
 		},
 		{
 			name: "linux amd64 rocm",
 			arch: AMD64, os: Linux, proc: ROCm,
 			matches: []string{
-				"sd-master-d8fb10c-bin-Linux-Ubuntu-24.04-x86_64-rocm-7.14.0.zip",
+				"sd-master-d04e895-bin-Linux-Ubuntu-24.04-x86_64-rocm-7.14.0.zip",
 				"sd-master-656-0e4ee04-bin-Linux-Ubuntu-24.04-x86_64-rocm-7.2.1.zip",
 			},
 		},
@@ -282,13 +282,13 @@ func TestSelectAssetsWindowsCUDA(t *testing.T) {
 	}
 
 	assets := []releaseAsset{
-		{Name: "sd-master-d8fb10c-bin-win-cuda12-x64.zip", DownloadURL: "https://example.com/stable-diffusion.zip"},
+		{Name: "sd-master-d04e895-bin-win-cuda12-x64.zip", DownloadURL: "https://example.com/stable-diffusion.zip"},
 		{Name: "cudart-sd-bin-win-cu12-x64.zip", DownloadURL: "https://example.com/cudart.zip"},
-		{Name: "sd-master-d8fb10c-bin-win-cpu-x64.zip", DownloadURL: "https://example.com/cpu.zip"},
+		{Name: "sd-master-d04e895-bin-win-cpu-x64.zip", DownloadURL: "https://example.com/cpu.zip"},
 	}
 	want := []releaseAsset{assets[0], assets[1]}
 
-	got, err := selectAssets(assets, pattern, Windows, CUDA, "master-846-d8fb10c")
+	got, err := selectAssets(assets, pattern, Windows, CUDA, "master-849-d04e895")
 	if err != nil {
 		t.Fatalf("selectAssets: unexpected error: %v", err)
 	}

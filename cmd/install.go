@@ -83,16 +83,18 @@ func runInstall(c *cli.Context) error {
 		version = v
 	}
 
-	if !upgrade && download.AlreadyInstalled(libPath) {
-		report, err := download.VerifyInstall(c.Context, libPath, version)
-		if err != nil {
-			return fmt.Errorf("verify existing stable-diffusion.cpp installation (reinstall with --upgrade): %w", err)
+	if download.AlreadyInstalled(libPath) {
+		report, verifyErr := download.VerifyInstall(c.Context, libPath, version)
+		if verifyErr == nil && report.OK() {
+			fmt.Println("stable-diffusion.cpp", version, "already installed and verified at", libPath)
+			return nil
 		}
-		if !report.OK() {
+		if !upgrade {
+			if verifyErr != nil {
+				return fmt.Errorf("verify existing stable-diffusion.cpp installation (reinstall with --upgrade): %w", verifyErr)
+			}
 			return fmt.Errorf("verify existing stable-diffusion.cpp installation: %d changed and %d missing files", report.Changed, report.Missing)
 		}
-		fmt.Println("stable-diffusion.cpp already installed and verified at", libPath)
-		return nil
 	}
 
 	if !quiet {

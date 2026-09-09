@@ -35,6 +35,7 @@ Sometimes there are breaking changes to stable-diffusion.cpp that require an upd
 
 | stable-diffusion.cpp | malina      |
 | -------------------- | ----------- |
+| master-849-d04e895   | 1.0.10      |
 | master-846-d8fb10c   | 1.0.9       |
 | master-841-6b3edaa   | 1.0.6–1.0.8 |
 | master-830-50d6405   | 1.0.5       |
@@ -110,7 +111,7 @@ The architecture of malina mirrors bucky and yzma file-for-file so anyone who kn
                           │
                           ▼
             libstable-diffusion.{dylib|so|dll}
-              (stable-diffusion.cpp master-846)
+              (stable-diffusion.cpp master-849)
 ```
 
 ### FFI API coverage

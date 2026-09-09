@@ -1,5 +1,5 @@
-STABLE_DIFF_VERSION = master-846-d8fb10c
-MALINA_VERSION = v1.0.9
+STABLE_DIFF_VERSION = master-849-d04e895
+MALINA_VERSION = v1.0.10
 
 Upgrade this Malina repository to stable-diffusion.cpp
 <STABLE_DIFF_VERSION> and prepare Malina release <MALINA_VERSION>.
