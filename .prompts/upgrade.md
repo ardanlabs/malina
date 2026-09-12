@@ -1,5 +1,5 @@
-STABLE_DIFF_VERSION = master-849-d04e895
-MALINA_VERSION = v1.0.10
+STABLE_DIFF_VERSION = master-859-7f410a3
+MALINA_VERSION = v1.1.1
 
 Upgrade this Malina repository to stable-diffusion.cpp
 <STABLE_DIFF_VERSION> and prepare Malina release <MALINA_VERSION>.
@@ -144,16 +144,17 @@ breaking FFI or public Go API changes. When it did:
 
 - add a row mapping <STABLE_DIFF_VERSION> to the new Malina release line
   derived from <MALINA_VERSION> (for example, `v1.0.1` maps to `1.0.x`)
-- preserve the previous compatibility row so users of older Malina releases
-  can still identify their supported stable-diffusion.cpp build
+- preserve the two previous compatibility rows so users of recent Malina
+  releases can still identify their supported stable-diffusion.cpp build
+- keep only the three newest compatibility mappings in the table, removing
+  older rows whenever a new mapping would make the table exceed three rows
 - do not leave the new stable-diffusion.cpp tag mapped to the old Malina
   release line
 - mention the compatibility break and affected release lines in the release
   notes and migration guidance
 
 For a non-breaking upstream upgrade, keep the existing Malina release-line
-mapping accurate and retain older rows when they remain useful compatibility
-references.
+mapping accurate and apply the same three-newest-mappings retention policy.
 
 Do not add a test that merely asserts `DefaultSDVersion` equals
 <STABLE_DIFF_VERSION>. Instead, verify behavior: the embedded manifest tag
@@ -170,6 +171,13 @@ Search the entire repository for stale references to the previous active
 stable-diffusion.cpp version and removed upstream fields. Distinguish active
 defaults from historical statements: do not rewrite historical benchmark
 claims unless those measurements are actually rerun.
+
+Review the models newly supported by stable-diffusion.cpp since the previous
+pin and determine whether any should be added to Malina's curated model-bundle
+catalog. Add a bundle only when its complete, license-compatible file set can
+be pinned to stable upstream URLs and represented by Malina's existing bundle
+roles. Document candidates that are unsuitable because they are gated,
+unstable, impractically large, or require unsupported files or workflows.
 
 ## Local runtime validation
 

@@ -18,7 +18,7 @@ import (
 // binary-compatible struct on darwin/arm64, darwin/amd64, linux/amd64 and
 // windows/amd64.
 //
-// Total size: 288 bytes.
+// Total size: 296 bytes.
 type cContextParams struct {
 	ModelPath                   uintptr // 0..8
 	ClipLPath                   uintptr // 8..16
@@ -73,7 +73,10 @@ type cContextParams struct {
 	RPCServers              uintptr // 264..272
 	ModelArgs               uintptr // 272..280
 	DisableSegmentedCompute uint8   // 280
-	_                       [7]byte // 281..288
+	_                       [3]byte // 281..284
+	LinearScale             float32 // 284..288
+	AttnScale               float32 // 288..292
+	_                       [4]byte // 292..296
 }
 
 // cEmbedding mirrors sd_embedding_t. Size: 16 bytes.
@@ -155,6 +158,12 @@ type ContextParams struct {
 	AutoFit       bool
 	RPCServers    string
 	ModelArgs     string
+
+	// LinearScale and AttnScale override numerical scaling used to avoid NaN
+	// output on some backend, device, model, and weight-format combinations.
+	// Zero preserves the model defaults; overrides must be finite and positive.
+	LinearScale float32
+	AttnScale   float32
 }
 
 var (
@@ -212,6 +221,8 @@ func ContextParamsInit() ContextParams {
 		EagerLoad:               raw.EagerLoad != 0,
 		AutoFit:                 raw.AutoFit != 0,
 		DisableSegmentedCompute: raw.DisableSegmentedCompute != 0,
+		LinearScale:             raw.LinearScale,
+		AttnScale:               raw.AttnScale,
 	}
 }
 
@@ -271,6 +282,8 @@ func marshalContextParams(params ContextParams) (*marshaledContextParams, error)
 		EagerLoad:               boolToU8(params.EagerLoad),
 		AutoFit:                 boolToU8(params.AutoFit),
 		DisableSegmentedCompute: boolToU8(params.DisableSegmentedCompute),
+		LinearScale:             params.LinearScale,
+		AttnScale:               params.AttnScale,
 	}
 
 	for _, m := range []struct {

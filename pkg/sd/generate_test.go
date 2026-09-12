@@ -433,6 +433,14 @@ func assertGenerateSmoke(t *testing.T, cparams ContextParams, params ImgGenParam
 	}
 	defer FreeContext(ctx)
 
+	modelVersion, err := ModelVersionName(ctx)
+	if err != nil {
+		t.Fatalf("ModelVersionName: %v", err)
+	}
+	if modelVersion == "" || modelVersion == "Unknown" {
+		t.Fatalf("ModelVersionName: got %q, want a detected model family", modelVersion)
+	}
+
 	if params.Prompt == "" {
 		params.Prompt = "a cat"
 	}

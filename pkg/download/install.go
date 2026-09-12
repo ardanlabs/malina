@@ -35,12 +35,12 @@ var (
 )
 
 // DefaultSDVersion is the authenticated leejet/stable-diffusion.cpp release
-// malina's FFI struct mirrors (e.g. sd_ctx_params_t's 288-byte layout) are
+// malina's FFI struct mirrors (e.g. sd_ctx_params_t's 296-byte layout) are
 // tested against. The suffix pins the exact bytes of library_manifest.json.
 // Bumping this value is a deliberate, reviewable change that should be paired
 // with regenerating that manifest and re-running the FFI sizeof tests in
 // pkg/sd.
-const DefaultSDVersion = "master-849-d04e895@sha256:b9c5d34ad3de676968b375716197718bce89b53999ea82ce778ab0c691ab00a9"
+const DefaultSDVersion = "master-859-7f410a3@sha256:9185fc5d3d17ac9910f2d56ec35b9fc3e334c56e16786e83a198412d064d1887"
 
 // SDRepo is the upstream GitHub repo we fetch prebuilt libraries from.
 const SDRepo = "leejet/stable-diffusion.cpp"
@@ -200,7 +200,7 @@ func LibraryName(operatingSystem string) string {
 //	architecture: "amd64" or "arm64"
 //	osName:       "linux", "darwin", or "windows"
 //	processor:    "cpu", "cuda", "metal", "vulkan", or "rocm"
-//	version:      a leejet release tag (e.g. "master-849-d04e895")
+//	version:      a leejet release tag (e.g. "master-859-7f410a3")
 //	dest:         destination directory for the extracted libraries
 func Get(architecture, osName, processor, version, dest string) error {
 	return GetWithProgress(architecture, osName, processor, version, dest, ProgressTracker)

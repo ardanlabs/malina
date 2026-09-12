@@ -34,6 +34,7 @@ func TestTargetAPISymbolManifest(t *testing.T) {
 		{"sd_ctx_load_control_net", ctxLoadControlFunc}, {"sd_ctx_unload_control_net", ctxUnloadControlFunc},
 		{"sd_ctx_has_control_net", ctxHasControlFunc}, {"sd_cancel_generation", cancelGenerationFunc},
 		{"sd_get_default_sample_method", getDefaultSampleMethodFunc}, {"sd_get_default_scheduler", getDefaultSchedulerFunc},
+		{"sd_get_model_version_name", getModelVersionNameFunc},
 		{"generate_image", generateImageFunc}, {"free_sd_images", freeSDImagesFunc},
 		{"generate_video", generateVideoFunc}, {"free_sd_audio", freeSDAudioFunc},
 		{"new_upscaler_ctx", newUpscalerCtxFunc}, {"free_upscaler_ctx", freeUpscalerCtxFunc},
@@ -44,8 +45,8 @@ func TestTargetAPISymbolManifest(t *testing.T) {
 		{"enable_imatrix_collection", enableImatrixFunc}, {"disable_imatrix_collection", disableImatrixFunc},
 		{"sd_list_devices", listDevicesFunc},
 	}
-	if len(symbols) != 59 {
-		t.Fatalf("wrapped symbol count: got %d, want 59", len(symbols))
+	if len(symbols) != 60 {
+		t.Fatalf("wrapped symbol count: got %d, want 60", len(symbols))
 	}
 	for _, symbol := range symbols {
 		if symbol.fn == (ffi.Fun{}) {
@@ -69,7 +70,7 @@ func TestEnumValues(t *testing.T) {
 		{"RngType", enumInts([]RngType{RngStdDefault, RngCuda, RngCPU, RngTypeCount}), sequence(0, 4)},
 		{"SampleMethod", enumInts([]SampleMethod{SampleEuler, SampleEulerA, SampleHeun, SampleDPM2, SampleDPMPP2SA, SampleDPMPP2M, SampleDPMPP2Mv2, SampleIPNDM, SampleIPNDMV, SampleLCM, SampleDDIMTrailing, SampleTCD, SampleResMultistep, SampleRes2S, SampleERSDE, SampleEulerCFGPP, SampleEulerACFGPP, SampleEulerGE, SampleDPMPP2MSDE, SampleDPMPP2MSDEBT, SampleLMS, SampleMethodCount}), sequence(0, 22)},
 		{"Scheduler", enumInts([]Scheduler{SchedulerDiscrete, SchedulerKarras, SchedulerExponential, SchedulerAys, SchedulerGits, SchedulerSgmUniform, SchedulerSimple, SchedulerSmoothstep, SchedulerKLOptimal, SchedulerLCM, SchedulerBongTangent, SchedulerLTX2, SchedulerLogitNormal, SchedulerFlux2, SchedulerFlux, SchedulerBeta, SchedulerCount}), sequence(0, 17)},
-		{"Prediction", enumInts([]Prediction{PredictionEPS, PredictionV, PredictionEDMV, PredictionFlow, PredictionFluxFlow, PredictionSeFiFlow, PredictionMinit2IFlow, PredictionCount}), sequence(0, 8)},
+		{"Prediction", enumInts([]Prediction{PredictionEPS, PredictionV, PredictionEDMV, PredictionFlow, PredictionFluxFlow, PredictionSeFiFlow, PredictionMinit2IFlow, PredictionSenseNovaU1, PredictionCount}), sequence(0, 9)},
 		{"LogLevel", enumInts([]LogLevel{LogDebug, LogVerbose, LogInfo, LogWarn, LogError}), sequence(0, 5)},
 		{"SDVaeFormat", enumInts([]SDVaeFormat{SDVaeFormatAuto, SDVaeFormatFlux, SDVaeFormatSD3, SDVaeFormatFlux2, SDVaeFormatWan, SDVaeFormatCount}), []int32{-1, 0, 1, 2, 3, 4}},
 		{"LoraApplyMode", enumInts([]LoraApplyMode{LoraApplyAuto, LoraApplyImmediately, LoraApplyAtRuntime, LoraApplyModeCount}), sequence(0, 4)},
@@ -99,7 +100,7 @@ func TestEnumNameRoundTrips(t *testing.T) {
 	assertEnumRoundTrips(t, "RngType", []RngType{RngStdDefault, RngCuda, RngCPU}, RngTypeName, ParseRngType)
 	assertEnumRoundTrips(t, "SampleMethod", []SampleMethod{SampleEuler, SampleEulerA, SampleHeun, SampleDPM2, SampleDPMPP2SA, SampleDPMPP2M, SampleDPMPP2Mv2, SampleIPNDM, SampleIPNDMV, SampleLCM, SampleDDIMTrailing, SampleTCD, SampleResMultistep, SampleRes2S, SampleERSDE, SampleEulerCFGPP, SampleEulerACFGPP, SampleEulerGE, SampleDPMPP2MSDE, SampleDPMPP2MSDEBT, SampleLMS}, SampleMethodName, ParseSampleMethod)
 	assertEnumRoundTrips(t, "Scheduler", []Scheduler{SchedulerDiscrete, SchedulerKarras, SchedulerExponential, SchedulerAys, SchedulerGits, SchedulerSgmUniform, SchedulerSimple, SchedulerSmoothstep, SchedulerKLOptimal, SchedulerLCM, SchedulerBongTangent, SchedulerLTX2, SchedulerLogitNormal, SchedulerFlux2, SchedulerFlux, SchedulerBeta}, SchedulerName, ParseScheduler)
-	assertEnumRoundTrips(t, "Prediction", []Prediction{PredictionEPS, PredictionV, PredictionEDMV, PredictionFlow, PredictionFluxFlow, PredictionSeFiFlow, PredictionMinit2IFlow}, PredictionName, ParsePrediction)
+	assertEnumRoundTrips(t, "Prediction", []Prediction{PredictionEPS, PredictionV, PredictionEDMV, PredictionFlow, PredictionFluxFlow, PredictionSeFiFlow, PredictionMinit2IFlow, PredictionSenseNovaU1}, PredictionName, ParsePrediction)
 	assertEnumRoundTrips(t, "PreviewMode", []PreviewMode{PreviewNone, PreviewProj, PreviewTAE, PreviewVAE}, PreviewModeName, ParsePreviewMode)
 	assertEnumRoundTrips(t, "LoraApplyMode", []LoraApplyMode{LoraApplyAuto, LoraApplyImmediately, LoraApplyAtRuntime}, LoraApplyModeName, ParseLoraApplyMode)
 	assertEnumRoundTrips(t, "HiresUpscaler", []HiresUpscaler{HiresUpscalerNone, HiresUpscalerLatent, HiresUpscalerLatentNearest, HiresUpscalerLatentNearestExact, HiresUpscalerLatentAntialiased, HiresUpscalerLatentBicubic, HiresUpscalerLatentBicubicAntialiased, HiresUpscalerLanczos, HiresUpscalerNearest, HiresUpscalerModel}, HiresUpscalerName, ParseHiresUpscaler)
@@ -124,6 +125,7 @@ func TestOptionalAPIsReturnUnsupportedSentinel(t *testing.T) {
 		{"CancelGeneration", &cancelGenerationFunc, func() error { return CancelGeneration(1, CancelReset) }},
 		{"DefaultSampleMethod", &getDefaultSampleMethodFunc, func() error { _, err := DefaultSampleMethod(1); return err }},
 		{"DefaultScheduler", &getDefaultSchedulerFunc, func() error { _, err := DefaultScheduler(1, SampleEuler); return err }},
+		{"ModelVersionName", &getModelVersionNameFunc, func() error { _, err := ModelVersionName(1); return err }},
 		{"Commit", &commitFunc, func() error { _, err := Commit(); return err }},
 		{"ListDevices", &listDevicesFunc, func() error { _, err := ListDevices(); return err }},
 		{"Convert", &convertFunc, func() error { return Convert(ConvertParams{}) }},

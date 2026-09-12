@@ -37,6 +37,7 @@ var (
 	strToHiresUpscalerFunc     ffi.Fun
 	getDefaultSampleMethodFunc ffi.Fun
 	getDefaultSchedulerFunc    ffi.Fun
+	getModelVersionNameFunc    ffi.Fun
 
 	commitFunc            ffi.Fun
 	listDevicesFunc       ffi.Fun
@@ -75,6 +76,7 @@ func loadExtendedFuncs(lib ffi.Lib) {
 	strToHiresUpscalerFunc = prepOptional(lib, "str_to_sd_hires_upscaler", &ffi.TypeSint32, &ffi.TypePointer)
 	getDefaultSampleMethodFunc = prepOptional(lib, "sd_get_default_sample_method", &ffi.TypeSint32, &ffi.TypePointer)
 	getDefaultSchedulerFunc = prepOptional(lib, "sd_get_default_scheduler", &ffi.TypeSint32, &ffi.TypePointer, &ffi.TypeSint32)
+	getModelVersionNameFunc = prepOptional(lib, "sd_get_model_version_name", &ffi.TypePointer, &ffi.TypePointer)
 
 	commitFunc = prepOptional(lib, "sd_commit", &ffi.TypePointer)
 	listDevicesFunc = prepOptional(lib, "sd_list_devices", &ffi.TypeUint64, &ffi.TypePointer, &ffi.TypeUint64)
@@ -323,6 +325,23 @@ func DefaultScheduler(ctx Context, method SampleMethod) (Scheduler, error) {
 	var result ffi.Arg
 	getDefaultSchedulerFunc.Call(&result, unsafe.Pointer(&ctx), unsafe.Pointer(&value))
 	return Scheduler(int32(result)), nil
+}
+
+// ModelVersionName returns the model family detected for a loaded context.
+// The returned string is copied from library-owned static storage.
+func ModelVersionName(ctx Context) (string, error) {
+	if ctx == 0 {
+		return "", errors.New("ModelVersionName: nil context")
+	}
+	if getModelVersionNameFunc == (ffi.Fun{}) {
+		return "", unsupported("sd_get_model_version_name")
+	}
+	var ptr *byte
+	getModelVersionNameFunc.Call(unsafe.Pointer(&ptr), unsafe.Pointer(&ctx))
+	if ptr == nil {
+		return "", nil
+	}
+	return utils.BytePtrToString(ptr), nil
 }
 
 // Commit returns the upstream source commit embedded in the loaded library.
