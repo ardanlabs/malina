@@ -77,6 +77,8 @@ func TestExtendedStructLayouts(t *testing.T) {
 		{"cContextParams.Backend", unsafe.Offsetof(context.Backend), 232},
 		{"cContextParams.RPCServers", unsafe.Offsetof(context.RPCServers), 264},
 		{"cContextParams.DisableSegmentedCompute", unsafe.Offsetof(context.DisableSegmentedCompute), 280},
+		{"cContextParams.LinearScale", unsafe.Offsetof(context.LinearScale), 284},
+		{"cContextParams.AttnScale", unsafe.Offsetof(context.AttnScale), 288},
 		{"cImgGenParams.InitImage", unsafe.Offsetof(image.InitImage), 40},
 		{"cImgGenParams.RefImages", unsafe.Offsetof(image.RefImages), 64},
 		{"cImgGenParams.MaskImage", unsafe.Offsetof(image.MaskImage), 88},

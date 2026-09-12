@@ -153,7 +153,8 @@ const (
 	PredictionFluxFlow    Prediction = 4
 	PredictionSeFiFlow    Prediction = 5
 	PredictionMinit2IFlow Prediction = 6
-	PredictionCount       Prediction = 7
+	PredictionSenseNovaU1 Prediction = 7
+	PredictionCount       Prediction = 8
 )
 
 // LogLevel mirrors enum sd_log_level_t.
