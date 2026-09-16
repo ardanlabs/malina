@@ -3,12 +3,12 @@
 Performance numbers for `pkg/sd` against the SD 1.5 and SDXL model bundles.
 Recorded on an Apple M5 Max with
 128 GiB RAM (macOS 26.6.2, darwin/arm64) using the Metal backend from upstream
-stable-diffusion.cpp `master-859-7f410a3` artifact
-`sd-master-7f410a3-bin-Darwin-macOS-26.6.2-arm64.zip` (SHA-256
-`49e7fc5cef1fc064535b8ef409729411938b894b42d95bcb3f239fbe50f72523`).
+stable-diffusion.cpp `master-869-07a85c7` artifact
+`sd-master-07a85c7-bin-Darwin-macOS-26.6.2-arm64.zip` (SHA-256
+`0fc228abbfbf3fffd9c62c498136a9448e8e8cb5f5f29091748731cf587a4859`).
 The Go benchmarks all run against the extracted
 `./lib/libstable-diffusion.dylib` (SHA-256
-`addc0fc4971acf8f4b797d8e86987f0ff45e4452ad214a985fa852609f0922dc`).
+`2fe8f9e9ab2dcaf9be313d082026811845c27ac97d61f5ac10054fed14830736`).
 
 Reproduce with:
 
@@ -52,9 +52,9 @@ and digest listed above. All measurements used `make bench BENCHTIME=1x`.
 
 | Workload                | Model/bundle       | Shape   | Steps | b.N | ns/op          | s/img | B/op    | allocs/op |
 |-------------------------|--------------------|---------|------:|----:|---------------:|------:|--------:|----------:|
-| text-to-image           | sd-1.5             | 512x512 |    20 |   1 | 17,906,295,834 | 17.91 | 800,232 |       281 |
-| text-to-image           | sdxl-base-1.0      | 512x512 |    20 |   1 |  8,498,723,584 |  8.499 | 801,136 |       301 |
-| image-to-image          | sd-1.5             | 512x512 |    16 |   1 | 14,967,376,000 | 14.97 | 800,216 |       274 |
+| text-to-image           | sd-1.5             | 512x512 |    20 |   1 | 18,383,515,459 | 18.38 | 800,232 |       281 |
+| text-to-image           | sdxl-base-1.0      | 512x512 |    20 |   1 |  8,655,675,084 |  8.656 | 801,152 |       301 |
+| image-to-image          | sd-1.5             | 512x512 |    16 |   1 | 17,929,761,459 | 17.93 | 808,488 |       283 |
 
 Run commands:
 

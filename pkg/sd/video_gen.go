@@ -105,7 +105,7 @@ var (
 func loadVideoFuncs(lib ffi.Lib) {
 	vidGenParamsInitFunc = prepOptional(lib, "sd_vid_gen_params_init", &ffi.TypeVoid, &ffi.TypePointer)
 	generateVideoFunc = prepOptional(lib, "generate_video", &ffi.TypeUint8,
-		&ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer)
+		&ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer)
 	freeSDAudioFunc = prepOptional(lib, "free_sd_audio", &ffi.TypeVoid, &ffi.TypePointer)
 }
 
@@ -327,35 +327,46 @@ func audioFromC(raw *cAudio) *Audio {
 // GenerateVideo runs native video generation and returns Go-owned frame and
 // audio copies. Native results are released with their matched allocators.
 func GenerateVideo(ctx Context, params VideoGenParams) ([]*SDImage, *Audio, error) {
+	frames, audio, _, err := GenerateVideoWithFPS(ctx, params)
+	return frames, audio, err
+}
+
+// GenerateVideoWithFPS runs native video generation and returns Go-owned
+// frame and audio copies plus the effective encoding frame rate. The returned
+// frame rate can differ from params.FPS when the model requires a fixed rate.
+// Native results are released with their matched allocators.
+func GenerateVideoWithFPS(ctx Context, params VideoGenParams) ([]*SDImage, *Audio, int32, error) {
 	if ctx == 0 {
-		return nil, nil, errors.New("GenerateVideo: nil context")
+		return nil, nil, 0, errors.New("GenerateVideo: nil context")
 	}
 	if generateVideoFunc == (ffi.Fun{}) {
-		return nil, nil, unsupported("generate_video")
+		return nil, nil, 0, unsupported("generate_video")
 	}
 	if freeSDAudioFunc == (ffi.Fun{}) {
-		return nil, nil, unsupported("free_sd_audio")
+		return nil, nil, 0, unsupported("free_sd_audio")
 	}
 	state, err := marshalVideoParams(params)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, 0, err
 	}
 	rawPtr := &state.raw
 	var framePtr *cImage
 	var frameCount int32
 	var audioPtr *cAudio
+	fps := params.FPS
 	framePtrPtr := &framePtr
 	frameCountPtr := &frameCount
 	audioPtrPtr := &audioPtr
+	fpsPtr := &fps
 	var result ffi.Arg
-	generateVideoFunc.Call(&result, unsafe.Pointer(&ctx), unsafe.Pointer(&rawPtr), unsafe.Pointer(&framePtrPtr), unsafe.Pointer(&frameCountPtr), unsafe.Pointer(&audioPtrPtr))
+	generateVideoFunc.Call(&result, unsafe.Pointer(&ctx), unsafe.Pointer(&rawPtr), unsafe.Pointer(&framePtrPtr), unsafe.Pointer(&frameCountPtr), unsafe.Pointer(&audioPtrPtr), unsafe.Pointer(&fpsPtr))
 	runtime.KeepAlive(state)
 	runtime.KeepAlive(params)
 	if byte(result) == 0 {
 		if last := LastError(); last != "" {
-			return nil, nil, fmt.Errorf("generate_video failed: %s", last)
+			return nil, nil, 0, fmt.Errorf("generate_video failed: %s", last)
 		}
-		return nil, nil, errors.New("generate_video failed (no log message captured)")
+		return nil, nil, 0, errors.New("generate_video failed (no log message captured)")
 	}
 	frames := make([]*SDImage, frameCount)
 	if framePtr != nil && frameCount > 0 {
@@ -369,5 +380,5 @@ func GenerateVideo(ctx Context, params VideoGenParams) ([]*SDImage, *Audio, erro
 	if audioPtr != nil {
 		freeSDAudioFunc.Call(nil, unsafe.Pointer(&audioPtr))
 	}
-	return frames, audio, nil
+	return frames, audio, fps, nil
 }

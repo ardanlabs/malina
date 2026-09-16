@@ -35,9 +35,9 @@ Sometimes there are breaking changes to stable-diffusion.cpp that require an upd
 
 | stable-diffusion.cpp | malina      |
 | -------------------- | ----------- |
-| master-859-7f410a3   | 1.1.x       |
+| master-869-07a85c7   | 1.1.2       |
+| master-859-7f410a3   | 1.1.0–1.1.1 |
 | master-849-d04e895   | 1.0.10      |
-| master-846-d8fb10c   | 1.0.9       |
 
 The FFI binding includes image and native video generation, upscaling, ADetailer, ControlNet hot-swap, conversion, Canny preprocessing, cancellation, preview/backend callbacks, device and loaded-model identification, and every generation parameter in the target header. Pure-Go PNG/JPEG decode + Motion-JPEG AVI mux, the CLI (`install`, `system`, `info`, `model list|pull`), and runnable examples for the generation APIs have also landed. Kronk integration (an OpenAI-compatible `POST /v1/images/generations` endpoint) lives in the [kronk](https://github.com/ardanlabs/kronk) repo.
 
@@ -110,7 +110,7 @@ The architecture of malina mirrors bucky and yzma file-for-file so anyone who kn
                           │
                           ▼
             libstable-diffusion.{dylib|so|dll}
-              (stable-diffusion.cpp master-859)
+              (stable-diffusion.cpp master-869)
 ```
 
 ### FFI API coverage
@@ -135,11 +135,24 @@ The `master-846-d8fb10c` ABI replaces `ContextParams.StreamLayers` with
 and inserts the `LogVerbose` level. Code setting `StreamLayers` must migrate to
 the new controls; the old field's storage now has the opposite meaning.
 
+The `master-869-07a85c7` ABI adds `ContextParams.AudioEncoderPath` for
+audio-conditioned video models and `ContextParams.Tokenizer` for external
+tokenizer JSON files. It also adds an output parameter to native video
+generation, so older Malina releases must not load this library build. Use
+`GenerateVideoWithFPS` when muxing output so models that force a fixed frame
+rate, such as Wan2.2 S2V and MiniMax-H3, report the effective value.
+
 ## Models
 
 Malina works with any model stable-diffusion.cpp accepts: `.safetensors` and `.gguf` checkpoints for SD 1.x / SD 2.x / SDXL, plus the multi-file FLUX and SD3 layouts (separate diffusion model + VAE + text-encoder files). Recommended hosts are [stable-diffusion-v1-5/stable-diffusion-v1-5](https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5) and the GGUF quants under [city96](https://huggingface.co/city96).
 
 The target library also supports SenseNova U1.5 directories. It is not in the curated catalog because upstream requires a complete repository directory with eight weight shards plus tokenizer and configuration files, while catalog roles currently resolve to individual files.
+
+The target library adds Wan2.2 S2V 14B audio-conditioned video support and
+requires external tokenizer JSON files for PiD and Lens. These are not curated
+bundles: Wan S2V needs a large multi-file video/audio workflow that the current
+catalog roles cannot represent, PiD's official weights are non-commercial, and
+Lens requires multiple large model components plus an external tokenizer.
 
 Malina ships a curated catalog so you can pull complete generation workflows
 and standalone tool models instead of pasting URLs:

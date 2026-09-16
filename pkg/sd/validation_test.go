@@ -18,6 +18,7 @@ func TestContextAPIsRejectNilContext(t *testing.T) {
 		{"DefaultSampleMethod", func() error { _, err := DefaultSampleMethod(0); return err }},
 		{"DefaultScheduler", func() error { _, err := DefaultScheduler(0, SampleEuler); return err }},
 		{"GenerateVideo", func() error { _, _, err := GenerateVideo(0, VideoGenParams{}); return err }},
+		{"GenerateVideoWithFPS", func() error { _, _, _, err := GenerateVideoWithFPS(0, VideoGenParams{}); return err }},
 		{"GetUpscaleFactor", func() error { _, err := GetUpscaleFactor(0); return err }},
 		{"Upscale", func() error { _, err := Upscale(0, testMarshalImage(1), 2); return err }},
 		{"ADetailImage ADetailer", func() error {

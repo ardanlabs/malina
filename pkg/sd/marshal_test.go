@@ -11,7 +11,7 @@ func TestMarshalContextParams(t *testing.T) {
 		ModelPath: "model", ClipLPath: "clip-l", ClipGPath: "clip-g", ClipVisionPath: "clip-vision",
 		T5XXLPath: "t5", LLMPath: "llm", LLMVisionPath: "llm-vision", DiffusionModelPath: "diffusion",
 		HighNoiseDiffusionModelPath: "high-noise", UncondDiffusionModelPath: "uncond", EmbeddingsConnectorsPath: "connectors",
-		VAEPath: "vae", AudioVAEPath: "audio-vae", TAESDPath: "taesd", ControlNetPath: "control",
+		VAEPath: "vae", AudioVAEPath: "audio-vae", AudioEncoderPath: "audio-encoder", TAESDPath: "taesd", ControlNetPath: "control",
 		IPAdapterPath: "ip-adapter", MotionModulePath: "motion", Embeddings: []Embedding{{Name: "one", Path: "one.pt"}, {Name: "two", Path: "two.pt"}},
 		PhotoMakerPath: "photomaker", PulidWeightsPath: "pulid", TensorTypeRules: "rules", NThreads: 7,
 		Wtype: SDTypeQ5K, RngType: RngCPU, SamplerRngType: RngCuda, Prediction: PredictionFlow, LoraApplyMode: LoraApplyAtRuntime,
@@ -19,7 +19,7 @@ func TestMarshalContextParams(t *testing.T) {
 		DiffusionConvDirect: true, VAEConvDirect: true, ForceSDXLVAEConvScale: true, VaeFormat: SDVaeFormatFlux2,
 		MaxVram: "12", DisablePrefetch: true, EagerLoad: true, Backend: "metal", ParamsBackend: "cpu",
 		SplitMode: "layer", AutoFit: true, RPCServers: "rpc", ModelArgs: "args", DisableSegmentedCompute: true,
-		LinearScale: 0.125, AttnScale: 0.25,
+		LinearScale: 0.125, AttnScale: 0.25, Tokenizer: "tokenizer.json",
 	}
 
 	state, err := marshalContextParams(params)
@@ -41,13 +41,14 @@ func TestMarshalContextParams(t *testing.T) {
 		{"UncondDiffusionModelPath", raw.UncondDiffusionModelPath, params.UncondDiffusionModelPath},
 		{"EmbeddingsConnectorsPath", raw.EmbeddingsConnectorsPath, params.EmbeddingsConnectorsPath},
 		{"VAEPath", raw.VAEPath, params.VAEPath}, {"AudioVAEPath", raw.AudioVAEPath, params.AudioVAEPath},
+		{"AudioEncoderPath", raw.AudioEncoderPath, params.AudioEncoderPath},
 		{"TAESDPath", raw.TAESDPath, params.TAESDPath}, {"ControlNetPath", raw.ControlNetPath, params.ControlNetPath},
 		{"IPAdapterPath", raw.IPAdapterPath, params.IPAdapterPath}, {"MotionModulePath", raw.MotionModulePath, params.MotionModulePath},
 		{"PhotoMakerPath", raw.PhotoMakerPath, params.PhotoMakerPath}, {"PulidWeightsPath", raw.PulidWeightsPath, params.PulidWeightsPath},
 		{"TensorTypeRules", raw.TensorTypeRules, params.TensorTypeRules}, {"MaxVram", raw.MaxVram, params.MaxVram},
 		{"Backend", raw.Backend, params.Backend}, {"ParamsBackend", raw.ParamsBackend, params.ParamsBackend},
 		{"SplitMode", raw.SplitMode, params.SplitMode}, {"RPCServers", raw.RPCServers, params.RPCServers},
-		{"ModelArgs", raw.ModelArgs, params.ModelArgs},
+		{"ModelArgs", raw.ModelArgs, params.ModelArgs}, {"Tokenizer", raw.Tokenizer, params.Tokenizer},
 	}
 	for i, item := range strings {
 		wantPointer := uintptr(unsafe.Pointer(state.refs.keep[i]))
