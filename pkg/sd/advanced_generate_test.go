@@ -210,18 +210,22 @@ func TestGenerateVideoAnimateDiff(t *testing.T) {
 	params.Height = 128
 	params.Sample.Steps = 4
 	params.VideoFrames = 4
-	params.FPS = 1
+	params.FPS = 0
 	params.Seed = 42
-	frames, audio, err := GenerateVideo(ctx, params)
+	frames, audio, fps, err := GenerateVideoWithFPS(ctx, params)
 	if err != nil {
-		t.Fatalf("GenerateVideo: %v", err)
+		t.Fatalf("GenerateVideoWithFPS: %v", err)
+	}
+	const wantFPS = 1
+	if fps != wantFPS {
+		t.Errorf("GenerateVideoWithFPS FPS: got %d, want %d", fps, wantFPS)
 	}
 	if len(frames) != int(params.VideoFrames) {
-		t.Fatalf("GenerateVideo returned %d frames, want %d", len(frames), params.VideoFrames)
+		t.Fatalf("GenerateVideoWithFPS returned %d frames, want %d", len(frames), params.VideoFrames)
 	}
 	for i, frame := range frames {
 		if frame == nil || frame.Width != uint32(params.Width) || frame.Height != uint32(params.Height) || len(frame.Data) != int(params.Width*params.Height*3) {
-			t.Fatalf("GenerateVideo frame %d is invalid: %#v", i, frame)
+			t.Fatalf("GenerateVideoWithFPS frame %d is invalid: %#v", i, frame)
 		}
 	}
 	if audio != nil && audio.Channels > 0 && len(audio.Data)%int(audio.Channels) != 0 {

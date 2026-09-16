@@ -1,5 +1,5 @@
-STABLE_DIFF_VERSION = master-859-7f410a3
-MALINA_VERSION = v1.1.1
+STABLE_DIFF_VERSION = master-869-07a85c7
+MALINA_VERSION = v1.1.2
 
 Upgrade this Malina repository to stable-diffusion.cpp
 <STABLE_DIFF_VERSION> and prepare Malina release <MALINA_VERSION>.
@@ -62,12 +62,21 @@ Audit every ABI-sensitive type used by `pkg/sd`, including:
 - callback typedefs
 - every function prepared through `lib.Prep`
 
+Build an explicit API-surface delta between the two headers. For every new
+symbol, struct field, enum value, callback, return value, or out-parameter,
+state whether Malina already exposes the capability or data. This includes
+changes to functions Malina already binds: do not treat a newly added output as
+implemented merely because the call signature was made ABI-safe.
+
 Also inspect changed upstream types and functions that Malina does not
 currently bind, such as video, upscaler, cancellation, ControlNet hot-swap,
-ADetailer, conversion, device-listing, and result-freeing APIs. Add bindings
-only when required to keep Malina's existing API correct or when they replace
-unsafe compatibility code. Do not expand the public API merely because
-upstream added optional features.
+ADetailer, conversion, device-listing, and result-freeing APIs. Add bindings or
+public Go access when required for correctness, when they replace unsafe
+compatibility code, or when the new capability or result is materially useful
+to callers of a workflow Malina already supports. Prefer an additive API or
+compatibility wrapper when exposing a new result would otherwise break an
+existing Go signature. Do not expand the public API merely because upstream
+added an optional feature with no supported Malina workflow.
 
 Identify and account for:
 
@@ -85,6 +94,14 @@ Use an authoritative C `sizeof`/`offsetof` probe against the target header for
 every changed struct. Do not rely only on hand-calculated offsets. Make the
 smallest required binding changes and update the struct-size/default-value
 tests whenever layouts change.
+
+Add behavior-focused regression coverage for every newly exposed capability or
+result. When behavior depends on the native library or a model family, exercise
+the target release with a real available fixture. Choose an asymmetric case
+where the native result differs from the requested input or default so the test
+fails if Malina ignores the new output and merely echoes existing Go state. If
+the required fixture is unavailable, add the strongest unit coverage possible
+and report the missing end-to-end case explicitly.
 
 If upstream removes or retypes a public `ContextParams` or `ImgGenParams`
 field, update Malina's public type honestly. Do not retain a dangerous no-op
@@ -327,6 +344,8 @@ Summarize:
 - files changed
 - upstream commit comparison and whether FFI changes were required
 - changed public API, if any
+- newly added upstream API surface, what Malina exposed, and what remained
+  intentionally unbound with reasons
 - target artifacts validated and any platform limitations
 - installed local library path and release
 - real model-generation tests and skipped fixtures

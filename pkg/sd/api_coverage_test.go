@@ -139,6 +139,7 @@ func TestOptionalAPIsReturnUnsupportedSentinel(t *testing.T) {
 		{"SetBackendEvalCallback", &setBackendEvalCallbackFunc, func() error { return SetBackendEvalCallback(nil) }},
 		{"VideoGenParamsInit", &vidGenParamsInitFunc, func() error { _, err := VideoGenParamsInit(); return err }},
 		{"GenerateVideo", &generateVideoFunc, func() error { _, _, err := GenerateVideo(1, VideoGenParams{}); return err }},
+		{"GenerateVideoWithFPS", &generateVideoFunc, func() error { _, _, _, err := GenerateVideoWithFPS(1, VideoGenParams{}); return err }},
 		{"NewUpscalerContext", &newUpscalerCtxFunc, func() error { _, err := NewUpscalerContext("model", false, 1, 0, "", ""); return err }},
 		{"GetUpscaleFactor", &getUpscaleFactorFunc, func() error { _, err := GetUpscaleFactor(1); return err }},
 		{"Upscale", &upscaleFunc, func() error { _, err := Upscale(1, image, 2); return err }},

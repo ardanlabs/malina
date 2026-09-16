@@ -59,12 +59,12 @@ func main() {
 	params.VideoFrames = 4
 	params.FPS = 1
 
-	frames, _, err := sd.GenerateVideo(ctx, params)
+	frames, _, fps, err := sd.GenerateVideoWithFPS(ctx, params)
 	if err != nil {
 		log.Fatalf("generate video: %v", err)
 	}
-	if err := sd.SaveAVI(*outPath, frames, int(params.FPS), 90); err != nil {
+	if err := sd.SaveAVI(*outPath, frames, int(fps), 90); err != nil {
 		log.Fatalf("save AVI: %v", err)
 	}
-	fmt.Printf("wrote %s (%d frames, %dx%d @ %d fps)\n", *outPath, len(frames), params.Width, params.Height, params.FPS)
+	fmt.Printf("wrote %s (%d frames, %dx%d @ %d fps)\n", *outPath, len(frames), params.Width, params.Height, fps)
 }

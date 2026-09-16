@@ -18,7 +18,7 @@ import (
 // binary-compatible struct on darwin/arm64, darwin/amd64, linux/amd64 and
 // windows/amd64.
 //
-// Total size: 296 bytes.
+// Total size: 312 bytes.
 type cContextParams struct {
 	ModelPath                   uintptr // 0..8
 	ClipLPath                   uintptr // 8..16
@@ -33,50 +33,52 @@ type cContextParams struct {
 	EmbeddingsConnectorsPath    uintptr // 80..88
 	VAEPath                     uintptr // 88..96
 	AudioVAEPath                uintptr // 96..104
-	TAESDPath                   uintptr // 104..112
-	ControlNetPath              uintptr // 112..120
-	IPAdapterPath               uintptr // 120..128
-	MotionModulePath            uintptr // 128..136
-	Embeddings                  uintptr // 136..144
-	EmbeddingCount              uint32  // 144..148
-	_                           [4]byte // 148..152
-	PhotoMakerPath              uintptr // 152..160
-	PulidWeightsPath            uintptr // 160..168
-	TensorTypeRules             uintptr // 168..176
+	AudioEncoderPath            uintptr // 104..112
+	TAESDPath                   uintptr // 112..120
+	ControlNetPath              uintptr // 120..128
+	IPAdapterPath               uintptr // 128..136
+	MotionModulePath            uintptr // 136..144
+	Embeddings                  uintptr // 144..152
+	EmbeddingCount              uint32  // 152..156
+	_                           [4]byte // 156..160
+	PhotoMakerPath              uintptr // 160..168
+	PulidWeightsPath            uintptr // 168..176
+	TensorTypeRules             uintptr // 176..184
 
-	NThreads       int32 // 176..180
-	Wtype          int32 // 180..184
-	RngType        int32 // 184..188
-	SamplerRngType int32 // 188..192
-	Prediction     int32 // 192..196
-	LoraApplyMode  int32 // 196..200
+	NThreads       int32 // 184..188
+	Wtype          int32 // 188..192
+	RngType        int32 // 192..196
+	SamplerRngType int32 // 196..200
+	Prediction     int32 // 200..204
+	LoraApplyMode  int32 // 204..208
 
-	EnableMmap              uint8 // 200
-	FlashAttn               uint8 // 201
-	DiffusionFlashAttn      uint8 // 202
-	TaePreviewOnly          uint8 // 203
-	DiffusionConvDirect     uint8 // 204
-	VAEConvDirect           uint8 // 205
-	ForceSDXLVAEConvScale   uint8 // 206
+	EnableMmap              uint8 // 208
+	FlashAttn               uint8 // 209
+	DiffusionFlashAttn      uint8 // 210
+	TaePreviewOnly          uint8 // 211
+	DiffusionConvDirect     uint8 // 212
+	VAEConvDirect           uint8 // 213
+	ForceSDXLVAEConvScale   uint8 // 214
 	_                       [1]byte
-	VaeFormat               int32   // 208..212
-	_                       [4]byte // 212..216
-	MaxVram                 uintptr // 216..224
-	DisablePrefetch         uint8   // 224
-	EagerLoad               uint8   // 225
-	_                       [6]byte // 226..232
-	Backend                 uintptr // 232..240
-	ParamsBackend           uintptr // 240..248
-	SplitMode               uintptr // 248..256
-	AutoFit                 uint8   // 256
-	_                       [7]byte // 257..264
-	RPCServers              uintptr // 264..272
-	ModelArgs               uintptr // 272..280
-	DisableSegmentedCompute uint8   // 280
-	_                       [3]byte // 281..284
-	LinearScale             float32 // 284..288
-	AttnScale               float32 // 288..292
-	_                       [4]byte // 292..296
+	VaeFormat               int32   // 216..220
+	_                       [4]byte // 220..224
+	MaxVram                 uintptr // 224..232
+	DisablePrefetch         uint8   // 232
+	EagerLoad               uint8   // 233
+	_                       [6]byte // 234..240
+	Backend                 uintptr // 240..248
+	ParamsBackend           uintptr // 248..256
+	SplitMode               uintptr // 256..264
+	AutoFit                 uint8   // 264
+	_                       [7]byte // 265..272
+	RPCServers              uintptr // 272..280
+	ModelArgs               uintptr // 280..288
+	DisableSegmentedCompute uint8   // 288
+	_                       [3]byte // 289..292
+	LinearScale             float32 // 292..296
+	AttnScale               float32 // 296..300
+	_                       [4]byte // 300..304
+	Tokenizer               uintptr // 304..312
 }
 
 // cEmbedding mirrors sd_embedding_t. Size: 16 bytes.
@@ -111,6 +113,7 @@ type ContextParams struct {
 	EmbeddingsConnectorsPath    string
 	VAEPath                     string
 	AudioVAEPath                string
+	AudioEncoderPath            string
 	TAESDPath                   string
 	ControlNetPath              string
 	IPAdapterPath               string
@@ -164,6 +167,11 @@ type ContextParams struct {
 	// Zero preserves the model defaults; overrides must be finite and positive.
 	LinearScale float32
 	AttnScale   float32
+
+	// Tokenizer selects tokenizer.json files for model families whose
+	// tokenizer is not embedded. It accepts a single path or upstream's
+	// main=FILE,clip-l=FILE,clip-g=FILE assignment syntax.
+	Tokenizer string
 }
 
 var (
@@ -303,6 +311,7 @@ func marshalContextParams(params ContextParams) (*marshaledContextParams, error)
 		{&raw.EmbeddingsConnectorsPath, params.EmbeddingsConnectorsPath},
 		{&raw.VAEPath, params.VAEPath},
 		{&raw.AudioVAEPath, params.AudioVAEPath},
+		{&raw.AudioEncoderPath, params.AudioEncoderPath},
 		{&raw.TAESDPath, params.TAESDPath},
 		{&raw.ControlNetPath, params.ControlNetPath},
 		{&raw.IPAdapterPath, params.IPAdapterPath},
@@ -316,6 +325,7 @@ func marshalContextParams(params ContextParams) (*marshaledContextParams, error)
 		{&raw.SplitMode, params.SplitMode},
 		{&raw.RPCServers, params.RPCServers},
 		{&raw.ModelArgs, params.ModelArgs},
+		{&raw.Tokenizer, params.Tokenizer},
 	} {
 		p, err := state.refs.add(m.s)
 		if err != nil {
