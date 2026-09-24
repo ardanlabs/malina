@@ -135,7 +135,12 @@ type cLora struct {
 	Path        uintptr
 }
 
-// cImgGenParams mirrors sd_img_gen_params_t. Size: 544 bytes.
+// cImagePreprocessParams mirrors sd_image_preprocess_params_t. Size: 8 bytes.
+type cImagePreprocessParams struct {
+	Rules *byte
+}
+
+// cImgGenParams mirrors sd_img_gen_params_t. Size: 552 bytes.
 type cImgGenParams struct {
 	Loras             uintptr // 0..8
 	LoraCount         uint32  // 8..12
@@ -169,10 +174,11 @@ type cImgGenParams struct {
 	VAETilingParams   cTilingParams
 	Cache             cCacheParams
 	Hires             cHiresParams
-	QwenImageLayers   int32 // 536..540
-	CircularX         uint8 // 540
-	CircularY         uint8 // 541
-	_                 [2]byte
+	QwenImageLayers   int32                  // 536..540
+	CircularX         uint8                  // 540
+	CircularY         uint8                  // 541
+	_                 [2]byte                // 542..544
+	ImagePreprocess   cImagePreprocessParams // 544..552
 }
 
 // =============================================================================
@@ -255,6 +261,7 @@ type ImgGenParams struct {
 	Cache             CacheParams
 	Hires             HiresParams
 	QwenImageLayers   int32
+	ImagePreprocess   ImagePreprocessParams
 }
 
 var (
@@ -328,6 +335,7 @@ func ImgGenParamsInit() ImgGenParams {
 		Cache:             cacheParamsFromC(raw.Cache),
 		Hires:             hiresParamsFromC(raw.Hires),
 		QwenImageLayers:   raw.QwenImageLayers,
+		ImagePreprocess:   ImagePreprocessParams{Rules: cString(raw.ImagePreprocess.Rules)},
 	}
 }
 
@@ -486,6 +494,7 @@ func marshalImgGenParams(params ImgGenParams) (*marshaledImgGenParams, error) {
 		{&raw.VAETilingParams.ExtraTilingArgs, params.VAETiling.ExtraArgs},
 		{&raw.Cache.SCMMask, params.Cache.SCMMask},
 		{&raw.Hires.ModelPath, params.Hires.ModelPath},
+		{&raw.ImagePreprocess.Rules, params.ImagePreprocess.Rules},
 	} {
 		ptr, err := state.refs.addPointer(item.value)
 		if err != nil {

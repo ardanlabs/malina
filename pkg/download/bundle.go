@@ -21,6 +21,7 @@ const (
 	RoleT5XXL          FileRole = "t5xxl"           // T5XXLPath
 	RoleLLM            FileRole = "llm"             // LLMPath
 	RoleLLMVision      FileRole = "llm_vision"      // LLMVisionPath
+	RoleTokenizer      FileRole = "tokenizer"       // Tokenizer
 	RoleControlNet     FileRole = "control_net"     // ControlNetPath
 	RoleTAESD          FileRole = "taesd"           // TAESDPath
 	RolePhotoMaker     FileRole = "photo_maker"     // PhotoMakerPath
@@ -56,7 +57,8 @@ type Bundle struct {
 // Catalog returns the curated set of bundles malina ships with.
 //
 // The catalog covers image generation, ControlNet, upscaling, ADetailer,
-// AnimateDiff video generation, SDXL, and multi-file FLUX.2 pipelines.
+// AnimateDiff video generation, SDXL, LLaDA-Image, and multi-file FLUX.2
+// pipelines.
 func Catalog() []Bundle {
 	return []Bundle{
 		{
@@ -152,6 +154,43 @@ func Catalog() []Bundle {
 					Filename: "sd_xl_base_1.0.safetensors",
 					URL:      "https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/resolve/main/sd_xl_base_1.0.safetensors",
 					Size:     "6.9 GB",
+				},
+			},
+		},
+		{
+			Name:        "llada-image-turbo",
+			Description: "LLaDA-Image-Turbo — 4-step text-to-image and image editing with quantized diffusion and text-encoder models. Five files (~20.2 GB total).",
+			License:     "Apache-2.0",
+			Files: []BundleFile{
+				{
+					Role:     RoleDiffusion,
+					Filename: "llada-image-turbo-q8_0.gguf",
+					URL:      "https://huggingface.co/fszontagh/LLaDA-Image-Turbo-GGUF/resolve/73e2e2adecb76bcf1f89fc37a636912c551349a9/llada-image-turbo-q8_0.gguf",
+					Size:     "7.0 GB",
+				},
+				{
+					Role:     RoleLLM,
+					Filename: "llada-image-turbo-text_encoder-q4_K.gguf",
+					URL:      "https://huggingface.co/fszontagh/LLaDA-Image-Turbo-GGUF/resolve/73e2e2adecb76bcf1f89fc37a636912c551349a9/llada-image-turbo-text_encoder-q4_K.gguf",
+					Size:     "9.7 GB",
+				},
+				{
+					Role:     RoleEmbeddingsConn,
+					Filename: "llada-image-turbo-connectors-edit.safetensors",
+					URL:      "https://huggingface.co/fszontagh/LLaDA-Image-Turbo-GGUF/resolve/73e2e2adecb76bcf1f89fc37a636912c551349a9/llada-image-turbo-connectors-edit.safetensors",
+					Size:     "3.3 GB",
+				},
+				{
+					Role:     RoleVAE,
+					Filename: "llada-image-vae.safetensors",
+					URL:      "https://huggingface.co/inclusionAI/LLaDA-Image-Turbo/resolve/f4afc52d925bbac4e22a1c947111fc1f127e37e5/vae/diffusion_pytorch_model.safetensors",
+					Size:     "168 MB",
+				},
+				{
+					Role:     RoleTokenizer,
+					Filename: "tokenizer.json",
+					URL:      "https://huggingface.co/inclusionAI/LLaDA-Image-Turbo/resolve/f4afc52d925bbac4e22a1c947111fc1f127e37e5/tokenizer/tokenizer.json",
+					Size:     "15 MB",
 				},
 			},
 		},
