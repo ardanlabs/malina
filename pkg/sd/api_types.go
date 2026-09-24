@@ -165,6 +165,13 @@ type HiresParams struct {
 	CustomSigmas      []float32
 }
 
+// ImagePreprocessParams configures upstream image preprocessing using
+// semicolon-separated target=...,key=value rules. Empty preserves the model
+// defaults.
+type ImagePreprocessParams struct {
+	Rules string
+}
+
 // Audio is interleaved, frame-major PCM audio. Data contains
 // SampleCount()*Channels float samples.
 type Audio struct {

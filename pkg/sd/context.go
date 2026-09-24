@@ -18,7 +18,7 @@ import (
 // binary-compatible struct on darwin/arm64, darwin/amd64, linux/amd64 and
 // windows/amd64.
 //
-// Total size: 312 bytes.
+// Total size: 320 bytes.
 type cContextParams struct {
 	ModelPath                   uintptr // 0..8
 	ClipLPath                   uintptr // 8..16
@@ -79,6 +79,9 @@ type cContextParams struct {
 	AttnScale               float32 // 296..300
 	_                       [4]byte // 300..304
 	Tokenizer               uintptr // 304..312
+	SageAttn                uint8   // 312
+	_                       [3]byte // 313..316
+	ConditioningCacheSize   int32   // 316..320
 }
 
 // cEmbedding mirrors sd_embedding_t. Size: 16 bytes.
@@ -172,6 +175,13 @@ type ContextParams struct {
 	// tokenizer is not embedded. It accepts a single path or upstream's
 	// main=FILE,clip-l=FILE,clip-g=FILE assignment syntax.
 	Tokenizer string
+
+	// SageAttn enables SageAttention in supported diffusion models.
+	SageAttn bool
+
+	// ConditioningCacheSize limits cached conditioning entries per context.
+	// Zero disables caching. The native default is 4.
+	ConditioningCacheSize int32
 }
 
 var (
@@ -231,6 +241,8 @@ func ContextParamsInit() ContextParams {
 		DisableSegmentedCompute: raw.DisableSegmentedCompute != 0,
 		LinearScale:             raw.LinearScale,
 		AttnScale:               raw.AttnScale,
+		SageAttn:                raw.SageAttn != 0,
+		ConditioningCacheSize:   raw.ConditioningCacheSize,
 	}
 }
 
@@ -292,6 +304,8 @@ func marshalContextParams(params ContextParams) (*marshaledContextParams, error)
 		DisableSegmentedCompute: boolToU8(params.DisableSegmentedCompute),
 		LinearScale:             params.LinearScale,
 		AttnScale:               params.AttnScale,
+		SageAttn:                boolToU8(params.SageAttn),
+		ConditioningCacheSize:   params.ConditioningCacheSize,
 	}
 
 	for _, m := range []struct {

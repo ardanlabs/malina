@@ -19,7 +19,7 @@ func TestMarshalContextParams(t *testing.T) {
 		DiffusionConvDirect: true, VAEConvDirect: true, ForceSDXLVAEConvScale: true, VaeFormat: SDVaeFormatFlux2,
 		MaxVram: "12", DisablePrefetch: true, EagerLoad: true, Backend: "metal", ParamsBackend: "cpu",
 		SplitMode: "layer", AutoFit: true, RPCServers: "rpc", ModelArgs: "args", DisableSegmentedCompute: true,
-		LinearScale: 0.125, AttnScale: 0.25, Tokenizer: "tokenizer.json",
+		LinearScale: 0.125, AttnScale: 0.25, Tokenizer: "tokenizer.json", SageAttn: true, ConditioningCacheSize: 7,
 	}
 
 	state, err := marshalContextParams(params)
@@ -75,6 +75,7 @@ func TestMarshalContextParams(t *testing.T) {
 		{"DisablePrefetch", raw.DisablePrefetch, uint8(1)}, {"EagerLoad", raw.EagerLoad, uint8(1)}, {"AutoFit", raw.AutoFit, uint8(1)},
 		{"DisableSegmentedCompute", raw.DisableSegmentedCompute, uint8(1)},
 		{"LinearScale", raw.LinearScale, params.LinearScale}, {"AttnScale", raw.AttnScale, params.AttnScale},
+		{"SageAttn", raw.SageAttn, uint8(1)}, {"ConditioningCacheSize", raw.ConditioningCacheSize, params.ConditioningCacheSize},
 		{"EmbeddingCount", raw.EmbeddingCount, uint32(len(params.Embeddings))},
 	}
 	for _, item := range values {
@@ -122,6 +123,7 @@ func TestMarshalImgGenParams(t *testing.T) {
 		PuLID:      PuLIDParams{IDEmbeddingPath: "pulid-embed", IDWeight: 0.55},
 		VAETiling:  TilingParams{Enabled: true, TemporalTiling: true, TileSizeX: 64, TileSizeY: 72, TargetOverlap: 0.25, RelativeSizeX: 0.4, RelativeSizeY: 0.5, ExtraArgs: "tile-args"},
 		Cache:      testCacheParams(), Hires: testHiresParams(), QwenImageLayers: 6,
+		ImagePreprocess: ImagePreprocessParams{Rules: "target=init,key=value"},
 	}
 
 	state, err := marshalImgGenParams(params)
@@ -146,6 +148,7 @@ func TestMarshalImgGenParams(t *testing.T) {
 		{"PhotoMaker.IDImagesCount", raw.PMParams.IDImagesCount, int32(1)},
 		{"PuLID.IDEmbeddingPath", cString(raw.PulidParams.IDEmbeddingPath), params.PuLID.IDEmbeddingPath},
 		{"PuLID.IDWeight", raw.PulidParams.IDWeight, params.PuLID.IDWeight}, {"QwenImageLayers", raw.QwenImageLayers, params.QwenImageLayers},
+		{"ImagePreprocess.Rules", cString(raw.ImagePreprocess.Rules), params.ImagePreprocess.Rules},
 		{"LoraCount", raw.LoraCount, uint32(1)},
 	}
 	for _, item := range values {
@@ -199,6 +202,7 @@ func TestMarshalVideoParams(t *testing.T) {
 		Seed: 99, VideoFrames: 8, FPS: 16, VaceStrength: 0.75,
 		VAETiling: TilingParams{Enabled: true, TemporalTiling: true, TileSizeX: 32, TileSizeY: 40, TargetOverlap: 0.2, RelativeSizeX: 0.3, RelativeSizeY: 0.4, ExtraArgs: "video-tiling"},
 		Cache:     testCacheParams(), Hires: testHiresParams(), CircularX: true, CircularY: true,
+		ImagePreprocess: ImagePreprocessParams{Rules: "target=control,key=value"},
 	}
 
 	state, err := marshalVideoParams(params)
@@ -218,6 +222,7 @@ func TestMarshalVideoParams(t *testing.T) {
 		{"LoraCount", raw.LoraCount, uint32(1)}, {"RefImagesCount", raw.RefImagesCount, int32(1)},
 		{"RefVideosCount", raw.RefVideosCount, int32(1)}, {"RefAudiosCount", raw.RefAudiosCount, int32(1)},
 		{"ControlFramesSize", raw.ControlFramesSize, int32(2)}, {"CircularX", raw.CircularX, uint8(1)}, {"CircularY", raw.CircularY, uint8(1)},
+		{"ImagePreprocess.Rules", cString(raw.ImagePreprocess.Rules), params.ImagePreprocess.Rules},
 	}
 	for _, item := range values {
 		if item.got != item.want {

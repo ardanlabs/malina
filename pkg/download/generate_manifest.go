@@ -3,7 +3,7 @@
 // This program generates the trusted library manifest for a stable-diffusion.cpp
 // release. Run it from this directory when DefaultSDVersion changes:
 //
-//	go run generate_manifest.go -version master-869-07a85c7
+//	go run generate_manifest.go -version master-908-88411ef
 package main
 
 import (

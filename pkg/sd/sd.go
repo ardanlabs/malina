@@ -139,7 +139,8 @@ const (
 	SchedulerFlux2       Scheduler = 13
 	SchedulerFlux        Scheduler = 14
 	SchedulerBeta        Scheduler = 15
-	SchedulerCount       Scheduler = 16
+	SchedulerLLaDAImage  Scheduler = 16
+	SchedulerCount       Scheduler = 17
 )
 
 // Prediction mirrors enum prediction_t.

@@ -24,10 +24,11 @@ func TestExtendedStructLayouts(t *testing.T) {
 		{"cCacheParams", unsafe.Sizeof(cCacheParams{}), 96},
 		{"cLora", unsafe.Sizeof(cLora{}), 16},
 		{"cHiresParams", unsafe.Sizeof(cHiresParams{}), 56},
-		{"cImgGenParams", unsafe.Sizeof(cImgGenParams{}), 544},
+		{"cImagePreprocessParams", unsafe.Sizeof(cImagePreprocessParams{}), 8},
+		{"cImgGenParams", unsafe.Sizeof(cImgGenParams{}), 552},
 		{"cAudio", unsafe.Sizeof(cAudio{}), 24},
 		{"cRefVideo", unsafe.Sizeof(cRefVideo{}), 40},
-		{"cVidGenParams", unsafe.Sizeof(cVidGenParams{}), 576},
+		{"cVidGenParams", unsafe.Sizeof(cVidGenParams{}), 584},
 		{"cADetailerParams", unsafe.Sizeof(cADetailerParams{}), 24},
 	}
 	for _, tt := range tests {
@@ -51,6 +52,7 @@ func TestExtendedStructLayouts(t *testing.T) {
 		{"Cache", unsafe.Offsetof(video.Cache), 416},
 		{"Hires", unsafe.Offsetof(video.Hires), 512},
 		{"CircularX", unsafe.Offsetof(video.CircularX), 568},
+		{"ImagePreprocess", unsafe.Offsetof(video.ImagePreprocess), 576},
 	}
 	for _, tt := range offsets {
 		if tt.got != tt.want {
@@ -81,6 +83,8 @@ func TestExtendedStructLayouts(t *testing.T) {
 		{"cContextParams.LinearScale", unsafe.Offsetof(context.LinearScale), 292},
 		{"cContextParams.AttnScale", unsafe.Offsetof(context.AttnScale), 296},
 		{"cContextParams.Tokenizer", unsafe.Offsetof(context.Tokenizer), 304},
+		{"cContextParams.SageAttn", unsafe.Offsetof(context.SageAttn), 312},
+		{"cContextParams.ConditioningCacheSize", unsafe.Offsetof(context.ConditioningCacheSize), 316},
 		{"cImgGenParams.InitImage", unsafe.Offsetof(image.InitImage), 40},
 		{"cImgGenParams.RefImages", unsafe.Offsetof(image.RefImages), 64},
 		{"cImgGenParams.MaskImage", unsafe.Offsetof(image.MaskImage), 88},
@@ -91,6 +95,7 @@ func TestExtendedStructLayouts(t *testing.T) {
 		{"cImgGenParams.Cache", unsafe.Offsetof(image.Cache), 384},
 		{"cImgGenParams.Hires", unsafe.Offsetof(image.Hires), 480},
 		{"cImgGenParams.CircularX", unsafe.Offsetof(image.CircularX), 540},
+		{"cImgGenParams.ImagePreprocess", unsafe.Offsetof(image.ImagePreprocess), 544},
 		{"cSampleParams.CustomSigmas", unsafe.Offsetof(sample.CustomSigmas), 72},
 		{"cSampleParams.ExtraSampleArgs", unsafe.Offsetof(sample.ExtraSampleArgs), 88},
 		{"cCacheParams.SCMMask", unsafe.Offsetof(cache.SCMMask), 56},

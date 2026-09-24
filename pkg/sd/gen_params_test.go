@@ -25,7 +25,8 @@ func TestNestedStructSizes(t *testing.T) {
 		{"cTilingParams", unsafe.Sizeof(cTilingParams{}), 32},
 		{"cCacheParams", unsafe.Sizeof(cCacheParams{}), 96},
 		{"cHiresParams", unsafe.Sizeof(cHiresParams{}), 56},
-		{"cImgGenParams", unsafe.Sizeof(cImgGenParams{}), 544},
+		{"cImagePreprocessParams", unsafe.Sizeof(cImagePreprocessParams{}), 8},
+		{"cImgGenParams", unsafe.Sizeof(cImgGenParams{}), 552},
 	}
 	for _, c := range cases {
 		if c.got != c.want {

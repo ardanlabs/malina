@@ -21,6 +21,7 @@ func TestBundleByName(t *testing.T) {
 		{"adetailer-face-yolov8n", true},
 		{"animatediff-sd1.5", true},
 		{"sdxl-base-1.0", true},
+		{"llada-image-turbo", true},
 		{"flux2-klein-4b", true},
 		{"flux2-klein-9b", true},
 		{"  Flux2-Klein-4B  ", true},
@@ -39,7 +40,7 @@ func TestBundleByName(t *testing.T) {
 
 func TestBundleNames(t *testing.T) {
 	got := BundleNames()
-	want := []string{"adetailer-face-yolov8n", "animatediff-sd1.5", "controlnet-canny-sd1.5", "flux2-klein-4b", "flux2-klein-9b", "realesrgan-x4-anime", "sd-1.5", "sdxl-base-1.0"}
+	want := []string{"adetailer-face-yolov8n", "animatediff-sd1.5", "controlnet-canny-sd1.5", "flux2-klein-4b", "flux2-klein-9b", "llada-image-turbo", "realesrgan-x4-anime", "sd-1.5", "sdxl-base-1.0"}
 	if len(got) != len(want) {
 		t.Fatalf("BundleNames: got %v, want %v", got, want)
 	}
@@ -107,6 +108,17 @@ func TestBundleShapes(t *testing.T) {
 			gated: false,
 			files: []wantFile{
 				{RoleModel, "sd_xl_base_1.0.safetensors"},
+			},
+		},
+		{
+			name:  "llada-image-turbo",
+			gated: false,
+			files: []wantFile{
+				{RoleDiffusion, "llada-image-turbo-q8_0.gguf"},
+				{RoleLLM, "llada-image-turbo-text_encoder-q4_K.gguf"},
+				{RoleEmbeddingsConn, "llada-image-turbo-connectors-edit.safetensors"},
+				{RoleVAE, "llada-image-vae.safetensors"},
+				{RoleTokenizer, "tokenizer.json"},
 			},
 		},
 		{

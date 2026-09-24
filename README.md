@@ -35,9 +35,9 @@ Sometimes there are breaking changes to stable-diffusion.cpp that require an upd
 
 | stable-diffusion.cpp | malina      |
 | -------------------- | ----------- |
+| master-908-88411ef   | 1.1.3       |
 | master-869-07a85c7   | 1.1.2       |
 | master-859-7f410a3   | 1.1.0–1.1.1 |
-| master-849-d04e895   | 1.0.10      |
 
 The FFI binding includes image and native video generation, upscaling, ADetailer, ControlNet hot-swap, conversion, Canny preprocessing, cancellation, preview/backend callbacks, device and loaded-model identification, and every generation parameter in the target header. Pure-Go PNG/JPEG decode + Motion-JPEG AVI mux, the CLI (`install`, `system`, `info`, `model list|pull`), and runnable examples for the generation APIs have also landed. Kronk integration (an OpenAI-compatible `POST /v1/images/generations` endpoint) lives in the [kronk](https://github.com/ardanlabs/kronk) repo.
 
@@ -110,7 +110,7 @@ The architecture of malina mirrors bucky and yzma file-for-file so anyone who kn
                           │
                           ▼
             libstable-diffusion.{dylib|so|dll}
-              (stable-diffusion.cpp master-869)
+              (stable-diffusion.cpp master-908)
 ```
 
 ### FFI API coverage
@@ -142,6 +142,12 @@ generation, so older Malina releases must not load this library build. Use
 `GenerateVideoWithFPS` when muxing output so models that force a fixed frame
 rate, such as Wan2.2 S2V and MiniMax-H3, report the effective value.
 
+The `master-908-88411ef` ABI grows the context, image-generation, and
+video-generation parameter structs. Malina 1.1.3 exposes native SageAttention,
+the per-context conditioning-cache limit, LLaDA-Image's scheduler, and shared
+image-input preprocessing rules through `ContextParams`, `ImgGenParams`, and
+`VideoGenParams`. Older Malina releases must not load this library build.
+
 ## Models
 
 Malina works with any model stable-diffusion.cpp accepts: `.safetensors` and `.gguf` checkpoints for SD 1.x / SD 2.x / SDXL, plus the multi-file FLUX and SD3 layouts (separate diffusion model + VAE + text-encoder files). Recommended hosts are [stable-diffusion-v1-5/stable-diffusion-v1-5](https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5) and the GGUF quants under [city96](https://huggingface.co/city96).
@@ -154,6 +160,11 @@ bundles: Wan S2V needs a large multi-file video/audio workflow that the current
 catalog roles cannot represent, PiD's official weights are non-commercial, and
 Lens requires multiple large model components plus an external tokenizer.
 
+The `master-908-88411ef` release also supports Qwen Image 2.1 and LLaDA-Image.
+Qwen Image 2.1 is not curated because its license restricts use to
+non-commercial research and evaluation. The catalog includes the Apache-2.0
+LLaDA-Image-Turbo model for 4-step text-to-image generation and image editing.
+
 Malina ships a curated catalog so you can pull complete generation workflows
 and standalone tool models instead of pasting URLs:
 
@@ -165,6 +176,7 @@ $ malina model pull realesrgan-x4-anime
 $ malina model pull adetailer-face-yolov8n
 $ malina model pull animatediff-sd1.5
 $ malina model pull sdxl-base-1.0
+$ malina model pull llada-image-turbo # five files; approximately 20.2 GB
 $ malina model pull flux2-klein-4b   # license-gated; export HF_TOKEN first
 $ malina model pull flux2-klein-9b   # license-gated; export HF_TOKEN first
 ```
@@ -189,8 +201,9 @@ Whenever there is a new release of stable-diffusion.cpp, the FFI struct mirrors 
 
 The `malina_model_tests` suite exercises SD 1.5, SDXL, and the advanced APIs
 against real models configured by the Makefile. The license-gated FLUX.2 Klein
-bundles remain available as opt-in catalog entries, but are deliberately not
-used by tests, benchmarks, examples, or `make download-models`.
+bundles and the approximately 20.2 GB LLaDA-Image-Turbo bundle remain available
+as opt-in catalog entries, but are deliberately not used by tests, benchmarks,
+examples, or `make download-models`.
 
 | Environment variable         | Catalog bundle / functional test                     |
 | ---------------------------- | ---------------------------------------------------- |

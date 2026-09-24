@@ -338,6 +338,54 @@ func TestGenerateImageImg2ImgSmoke(t *testing.T) {
 	}
 }
 
+// TestImagePreprocessRulesSD15 verifies native image preprocessing changes a
+// real img2img result instead of Malina silently dropping the rule string.
+func TestImagePreprocessRulesSD15(t *testing.T) {
+	testSetup(t)
+	modelPath := testEnvModelFile(t, "MALINA_TEST_MODEL")
+
+	cparams := ContextParamsInit()
+	cparams.ModelPath = modelPath
+	ctx, err := NewContext(cparams)
+	if err != nil {
+		t.Fatalf("NewContext: %v", err)
+	}
+	defer FreeContext(ctx)
+
+	const dim = 64
+	initImage := &SDImage{Width: dim, Height: dim, Channel: 3, Data: make([]byte, dim*dim*3)}
+	for y := range dim {
+		for x := range dim {
+			offset := (y*dim + x) * 3
+			initImage.Data[offset] = byte(x * 4)
+			initImage.Data[offset+1] = byte(y * 4)
+			initImage.Data[offset+2] = byte((x + 2*y) % 256)
+		}
+	}
+
+	params := ImgGenParamsInit()
+	params.Prompt = "a watercolor landscape"
+	params.Width = dim
+	params.Height = dim
+	params.Steps = 1
+	params.Seed = 91
+	params.Strength = 0.5
+	params.InitImage = initImage
+
+	baseline, err := GenerateImage(ctx, params)
+	if err != nil {
+		t.Fatalf("GenerateImage baseline: %v", err)
+	}
+	params.ImagePreprocess.Rules = "target=init,mode=none,canny=true"
+	processed, err := GenerateImage(ctx, params)
+	if err != nil {
+		t.Fatalf("GenerateImage with preprocessing: %v", err)
+	}
+	if bytes.Equal(processed.Data, baseline.Data) {
+		t.Fatal("image preprocessing produced unchanged pixels")
+	}
+}
+
 // TestGenerateImageImg2ImgFromJPEGSmoke walks the full path the
 // example-img2img makefile target takes: write a JPEG to disk, load it
 // with sd.LoadImage (which routes by extension), feed it to

@@ -25,7 +25,7 @@ type cRefVideo struct {
 	Audio      cAudio
 }
 
-// cVidGenParams mirrors sd_vid_gen_params_t. Size: 576 bytes.
+// cVidGenParams mirrors sd_vid_gen_params_t. Size: 584 bytes.
 type cVidGenParams struct {
 	Loras                 uintptr
 	LoraCount             uint32
@@ -65,6 +65,7 @@ type cVidGenParams struct {
 	CircularX             uint8
 	CircularY             uint8
 	_                     [6]byte
+	ImagePreprocess       cImagePreprocessParams
 }
 
 // VideoGenParams is the Go-side representation of sd_vid_gen_params_t.
@@ -94,6 +95,7 @@ type VideoGenParams struct {
 	Hires           HiresParams
 	CircularX       bool
 	CircularY       bool
+	ImagePreprocess ImagePreprocessParams
 }
 
 var (
@@ -134,6 +136,7 @@ func VideoGenParamsInit() (VideoGenParams, error) {
 		Hires:           hiresParamsFromC(raw.Hires),
 		CircularX:       raw.CircularX != 0,
 		CircularY:       raw.CircularY != 0,
+		ImagePreprocess: ImagePreprocessParams{Rules: cString(raw.ImagePreprocess.Rules)},
 	}, nil
 }
 
@@ -181,6 +184,7 @@ func marshalVideoParams(params VideoGenParams) (*marshaledVideoParams, error) {
 		{&raw.VAETilingParams.ExtraTilingArgs, params.VAETiling.ExtraArgs},
 		{&raw.Cache.SCMMask, params.Cache.SCMMask},
 		{&raw.Hires.ModelPath, params.Hires.ModelPath},
+		{&raw.ImagePreprocess.Rules, params.ImagePreprocess.Rules},
 	} {
 		value, err := state.refs.addPointer(item.value)
 		if err != nil {
