@@ -12,8 +12,8 @@ concurrency:
   cancel-in-progress: true
 
 # Windows x64. leejet ships stable-diffusion.dll alongside ggml-*.dll in
-# the win-cpu-x64 zip. Adding the lib directory to PATH lets the OS
-# resolve those sibling DLLs when stable-diffusion.dll is loaded.
+# the win-cpu-x64 zip. Malina loads the DLL with an altered search path so
+# Windows resolves those dependencies from the same directory.
 
 jobs:
   test:
@@ -42,12 +42,8 @@ jobs:
         # tag — bumping that constant in code is the rollover.
         run: malina install -lib ${env:GITHUB_WORKSPACE}/lib
 
-      - name: Set MALINA_LIB and PATH
-        # stable-diffusion.dll loads ggml-*.dll from the same directory;
-        # add it to PATH so they are discoverable.
-        run: |
-          echo "${env:GITHUB_WORKSPACE}/lib" | Out-File -Append -FilePath $env:GITHUB_PATH -Encoding utf8
-          echo "MALINA_LIB=${env:GITHUB_WORKSPACE}/lib" | Out-File -Append -FilePath $env:GITHUB_ENV -Encoding utf8
+      - name: Set MALINA_LIB
+        run: echo "MALINA_LIB=${env:GITHUB_WORKSPACE}/lib" | Out-File -Append -FilePath $env:GITHUB_ENV -Encoding utf8
 
       - name: Build examples
         shell: bash
