@@ -25,7 +25,7 @@ func LoadLibrary(path, lib string) (ffi.Lib, error) {
 
 	filename := GetLibraryFilename(path, lib)
 
-	return ffi.Load(filename)
+	return load(filename)
 }
 
 // GetLibraryFilename returns the full path to the library file for the given
