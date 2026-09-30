@@ -35,7 +35,7 @@ Sometimes there are breaking changes to stable-diffusion.cpp that require an upd
 
 | stable-diffusion.cpp | malina      |
 | -------------------- | ----------- |
-| master-929-3f8527a   | 1.1.4       |
+| master-929-3f8527a   | 1.1.4–1.1.5 |
 | master-908-88411ef   | 1.1.3       |
 | master-869-07a85c7   | 1.1.2       |
 
@@ -163,10 +163,10 @@ Malina works with any model stable-diffusion.cpp accepts: `.safetensors` and `.g
 The target library also supports SenseNova U1.5 directories. It is not in the curated catalog because upstream requires a complete repository directory with eight weight shards plus tokenizer and configuration files, while catalog roles currently resolve to individual files.
 
 The target library adds Wan2.2 S2V 14B audio-conditioned video support and
-requires external tokenizer JSON files for PiD and Lens. These are not curated
-bundles: Wan S2V needs a large multi-file video/audio workflow that the current
-catalog roles cannot represent, PiD's official weights are non-commercial, and
-Lens requires multiple large model components plus an external tokenizer.
+requires external tokenizer JSON files for PiD and Lens. The catalog includes
+the complete Wan S2V video/audio workflow. PiD is not curated because its
+official weights are non-commercial, and Lens requires multiple large model
+components plus an external tokenizer.
 
 The `master-908-88411ef` release also supports Qwen Image 2.1 and LLaDA-Image.
 Qwen Image 2.1 is not curated because its license restricts use to
@@ -191,6 +191,7 @@ $ malina model pull controlnet-canny-sd1.5
 $ malina model pull realesrgan-x4-anime
 $ malina model pull adetailer-face-yolov8n
 $ malina model pull animatediff-sd1.5
+$ malina model pull wan2.2-s2v-14b # four files; approximately 18.4 GB
 $ malina model pull sdxl-base-1.0
 $ malina model pull llada-image-turbo # five files; approximately 20.2 GB
 $ malina model pull flux2-klein-4b   # license-gated; export HF_TOKEN first
@@ -217,9 +218,10 @@ Whenever there is a new release of stable-diffusion.cpp, the FFI struct mirrors 
 
 The `malina_model_tests` suite exercises SD 1.5, SDXL, and the advanced APIs
 against real models configured by the Makefile. The license-gated FLUX.2 Klein
-bundles and the approximately 20.2 GB LLaDA-Image-Turbo bundle remain available
-as opt-in catalog entries, but are deliberately not used by tests, benchmarks,
-examples, or `make download-models`.
+bundles, the approximately 20.2 GB LLaDA-Image-Turbo bundle, and the
+approximately 18.4 GB Wan2.2 S2V bundle remain available as opt-in catalog
+entries, but are deliberately not used by tests, benchmarks, examples, or
+`make download-models`.
 
 | Environment variable         | Catalog bundle / functional test                     |
 | ---------------------------- | ---------------------------------------------------- |

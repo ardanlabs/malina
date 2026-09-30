@@ -31,6 +31,7 @@ const (
 	RoleMotionModule   FileRole = "motion_module"   // MotionModulePath
 	RoleUpscaler       FileRole = "upscaler"        // NewUpscalerContext
 	RoleADetailer      FileRole = "adetailer"       // NewADetailerContext
+	RoleAudioEncoder   FileRole = "audio_encoder"   // AudioEncoderPath
 )
 
 // BundleFile describes a single file inside a bundle.
@@ -57,8 +58,8 @@ type Bundle struct {
 // Catalog returns the curated set of bundles malina ships with.
 //
 // The catalog covers image generation, ControlNet, upscaling, ADetailer,
-// AnimateDiff video generation, SDXL, LLaDA-Image, and multi-file FLUX.2
-// pipelines.
+// AnimateDiff and audio-conditioned video generation, SDXL, LLaDA-Image, and
+// multi-file FLUX.2 pipelines.
 func Catalog() []Bundle {
 	return []Bundle{
 		{
@@ -141,6 +142,37 @@ func Catalog() []Bundle {
 					Filename: "mm_sd15_v3.safetensors",
 					URL:      "https://huggingface.co/conrevo/AnimateDiff-A1111/resolve/aa4a0ef5bd366a0ec898e7a64b6fc0f612e37444/motion_module/mm_sd15_v3.safetensors",
 					Size:     "837 MB",
+				},
+			},
+		},
+		{
+			Name:        "wan2.2-s2v-14b",
+			Description: "Wan2.2 S2V 14B with quantized diffusion and text encoder, VAE, and audio encoder. Four files (~18.4 GB total).",
+			License:     "Apache-2.0",
+			Files: []BundleFile{
+				{
+					Role:     RoleDiffusion,
+					Filename: "Wan2.2-S2V-14B-Q4_K_M.gguf",
+					URL:      "https://huggingface.co/QuantStack/Wan2.2-S2V-14B-GGUF/resolve/f3e3bb574e18741431bc6ba84892f06286c29328/Wan2.2-S2V-14B-Q4_K_M.gguf",
+					Size:     "13.9 GB",
+				},
+				{
+					Role:     RoleVAE,
+					Filename: "wan_2.1_vae.safetensors",
+					URL:      "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_Repackaged/resolve/123acf1cc74bccbb9bfff8ac1ee72edc08c2341d/split_files/vae/wan_2.1_vae.safetensors",
+					Size:     "254 MB",
+				},
+				{
+					Role:     RoleT5XXL,
+					Filename: "umt5-xxl-encoder-Q4_K_M.gguf",
+					URL:      "https://huggingface.co/city96/umt5-xxl-encoder-gguf/resolve/b535255bee98c2b0a59ea7c0ae2dcd0c6657b3b7/umt5-xxl-encoder-Q4_K_M.gguf",
+					Size:     "3.7 GB",
+				},
+				{
+					Role:     RoleAudioEncoder,
+					Filename: "wav2vec2_large_english_fp16.safetensors",
+					URL:      "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/ee6f4a40737a995bf5818954cfce6d59443b0f04/split_files/audio_encoders/wav2vec2_large_english_fp16.safetensors",
+					Size:     "631 MB",
 				},
 			},
 		},

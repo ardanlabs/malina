@@ -1,21 +1,21 @@
 # Benchmarks
 
 Performance numbers for `pkg/sd` against the locally available model bundles.
-Recorded on an Apple M4 Pro with
-24 GiB RAM (macOS 26.6.2, darwin/arm64) using the Metal backend from upstream
+Recorded on an Apple M5 Max with
+128 GiB RAM (macOS 27.0.1, darwin/arm64) using the Metal backend from upstream
 stable-diffusion.cpp `master-929-3f8527a` artifact
 `sd-master-3f8527a-bin-Darwin-macOS-26.6.2-arm64.zip` (SHA-256
 `1c8ee6c8e413e3335b1223bbc657ea5d86dae1819f8426a98b84c265587eb192`).
 The Go benchmarks all run against the extracted
-`./lib/libstable-diffusion.dylib` (SHA-256
+`~/.kronk/malina-libraries/darwin/arm64/metal/libstable-diffusion.dylib` (SHA-256
 `9dea16e624c7bcd87fcc3e631773b0015ba6a5c7395b28c391bbd734403be9b3`).
 
 Reproduce with:
 
 ```
-make download-stable-diffusion.cpp MALINA_LIB="$PWD/lib"
+make download-stable-diffusion.cpp
 make download-models                 # populates ~/.kronk/malina-models
-make bench BENCHTIME=1x MALINA_LIB="$PWD/lib"
+make bench BENCHTIME=1x
 ```
 
 ## Methodology
@@ -52,9 +52,9 @@ and digest listed above. All measurements used `make bench BENCHTIME=1x`.
 
 | Workload                | Model/bundle       | Shape   | Steps | b.N | ns/op          | s/img | B/op    | allocs/op |
 |-------------------------|--------------------|---------|------:|----:|---------------:|------:|--------:|----------:|
-| text-to-image           | sd-1.5             | 512x512 |    20 |   1 | 65,876,727,208 | 65.88 | 800,680 |       255 |
-| text-to-image           | sdxl-base-1.0      | 512x512 |    20 |   1 | 27,390,142,625 | 27.39 | 798,880 |       253 |
-| image-to-image          | sd-1.5             | 512x512 |    16 |   1 | 54,831,302,041 | 54.83 | 798,808 |       249 |
+| text-to-image           | sd-1.5             | 512x512 |    20 |   1 | 18,345,967,542 | 18.35 | 798,880 |       253 |
+| text-to-image           | sdxl-base-1.0      | 512x512 |    20 |   1 |  9,436,715,875 |  9.44 | 798,880 |       253 |
+| image-to-image          | sd-1.5             | 512x512 |    16 |   1 | 22,430,346,916 | 22.43 | 798,808 |       249 |
 
 Run commands:
 
