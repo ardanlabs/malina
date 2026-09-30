@@ -87,8 +87,16 @@ func TestUpscaleImage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadManifest: %v", err)
 	}
+	modelPath := manifest.Files[string(download.RoleUpscaler)]
+	modelScale, err := GetUpscalerModelScale(modelPath)
+	if err != nil {
+		t.Fatalf("GetUpscalerModelScale: %v", err)
+	}
+	if modelScale != 4 {
+		t.Fatalf("GetUpscalerModelScale: got %d, want 4", modelScale)
+	}
 
-	ctx, err := NewUpscalerContext(manifest.Files[string(download.RoleUpscaler)], false, NumPhysicalCores(), 0, "", "")
+	ctx, err := NewUpscalerContext(modelPath, false, NumPhysicalCores(), 0, "", "")
 	if err != nil {
 		t.Fatalf("NewUpscalerContext: %v", err)
 	}
@@ -100,6 +108,9 @@ func TestUpscaleImage(t *testing.T) {
 	}
 	if factor <= 1 {
 		t.Fatalf("GetUpscaleFactor: got %d, want greater than 1", factor)
+	}
+	if factor != modelScale {
+		t.Fatalf("model scale %d differs from loaded context factor %d", modelScale, factor)
 	}
 	input := &SDImage{Width: 8, Height: 8, Channel: 3, Data: make([]byte, 8*8*3)}
 	for i := range input.Data {
