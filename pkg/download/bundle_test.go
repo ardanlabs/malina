@@ -20,6 +20,7 @@ func TestBundleByName(t *testing.T) {
 		{"realesrgan-x4-anime", true},
 		{"adetailer-face-yolov8n", true},
 		{"animatediff-sd1.5", true},
+		{"wan2.2-s2v-14b", true},
 		{"sdxl-base-1.0", true},
 		{"llada-image-turbo", true},
 		{"flux2-klein-4b", true},
@@ -40,7 +41,7 @@ func TestBundleByName(t *testing.T) {
 
 func TestBundleNames(t *testing.T) {
 	got := BundleNames()
-	want := []string{"adetailer-face-yolov8n", "animatediff-sd1.5", "controlnet-canny-sd1.5", "flux2-klein-4b", "flux2-klein-9b", "llada-image-turbo", "realesrgan-x4-anime", "sd-1.5", "sdxl-base-1.0"}
+	want := []string{"adetailer-face-yolov8n", "animatediff-sd1.5", "controlnet-canny-sd1.5", "flux2-klein-4b", "flux2-klein-9b", "llada-image-turbo", "realesrgan-x4-anime", "sd-1.5", "sdxl-base-1.0", "wan2.2-s2v-14b"}
 	if len(got) != len(want) {
 		t.Fatalf("BundleNames: got %v, want %v", got, want)
 	}
@@ -101,6 +102,16 @@ func TestBundleShapes(t *testing.T) {
 			files: []wantFile{
 				{RoleModel, "stable-diffusion-v1-5-pruned-emaonly-Q4_0.gguf"},
 				{RoleMotionModule, "mm_sd15_v3.safetensors"},
+			},
+		},
+		{
+			name:  "wan2.2-s2v-14b",
+			gated: false,
+			files: []wantFile{
+				{RoleDiffusion, "Wan2.2-S2V-14B-Q4_K_M.gguf"},
+				{RoleVAE, "wan_2.1_vae.safetensors"},
+				{RoleT5XXL, "umt5-xxl-encoder-Q4_K_M.gguf"},
+				{RoleAudioEncoder, "wav2vec2_large_english_fp16.safetensors"},
 			},
 		},
 		{
