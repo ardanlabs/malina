@@ -26,6 +26,7 @@ var (
 	freeUpscalerCtxFunc  ffi.Fun
 	upscaleFunc          ffi.Fun
 	getUpscaleFactorFunc ffi.Fun
+	getUpscalerScaleFunc ffi.Fun
 
 	newADetailerCtxFunc  ffi.Fun
 	freeADetailerCtxFunc ffi.Fun
@@ -39,6 +40,7 @@ func loadUpscalerFuncs(lib ffi.Lib) {
 	freeUpscalerCtxFunc = prepOptional(lib, "free_upscaler_ctx", &ffi.TypeVoid, &ffi.TypePointer)
 	upscaleFunc = prepOptional(lib, "upscale", &ffi.TypeUint8, &ffi.TypePointer, &ffiTypeImage, &ffi.TypeUint32, &ffi.TypePointer, &ffi.TypePointer)
 	getUpscaleFactorFunc = prepOptional(lib, "get_upscale_factor", &ffi.TypeSint32, &ffi.TypePointer)
+	getUpscalerScaleFunc = prepOptional(lib, "get_upscaler_model_scale", &ffi.TypeSint32, &ffi.TypePointer)
 
 	newADetailerCtxFunc = prepOptional(lib, "new_adetailer_ctx", &ffi.TypePointer, &ffi.TypePointer, &ffi.TypeSint32, &ffi.TypePointer, &ffi.TypePointer)
 	freeADetailerCtxFunc = prepOptional(lib, "free_adetailer_ctx", &ffi.TypeVoid, &ffi.TypePointer)
@@ -93,6 +95,26 @@ func GetUpscaleFactor(ctx UpscalerContext) (int32, error) {
 	var factor int32
 	getUpscaleFactorFunc.Call(unsafe.Pointer(&factor), unsafe.Pointer(&ctx))
 	return factor, nil
+}
+
+// GetUpscalerModelScale reads an ESRGAN model's native scale from its
+// metadata without loading an upscaler context. It returns zero when the file
+// is not a recognized RGB ESRGAN model.
+func GetUpscalerModelScale(modelPath string) (int32, error) {
+	if getUpscalerScaleFunc == (ffi.Fun{}) {
+		return 0, unsupported("get_upscaler_model_scale")
+	}
+
+	var refs cStringRefs
+	path, err := refs.add(modelPath)
+	if err != nil {
+		return 0, err
+	}
+
+	var scale int32
+	getUpscalerScaleFunc.Call(unsafe.Pointer(&scale), unsafe.Pointer(&path))
+	runtime.KeepAlive(refs.keep)
+	return scale, nil
 }
 
 // Upscale upscales an image and returns every native result as a Go-owned copy.

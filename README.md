@@ -35,9 +35,9 @@ Sometimes there are breaking changes to stable-diffusion.cpp that require an upd
 
 | stable-diffusion.cpp | malina      |
 | -------------------- | ----------- |
+| master-929-3f8527a   | 1.1.4       |
 | master-908-88411ef   | 1.1.3       |
 | master-869-07a85c7   | 1.1.2       |
-| master-859-7f410a3   | 1.1.0–1.1.1 |
 
 The FFI binding includes image and native video generation, upscaling, ADetailer, ControlNet hot-swap, conversion, Canny preprocessing, cancellation, preview/backend callbacks, device and loaded-model identification, and every generation parameter in the target header. Pure-Go PNG/JPEG decode + Motion-JPEG AVI mux, the CLI (`install`, `system`, `info`, `model list|pull`), and runnable examples for the generation APIs have also landed. Kronk integration (an OpenAI-compatible `POST /v1/images/generations` endpoint) lives in the [kronk](https://github.com/ardanlabs/kronk) repo.
 
@@ -110,12 +110,12 @@ The architecture of malina mirrors bucky and yzma file-for-file so anyone who kn
                           │
                           ▼
             libstable-diffusion.{dylib|so|dll}
-              (stable-diffusion.cpp master-908)
+              (stable-diffusion.cpp master-929)
 ```
 
 ### FFI API coverage
 
-`pkg/sd` prepares 60 of the 63 functions exported by the pinned
+`pkg/sd` prepares 61 of the 64 functions exported by the pinned
 `stable-diffusion.h`. This includes all functions with a safe ownership
 contract. Newer optional symbols are resolved at load time so an explicitly
 requested older compatible library can still load; calling an unavailable
@@ -148,6 +148,14 @@ the per-context conditioning-cache limit, LLaDA-Image's scheduler, and shared
 image-input preprocessing rules through `ContextParams`, `ImgGenParams`, and
 `VideoGenParams`. Older Malina releases must not load this library build.
 
+The `master-929-3f8527a` header keeps every struct size, field offset, enum,
+callback, and existing function signature unchanged. It renames VAE tiling's
+X/Y fields to width/height and defines tile dimensions in image pixels; Malina
+keeps the source-compatible `TileSizeX`/`TileSizeY` and
+`RelativeSizeX`/`RelativeSizeY` names while documenting those semantics.
+Malina 1.1.4 also exposes `GetUpscalerModelScale`, which reads an ESRGAN
+model's native scale without first loading an upscaler context.
+
 ## Models
 
 Malina works with any model stable-diffusion.cpp accepts: `.safetensors` and `.gguf` checkpoints for SD 1.x / SD 2.x / SDXL, plus the multi-file FLUX and SD3 layouts (separate diffusion model + VAE + text-encoder files). Recommended hosts are [stable-diffusion-v1-5/stable-diffusion-v1-5](https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5) and the GGUF quants under [city96](https://huggingface.co/city96).
@@ -164,6 +172,14 @@ The `master-908-88411ef` release also supports Qwen Image 2.1 and LLaDA-Image.
 Qwen Image 2.1 is not curated because its license restricts use to
 non-commercial research and evaluation. The catalog includes the Apache-2.0
 LLaDA-Image-Turbo model for 4-step text-to-image generation and image editing.
+
+The `master-929-3f8527a` release adds PixArt-α/Σ and Ming-Image Design.
+Neither is curated yet: the official PixArt distribution is a multi-file
+transformer/text-encoder/VAE layout and upstream does not yet apply PixArt-α's
+resolution micro-conditioning, while Ming-Image requires a 6B diffusion model,
+a BF16 Ling-mini-2.0 text encoder, a VAE, and an external tokenizer. Those
+official workflows are impractically large for the curated catalog without
+stable compact variants, though callers can supply their files directly.
 
 Malina ships a curated catalog so you can pull complete generation workflows
 and standalone tool models instead of pasting URLs:

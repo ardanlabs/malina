@@ -72,11 +72,11 @@ type cTilingParams struct {
 	Enabled         uint8   // 0
 	TemporalTiling  uint8   // 1
 	_               [2]byte // 2..4
-	TileSizeX       int32   // 4..8
-	TileSizeY       int32   // 8..12
+	TileSizeW       int32   // 4..8
+	TileSizeH       int32   // 8..12
 	TargetOverlap   float32 // 12..16
-	RelSizeX        float32 // 16..20
-	RelSizeY        float32 // 20..24
+	RelSizeW        float32 // 16..20
+	RelSizeH        float32 // 20..24
 	ExtraTilingArgs *byte   // 24..32
 }
 
@@ -638,16 +638,16 @@ func pulidParamsFromC(raw cPulidParams) PuLIDParams {
 func tilingParamsFromC(raw cTilingParams) TilingParams {
 	return TilingParams{
 		Enabled: raw.Enabled != 0, TemporalTiling: raw.TemporalTiling != 0,
-		TileSizeX: raw.TileSizeX, TileSizeY: raw.TileSizeY, TargetOverlap: raw.TargetOverlap,
-		RelativeSizeX: raw.RelSizeX, RelativeSizeY: raw.RelSizeY, ExtraArgs: cString(raw.ExtraTilingArgs),
+		TileSizeX: raw.TileSizeW, TileSizeY: raw.TileSizeH, TargetOverlap: raw.TargetOverlap,
+		RelativeSizeX: raw.RelSizeW, RelativeSizeY: raw.RelSizeH, ExtraArgs: cString(raw.ExtraTilingArgs),
 	}
 }
 
 func tilingParamsToC(params TilingParams, extra *byte) cTilingParams {
 	return cTilingParams{
 		Enabled: boolToU8(params.Enabled), TemporalTiling: boolToU8(params.TemporalTiling),
-		TileSizeX: params.TileSizeX, TileSizeY: params.TileSizeY, TargetOverlap: params.TargetOverlap,
-		RelSizeX: params.RelativeSizeX, RelSizeY: params.RelativeSizeY, ExtraTilingArgs: extra,
+		TileSizeW: params.TileSizeX, TileSizeH: params.TileSizeY, TargetOverlap: params.TargetOverlap,
+		RelSizeW: params.RelativeSizeX, RelSizeH: params.RelativeSizeY, ExtraTilingArgs: extra,
 	}
 }
 

@@ -38,15 +38,15 @@ func TestTargetAPISymbolManifest(t *testing.T) {
 		{"generate_image", generateImageFunc}, {"free_sd_images", freeSDImagesFunc},
 		{"generate_video", generateVideoFunc}, {"free_sd_audio", freeSDAudioFunc},
 		{"new_upscaler_ctx", newUpscalerCtxFunc}, {"free_upscaler_ctx", freeUpscalerCtxFunc},
-		{"upscale", upscaleFunc}, {"get_upscale_factor", getUpscaleFactorFunc},
+		{"upscale", upscaleFunc}, {"get_upscale_factor", getUpscaleFactorFunc}, {"get_upscaler_model_scale", getUpscalerScaleFunc},
 		{"new_adetailer_ctx", newADetailerCtxFunc}, {"free_adetailer_ctx", freeADetailerCtxFunc},
 		{"adetail_image", adetailImageFunc}, {"convert", convertFunc}, {"convert_with_components", convertComponentsFunc},
 		{"preprocess_canny", preprocessCannyFunc}, {"load_imatrix", loadImatrixFunc}, {"save_imatrix", saveImatrixFunc},
 		{"enable_imatrix_collection", enableImatrixFunc}, {"disable_imatrix_collection", disableImatrixFunc},
 		{"sd_list_devices", listDevicesFunc},
 	}
-	if len(symbols) != 60 {
-		t.Fatalf("wrapped symbol count: got %d, want 60", len(symbols))
+	if len(symbols) != 61 {
+		t.Fatalf("wrapped symbol count: got %d, want 61", len(symbols))
 	}
 	for _, symbol := range symbols {
 		if symbol.fn == (ffi.Fun{}) {
@@ -142,6 +142,7 @@ func TestOptionalAPIsReturnUnsupportedSentinel(t *testing.T) {
 		{"GenerateVideoWithFPS", &generateVideoFunc, func() error { _, _, _, err := GenerateVideoWithFPS(1, VideoGenParams{}); return err }},
 		{"NewUpscalerContext", &newUpscalerCtxFunc, func() error { _, err := NewUpscalerContext("model", false, 1, 0, "", ""); return err }},
 		{"GetUpscaleFactor", &getUpscaleFactorFunc, func() error { _, err := GetUpscaleFactor(1); return err }},
+		{"GetUpscalerModelScale", &getUpscalerScaleFunc, func() error { _, err := GetUpscalerModelScale("model"); return err }},
 		{"Upscale", &upscaleFunc, func() error { _, err := Upscale(1, image, 2); return err }},
 		{"NewADetailerContext", &newADetailerCtxFunc, func() error { _, err := NewADetailerContext("model", 1, "", ""); return err }},
 		{"ADetailImage", &adetailImageFunc, func() error { _, err := ADetailImage(1, 1, image, ADetailerParams{}, ImgGenParams{}); return err }},

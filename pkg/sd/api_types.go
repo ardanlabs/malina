@@ -115,12 +115,17 @@ type PuLIDParams struct {
 type TilingParams struct {
 	Enabled        bool
 	TemporalTiling bool
-	TileSizeX      int32
-	TileSizeY      int32
-	TargetOverlap  float32
-	RelativeSizeX  float32
-	RelativeSizeY  float32
-	ExtraArgs      string
+	// TileSizeX and TileSizeY are the spatial tile width and height in image
+	// pixels for both encoding and decoding. Zero uses 256 pixels.
+	TileSizeX     int32
+	TileSizeY     int32
+	TargetOverlap float32
+	// RelativeSizeX and RelativeSizeY override the corresponding tile size
+	// when positive: values up to 1 are dimension fractions, and values above
+	// 1 request a target tile count.
+	RelativeSizeX float32
+	RelativeSizeY float32
+	ExtraArgs     string
 }
 
 // CacheParams configures diffusion-transformer inference caching.
