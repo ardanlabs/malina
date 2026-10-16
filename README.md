@@ -35,7 +35,7 @@ Sometimes there are breaking changes to stable-diffusion.cpp that require an upd
 
 | stable-diffusion.cpp | malina      |
 | -------------------- | ----------- |
-| master-969-8c442fb   | 1.1.6       |
+| master-969-8c442fb   | 1.1.6-1.1.7 |
 | master-929-3f8527a   | 1.1.4–1.1.5 |
 | master-908-88411ef   | 1.1.3       |
 
