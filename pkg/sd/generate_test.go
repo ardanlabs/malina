@@ -172,6 +172,12 @@ func TestPreviewCallbackSD15Smoke(t *testing.T) {
 	var callbacks atomic.Int32
 	err = SetPreviewCallback(func(_ int, frames []SDImage, _ bool) {
 		callbacks.Add(1)
+		info, err := GetPreviewInfo()
+		if err != nil {
+			t.Errorf("GetPreviewInfo: %v", err)
+		} else if info.SamplePass != 1 || info.TotalSteps != 4 {
+			t.Errorf("preview info: got %+v, want pass 1 with 4 actual steps", info)
+		}
 		for i := range frames {
 			if len(frames[i].Data) == 0 {
 				t.Errorf("preview frame %d has no copied pixels", i)
@@ -180,6 +186,9 @@ func TestPreviewCallbackSD15Smoke(t *testing.T) {
 	}, PreviewVAE, 1, true, false)
 	if err != nil {
 		t.Fatalf("SetPreviewCallback: %v", err)
+	}
+	if info, err := GetPreviewInfo(); err != nil || info != (PreviewInfo{}) {
+		t.Fatalf("preview info before sampling: got %+v, %v, want zeros", info, err)
 	}
 	t.Cleanup(func() {
 		if err := SetPreviewCallback(nil, PreviewNone, 1, false, false); err != nil {
@@ -193,6 +202,8 @@ func TestPreviewCallbackSD15Smoke(t *testing.T) {
 	params.Height = 64
 	params.Steps = 2
 	params.Seed = 42
+	// The custom schedule determines the actual pass length, not Steps.
+	params.CustomSigmas = []float32{14, 8, 3, 1, 0}
 	if _, err := GenerateImage(ctx, params); err != nil {
 		t.Fatalf("GenerateImage: %v", err)
 	}
@@ -367,7 +378,7 @@ func TestImagePreprocessRulesSD15(t *testing.T) {
 	params.Prompt = "a watercolor landscape"
 	params.Width = dim
 	params.Height = dim
-	params.Steps = 1
+	params.Steps = 4
 	params.Seed = 91
 	params.Strength = 0.5
 	params.InitImage = initImage

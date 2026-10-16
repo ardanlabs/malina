@@ -3,19 +3,28 @@
 Performance numbers for `pkg/sd` against the locally available model bundles.
 Recorded on an Apple M5 Max with
 128 GiB RAM (macOS 27.0.1, darwin/arm64) using the Metal backend from upstream
-stable-diffusion.cpp `master-929-3f8527a` artifact
-`sd-master-3f8527a-bin-Darwin-macOS-26.6.2-arm64.zip` (SHA-256
-`1c8ee6c8e413e3335b1223bbc657ea5d86dae1819f8426a98b84c265587eb192`).
+stable-diffusion.cpp `master-969-8c442fb` artifact
+`sd-master-8c442fb-bin-Darwin-macOS-26.6.2-arm64.zip` (SHA-256
+`129b62de61772f368fa9f9ee8130d62a4dadd6ad99e7243b9734cff97f539191`).
 The Go benchmarks all run against the extracted
-`~/.kronk/malina-libraries/darwin/arm64/metal/libstable-diffusion.dylib` (SHA-256
-`9dea16e624c7bcd87fcc3e631773b0015ba6a5c7395b28c391bbd734403be9b3`).
+`./lib/libstable-diffusion.dylib` (SHA-256
+`b8d76b876ac598881b1fbeeb1ae5a63893176ee870b5f971e5f474c3723f9783`).
+Recorded October 16, 2026, using Go 1.27.2, automatic operator selection,
+and Malina's Metal workaround: batched CFG is disabled at context creation.
+
+The official library's Metal group-normalization kernel leaves the second
+batch item unwritten. Disabling batched CFG avoids the reproduced all-white
+output; these measurements include that correctness workaround and replace
+the earlier unsafe batched-CFG timings. The model-backed suite and focused
+four-step img2img regression pass with the workaround. Timings alone are not
+an image-quality guarantee or evidence about untested models/backends.
 
 Reproduce with:
 
 ```
-make download-stable-diffusion.cpp
+make download-stable-diffusion.cpp MALINA_LIB="$PWD/lib"
 make download-models                 # populates ~/.kronk/malina-models
-make bench BENCHTIME=1x
+make bench BENCHTIME=1x MALINA_LIB="$PWD/lib"
 ```
 
 ## Methodology
@@ -47,14 +56,23 @@ make bench BENCHTIME=1x
 
 ## End-to-end generation
 
-Recorded on Apple M4 Pro, Metal backend, using the exact upstream artifact
-and digest listed above. All measurements used `make bench BENCHTIME=1x`.
+Recorded on Apple M5 Max, Metal backend, using the exact upstream artifact
+and digest listed above. All measurements used
+`make bench BENCHTIME=1x MALINA_LIB="$PWD/lib"`; no benchmarks skipped.
 
 | Workload                | Model/bundle       | Shape   | Steps | b.N | ns/op          | s/img | B/op    | allocs/op |
 |-------------------------|--------------------|---------|------:|----:|---------------:|------:|--------:|----------:|
-| text-to-image           | sd-1.5             | 512x512 |    20 |   1 | 18,345,967,542 | 18.35 | 798,880 |       253 |
-| text-to-image           | sdxl-base-1.0      | 512x512 |    20 |   1 |  9,436,715,875 |  9.44 | 798,880 |       253 |
-| image-to-image          | sd-1.5             | 512x512 |    16 |   1 | 22,430,346,916 | 22.43 | 798,808 |       249 |
+| text-to-image           | sd-1.5             | 512x512 |    20 |   1 | 17,736,649,125 | 17.74 | 798,912 |       253 |
+| text-to-image           | sdxl-base-1.0      | 512x512 |    20 |   1 |  8,167,759,666 |  8.17 | 798,912 |       253 |
+| image-to-image          | sd-1.5             | 512x512 |    16 |   1 | 15,035,871,792 | 15.04 | 798,824 |       249 |
+
+Actual benchmark output (`b.N=1`, after one untimed warm-up):
+
+```text
+BenchmarkGenerateImageSD15-18                  1  17736649125 ns/op  262144 px  17.74 s/img  798912 B/op  253 allocs/op
+BenchmarkGenerateImageSDXL-18                  1   8167759666 ns/op  262144 px  8.168 s/img  798912 B/op  253 allocs/op
+BenchmarkGenerateImageImg2ImgSD15-18            1  15035871792 ns/op  262144 px  15.04 s/img  798824 B/op  249 allocs/op
+```
 
 Run commands:
 

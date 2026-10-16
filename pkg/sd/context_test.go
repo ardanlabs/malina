@@ -10,7 +10,7 @@ import (
 // means struct fields will misalign and NewContext will produce garbage
 // pointers.
 func TestContextParamsStructSize(t *testing.T) {
-	const expectedSize = 320
+	const expectedSize = 336
 	got := unsafe.Sizeof(cContextParams{})
 	if got != expectedSize {
 		t.Fatalf("cContextParams size: got %d, want %d", got, expectedSize)
@@ -56,6 +56,9 @@ func TestContextParamsInitDefaults(t *testing.T) {
 		{"AttnScale", p.AttnScale, float32(0)},
 		{"SageAttn", p.SageAttn, false},
 		{"ConditioningCacheSize", p.ConditioningCacheSize, int32(4)},
+		{"BatchedCFG", p.BatchedCFG, true},
+		{"FlashAttnMode", p.FlashAttnMode, ""},
+		{"ConvDirectMode", p.ConvDirectMode, ""},
 	}
 
 	for _, c := range cases {

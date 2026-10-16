@@ -17,6 +17,14 @@ import (
 // concurrency-safe.
 type PreviewCallback func(step int, frames []SDImage, noisy bool)
 
+// PreviewInfo identifies the current native sampling pass. Both fields are
+// zero before sampling starts; SamplePass is numbered from one since the
+// last SetPreviewCallback call. TotalSteps is the actual schedule length.
+type PreviewInfo struct {
+	SamplePass int32
+	TotalSteps int32
+}
+
 // Tensor is an opaque handle to a ggml_tensor.
 //
 // A Tensor passed to BackendEvalCallback is valid only for the duration of
@@ -34,6 +42,8 @@ type BackendEvalCallback func(tensor Tensor, ask bool) bool
 var (
 	setPreviewCallbackFunc     ffi.Fun
 	setBackendEvalCallbackFunc ffi.Fun
+	getPreviewInfoFunc         ffi.Fun
+	ffiTypePreviewInfo         = ffi.NewType(&ffi.TypeSint32, &ffi.TypeSint32)
 
 	previewCif          ffi.Cif
 	previewClosure      *ffi.Closure
@@ -73,8 +83,22 @@ func loadCallbacksFuncs(lib ffi.Lib) error {
 	}
 	setPreviewCallbackFunc = previewFn
 	setBackendEvalCallbackFunc = backendFn
+	getPreviewInfoFunc = prepOptional(lib, "sd_get_preview_info", &ffiTypePreviewInfo)
 
 	return nil
+}
+
+// GetPreviewInfo queries native preview metadata from inside a preview
+// callback. The state is process-global, not per-context; configure previews
+// once and serialize preview-enabled generation. The result is a Go-owned
+// value and needs no freeing. Older libraries return ErrUnsupportedAPI.
+func GetPreviewInfo() (PreviewInfo, error) {
+	if getPreviewInfoFunc == (ffi.Fun{}) {
+		return PreviewInfo{}, unsupported("sd_get_preview_info")
+	}
+	var info PreviewInfo
+	getPreviewInfoFunc.Call(unsafe.Pointer(&info))
+	return info, nil
 }
 
 func preparePreviewCallback() error {

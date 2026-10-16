@@ -35,9 +35,9 @@ Sometimes there are breaking changes to stable-diffusion.cpp that require an upd
 
 | stable-diffusion.cpp | malina      |
 | -------------------- | ----------- |
+| master-969-8c442fb   | 1.1.6       |
 | master-929-3f8527a   | 1.1.4–1.1.5 |
 | master-908-88411ef   | 1.1.3       |
-| master-869-07a85c7   | 1.1.2       |
 
 The FFI binding includes image and native video generation, upscaling, ADetailer, ControlNet hot-swap, conversion, Canny preprocessing, cancellation, preview/backend callbacks, device and loaded-model identification, and every generation parameter in the target header. Pure-Go PNG/JPEG decode + Motion-JPEG AVI mux, the CLI (`install`, `system`, `info`, `model list|pull`), and runnable examples for the generation APIs have also landed. Kronk integration (an OpenAI-compatible `POST /v1/images/generations` endpoint) lives in the [kronk](https://github.com/ardanlabs/kronk) repo.
 
@@ -110,51 +110,8 @@ The architecture of malina mirrors bucky and yzma file-for-file so anyone who kn
                           │
                           ▼
             libstable-diffusion.{dylib|so|dll}
-              (stable-diffusion.cpp master-929)
+              (stable-diffusion.cpp master-969)
 ```
-
-### FFI API coverage
-
-`pkg/sd` prepares 61 of the 64 functions exported by the pinned
-`stable-diffusion.h`. This includes all functions with a safe ownership
-contract. Newer optional symbols are resolved at load time so an explicitly
-requested older compatible library can still load; calling an unavailable
-feature returns `sd.ErrUnsupportedAPI`.
-
-The only functions intentionally not called are `sd_ctx_params_to_str`,
-`sd_sample_params_to_str`, and `sd_img_gen_params_to_str`. Each returns a
-newly allocated `char *`, but upstream provides no matching public deallocator.
-Freeing those pointers from Go would be unsafe across Windows CRT boundaries,
-and not freeing them would leak. Malina will bind them when upstream exposes a
-matched free API. The exported `sample_method_to_str` and `scheduler_to_str`
-data arrays are represented by the safe name and parse functions instead of
-directly exposing C global memory.
-
-The `master-846-d8fb10c` ABI replaces `ContextParams.StreamLayers` with
-`ContextParams.DisablePrefetch`, adds `ContextParams.DisableSegmentedCompute`,
-and inserts the `LogVerbose` level. Code setting `StreamLayers` must migrate to
-the new controls; the old field's storage now has the opposite meaning.
-
-The `master-869-07a85c7` ABI adds `ContextParams.AudioEncoderPath` for
-audio-conditioned video models and `ContextParams.Tokenizer` for external
-tokenizer JSON files. It also adds an output parameter to native video
-generation, so older Malina releases must not load this library build. Use
-`GenerateVideoWithFPS` when muxing output so models that force a fixed frame
-rate, such as Wan2.2 S2V and MiniMax-H3, report the effective value.
-
-The `master-908-88411ef` ABI grows the context, image-generation, and
-video-generation parameter structs. Malina 1.1.3 exposes native SageAttention,
-the per-context conditioning-cache limit, LLaDA-Image's scheduler, and shared
-image-input preprocessing rules through `ContextParams`, `ImgGenParams`, and
-`VideoGenParams`. Older Malina releases must not load this library build.
-
-The `master-929-3f8527a` header keeps every struct size, field offset, enum,
-callback, and existing function signature unchanged. It renames VAE tiling's
-X/Y fields to width/height and defines tile dimensions in image pixels; Malina
-keeps the source-compatible `TileSizeX`/`TileSizeY` and
-`RelativeSizeX`/`RelativeSizeY` names while documenting those semantics.
-Malina 1.1.4 also exposes `GetUpscalerModelScale`, which reads an ESRGAN
-model's native scale without first loading an upscaler context.
 
 ## Models
 
@@ -180,6 +137,17 @@ resolution micro-conditioning, while Ming-Image requires a 6B diffusion model,
 a BF16 Ling-mini-2.0 text encoder, a VAE, and an external tokenizer. Those
 official workflows are impractically large for the curated catalog without
 stable compact variants, though callers can supply their files directly.
+
+The `master-969-8c442fb` release adds Iris-3B, Z-Image L2P, FLUX.3 Image
+Klein/Klein Base, and MoSR upscalers. No new bundle is curated in this upgrade:
+Iris's official F32 diffusion weights are approximately 12 GB plus a Qwen3-VL
+encoder, and L2P's diffusion download is approximately 18.6 GB plus a Qwen3
+encoder. Both pixel-space workflows need no VAE but lack verified compact
+bundles. Official FLUX.3 weights are gated. The linked 17 MB MoSR checkpoint
+[`4xNomos2_hq_mosr.pth`](https://github.com/Phhofm/models/releases/tag/4xNomos2_hq_mosr)
+fits the upscaler role, but its weight release states the ambiguous license
+`CC-BY-0.4`; curation is deferred until the weight license is clarified.
+Existing ungated bundles remain the recommended validation fixtures.
 
 Malina ships a curated catalog so you can pull complete generation workflows
 and standalone tool models instead of pasting URLs:

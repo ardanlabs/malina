@@ -20,6 +20,7 @@ func TestMarshalContextParams(t *testing.T) {
 		MaxVram: "12", DisablePrefetch: true, EagerLoad: true, Backend: "metal", ParamsBackend: "cpu",
 		SplitMode: "layer", AutoFit: true, RPCServers: "rpc", ModelArgs: "args", DisableSegmentedCompute: true,
 		LinearScale: 0.125, AttnScale: 0.25, Tokenizer: "tokenizer.json", SageAttn: true, ConditioningCacheSize: 7,
+		BatchedCFG: true, FlashAttnMode: "auto,te=off", ConvDirectMode: "off,vae=on",
 	}
 
 	state, err := marshalContextParams(params)
@@ -49,6 +50,8 @@ func TestMarshalContextParams(t *testing.T) {
 		{"Backend", raw.Backend, params.Backend}, {"ParamsBackend", raw.ParamsBackend, params.ParamsBackend},
 		{"SplitMode", raw.SplitMode, params.SplitMode}, {"RPCServers", raw.RPCServers, params.RPCServers},
 		{"ModelArgs", raw.ModelArgs, params.ModelArgs}, {"Tokenizer", raw.Tokenizer, params.Tokenizer},
+		{"FlashAttnMode", uintptr(unsafe.Pointer(raw.FlashAttnMode)), params.FlashAttnMode},
+		{"ConvDirectMode", uintptr(unsafe.Pointer(raw.ConvDirectMode)), params.ConvDirectMode},
 	}
 	for i, item := range strings {
 		wantPointer := uintptr(unsafe.Pointer(state.refs.keep[i]))
@@ -74,6 +77,7 @@ func TestMarshalContextParams(t *testing.T) {
 		{"ForceSDXLVAEConvScale", raw.ForceSDXLVAEConvScale, uint8(1)}, {"VaeFormat", raw.VaeFormat, int32(params.VaeFormat)},
 		{"DisablePrefetch", raw.DisablePrefetch, uint8(1)}, {"EagerLoad", raw.EagerLoad, uint8(1)}, {"AutoFit", raw.AutoFit, uint8(1)},
 		{"DisableSegmentedCompute", raw.DisableSegmentedCompute, uint8(1)},
+		{"BatchedCFG", raw.BatchedCFG, uint8(0)},
 		{"LinearScale", raw.LinearScale, params.LinearScale}, {"AttnScale", raw.AttnScale, params.AttnScale},
 		{"SageAttn", raw.SageAttn, uint8(1)}, {"ConditioningCacheSize", raw.ConditioningCacheSize, params.ConditioningCacheSize},
 		{"EmbeddingCount", raw.EmbeddingCount, uint32(len(params.Embeddings))},
