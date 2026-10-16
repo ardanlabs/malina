@@ -35,7 +35,7 @@ Sometimes there are breaking changes to stable-diffusion.cpp that require an upd
 
 | stable-diffusion.cpp | malina      |
 | -------------------- | ----------- |
-| master-969-8c442fb   | 1.1.6       |
+| master-969-8c442fb   | 1.1.6-1.1.7 |
 | master-929-3f8527a   | 1.1.4–1.1.5 |
 | master-908-88411ef   | 1.1.3       |
 
@@ -139,7 +139,7 @@ official workflows are impractically large for the curated catalog without
 stable compact variants, though callers can supply their files directly.
 
 The `master-969-8c442fb` release adds Iris-3B, Z-Image L2P, FLUX.3 Image
-Klein/Klein Base, and MoSR upscalers. No new bundle is curated in this upgrade:
+Klein/Klein Base, and MoSR upscalers. These are not curated yet:
 Iris's official F32 diffusion weights are approximately 12 GB plus a Qwen3-VL
 encoder, and L2P's diffusion download is approximately 18.6 GB plus a Qwen3
 encoder. Both pixel-space workflows need no VAE but lack verified compact
@@ -148,6 +148,13 @@ bundles. Official FLUX.3 weights are gated. The linked 17 MB MoSR checkpoint
 fits the upscaler role, but its weight release states the ambiguous license
 `CC-BY-0.4`; curation is deferred until the weight license is clarified.
 Existing ungated bundles remain the recommended validation fixtures.
+
+The catalog also includes **Z-Image-Turbo**: an ungated Apache-2.0 bundle
+with Q4_K diffusion weights, a Q4_K_M Qwen3-4B-Instruct-2507 text encoder,
+and a VAE (three revision-pinned files, approximately 6.7 GB total).
+Use 8 steps and CFG 1 for its distilled text-to-image workflow. Resolve the
+bundle's diffusion, LLM, and VAE roles to `ContextParams.DiffusionModelPath`,
+`LLMPath`, and `VAEPath`; no additional tokenizer or vision projector is needed.
 
 Malina ships a curated catalog so you can pull complete generation workflows
 and standalone tool models instead of pasting URLs:
@@ -162,6 +169,7 @@ $ malina model pull animatediff-sd1.5
 $ malina model pull wan2.2-s2v-14b # four files; approximately 18.4 GB
 $ malina model pull sdxl-base-1.0
 $ malina model pull llada-image-turbo # five files; approximately 20.2 GB
+$ malina model pull z-image-turbo   # three files; approximately 6.7 GB; ungated
 $ malina model pull flux2-klein-4b   # license-gated; export HF_TOKEN first
 $ malina model pull flux2-klein-9b   # license-gated; export HF_TOKEN first
 ```
