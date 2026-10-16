@@ -236,6 +236,9 @@ type ComponentConvertParams struct {
 	TensorTypeRules    string
 	ConvertName        bool
 	NThreads           int32
+	// Loras are merged before export. Nonzero multipliers require loading
+	// the full model into CPU memory instead of streaming conversion.
+	Loras []Lora
 }
 
 // CannyParams configures in-place Canny edge preprocessing.

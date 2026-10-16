@@ -81,7 +81,7 @@ func loadExtendedFuncs(lib ffi.Lib) {
 	commitFunc = prepOptional(lib, "sd_commit", &ffi.TypePointer)
 	listDevicesFunc = prepOptional(lib, "sd_list_devices", &ffi.TypeUint64, &ffi.TypePointer, &ffi.TypeUint64)
 	convertFunc = prepOptional(lib, "convert", &ffi.TypeUint8, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypeSint32, &ffi.TypePointer, &ffi.TypeUint8)
-	convertComponentsFunc = prepOptional(lib, "convert_with_components", &ffi.TypeUint8, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypeSint32, &ffi.TypePointer, &ffi.TypeUint8, &ffi.TypeSint32)
+	convertComponentsFunc = prepOptional(lib, "convert_with_components", &ffi.TypeUint8, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypeSint32, &ffi.TypePointer, &ffi.TypeUint8, &ffi.TypeSint32, &ffi.TypePointer, &ffi.TypeSint32)
 	preprocessCannyFunc = prepOptional(lib, "preprocess_canny", &ffi.TypeUint8, &ffiTypeImage, &ffi.TypeFloat, &ffi.TypeFloat, &ffi.TypeFloat, &ffi.TypeFloat, &ffi.TypeUint8)
 	loadImatrixFunc = prepOptional(lib, "load_imatrix", &ffi.TypeUint8, &ffi.TypePointer)
 	saveImatrixFunc = prepOptional(lib, "save_imatrix", &ffi.TypeVoid, &ffi.TypePointer)
@@ -430,16 +430,38 @@ func ConvertWithComponents(params ComponentConvertParams) error {
 		}
 		values = append(values, ptr)
 	}
+	// Upstream constructs std::string from tensor_type_rules without a null
+	// check. Unlike optional component paths, empty rules must be non-null.
+	var emptyRules byte
+	if params.TensorTypeRules == "" {
+		values[7] = uintptr(unsafe.Pointer(&emptyRules))
+	}
 	typeValue := int32(params.OutputType)
 	convertName := boolToU8(params.ConvertName)
 	threads := params.NThreads
-	if !callBool(convertComponentsFunc,
+	loras := make([]cLora, len(params.Loras))
+	for i, lora := range params.Loras {
+		path, err := refs.add(lora.Path)
+		if err != nil {
+			return err
+		}
+		loras[i] = cLora{IsHighNoise: boolToU8(lora.IsHighNoise), Multiplier: lora.Multiplier, Path: path}
+	}
+	var loraPtr *cLora
+	if len(loras) > 0 {
+		loraPtr = &loras[0]
+	}
+	loraCount := int32(len(loras))
+	ok := callBool(convertComponentsFunc,
 		unsafe.Pointer(&values[0]), unsafe.Pointer(&values[1]), unsafe.Pointer(&values[2]), unsafe.Pointer(&values[3]),
 		unsafe.Pointer(&values[4]), unsafe.Pointer(&values[5]), unsafe.Pointer(&values[6]), unsafe.Pointer(&typeValue),
-		unsafe.Pointer(&values[7]), unsafe.Pointer(&convertName), unsafe.Pointer(&threads)) {
+		unsafe.Pointer(&values[7]), unsafe.Pointer(&convertName), unsafe.Pointer(&threads), unsafe.Pointer(&loraPtr), unsafe.Pointer(&loraCount))
+	runtime.KeepAlive(refs.keep)
+	runtime.KeepAlive(loras)
+	runtime.KeepAlive(&emptyRules)
+	if !ok {
 		return errors.New("convert_with_components failed")
 	}
-	runtime.KeepAlive(refs.keep)
 	return nil
 }
 

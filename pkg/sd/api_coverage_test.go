@@ -18,6 +18,7 @@ func TestTargetAPISymbolManifest(t *testing.T) {
 		{"sd_version", versionFunc}, {"sd_commit", commitFunc}, {"sd_get_system_info", getSystemInfoFunc},
 		{"sd_get_num_physical_cores", getNumPhysicalCoresFunc}, {"sd_set_log_callback", setLogCallbackFunc},
 		{"sd_set_progress_callback", setProgressCallbackFunc}, {"sd_set_preview_callback", setPreviewCallbackFunc},
+		{"sd_get_preview_info", getPreviewInfoFunc},
 		{"sd_set_backend_eval_callback", setBackendEvalCallbackFunc}, {"sd_type_name", typeNameFunc},
 		{"str_to_sd_type", strToTypeFunc}, {"sd_rng_type_name", rngTypeNameFunc}, {"str_to_rng_type", strToRngTypeFunc},
 		{"sd_sample_method_name", sampleMethodNameFunc}, {"str_to_sample_method", strToSampleMethodFunc},
@@ -45,8 +46,8 @@ func TestTargetAPISymbolManifest(t *testing.T) {
 		{"enable_imatrix_collection", enableImatrixFunc}, {"disable_imatrix_collection", disableImatrixFunc},
 		{"sd_list_devices", listDevicesFunc},
 	}
-	if len(symbols) != 61 {
-		t.Fatalf("wrapped symbol count: got %d, want 61", len(symbols))
+	if len(symbols) != 62 {
+		t.Fatalf("wrapped symbol count: got %d, want 62", len(symbols))
 	}
 	for _, symbol := range symbols {
 		if symbol.fn == (ffi.Fun{}) {
@@ -136,6 +137,7 @@ func TestOptionalAPIsReturnUnsupportedSentinel(t *testing.T) {
 		{"EnableImatrixCollection", &enableImatrixFunc, EnableImatrixCollection},
 		{"DisableImatrixCollection", &disableImatrixFunc, DisableImatrixCollection},
 		{"SetPreviewCallback", &setPreviewCallbackFunc, func() error { return SetPreviewCallback(nil, PreviewNone, 1, false, false) }},
+		{"GetPreviewInfo", &getPreviewInfoFunc, func() error { _, err := GetPreviewInfo(); return err }},
 		{"SetBackendEvalCallback", &setBackendEvalCallbackFunc, func() error { return SetBackendEvalCallback(nil) }},
 		{"VideoGenParamsInit", &vidGenParamsInitFunc, func() error { _, err := VideoGenParamsInit(); return err }},
 		{"GenerateVideo", &generateVideoFunc, func() error { _, _, err := GenerateVideo(1, VideoGenParams{}); return err }},

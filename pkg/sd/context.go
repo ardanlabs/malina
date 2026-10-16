@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
+	"strings"
 	"unsafe"
 
 	"github.com/ardanlabs/malina/pkg/utils"
@@ -18,7 +19,7 @@ import (
 // binary-compatible struct on darwin/arm64, darwin/amd64, linux/amd64 and
 // windows/amd64.
 //
-// Total size: 320 bytes.
+// Total size: 336 bytes.
 type cContextParams struct {
 	ModelPath                   uintptr // 0..8
 	ClipLPath                   uintptr // 8..16
@@ -74,7 +75,8 @@ type cContextParams struct {
 	RPCServers              uintptr // 272..280
 	ModelArgs               uintptr // 280..288
 	DisableSegmentedCompute uint8   // 288
-	_                       [3]byte // 289..292
+	BatchedCFG              uint8   // 289
+	_                       [2]byte // 290..292
 	LinearScale             float32 // 292..296
 	AttnScale               float32 // 296..300
 	_                       [4]byte // 300..304
@@ -82,6 +84,8 @@ type cContextParams struct {
 	SageAttn                uint8   // 312
 	_                       [3]byte // 313..316
 	ConditioningCacheSize   int32   // 316..320
+	FlashAttnMode           *byte   // 320..328
+	ConvDirectMode          *byte   // 328..336
 }
 
 // cEmbedding mirrors sd_embedding_t. Size: 16 bytes.
@@ -182,6 +186,18 @@ type ContextParams struct {
 	// ConditioningCacheSize limits cached conditioning entries per context.
 	// Zero disables caching. The native default is 4.
 	ConditioningCacheSize int32
+
+	// BatchedCFG batches conditional and unconditional UNet branches when
+	// supported. The native default is true; unsupported workflows fall back.
+	// NewContext disables it for Metal (including automatic macOS selection)
+	// until upstream group normalization handles every batch item correctly.
+	BatchedCFG bool
+
+	// FlashAttnMode and ConvDirectMode select on/off/auto policies, optionally
+	// per module (e.g. "auto,te=off"). Empty uses automatic selection while
+	// honoring the legacy true flags above. Use "off" to explicitly disable.
+	FlashAttnMode  string
+	ConvDirectMode string
 }
 
 var (
@@ -243,6 +259,9 @@ func ContextParamsInit() ContextParams {
 		AttnScale:               raw.AttnScale,
 		SageAttn:                raw.SageAttn != 0,
 		ConditioningCacheSize:   raw.ConditioningCacheSize,
+		BatchedCFG:              raw.BatchedCFG != 0,
+		FlashAttnMode:           utils.BytePtrToString(raw.FlashAttnMode),
+		ConvDirectMode:          utils.BytePtrToString(raw.ConvDirectMode),
 	}
 }
 
@@ -306,6 +325,7 @@ func marshalContextParams(params ContextParams) (*marshaledContextParams, error)
 		AttnScale:               params.AttnScale,
 		SageAttn:                boolToU8(params.SageAttn),
 		ConditioningCacheSize:   params.ConditioningCacheSize,
+		BatchedCFG:              boolToU8(params.BatchedCFG && !metalDiffusionBackend(params.Backend)),
 	}
 
 	for _, m := range []struct {
@@ -348,6 +368,14 @@ func marshalContextParams(params ContextParams) (*marshaledContextParams, error)
 		*m.dst = p
 	}
 
+	var err error
+	if raw.FlashAttnMode, err = state.refs.addPointer(params.FlashAttnMode); err != nil {
+		return nil, err
+	}
+	if raw.ConvDirectMode, err = state.refs.addPointer(params.ConvDirectMode); err != nil {
+		return nil, err
+	}
+
 	state.embeddings = make([]cEmbedding, len(params.Embeddings))
 	for i := range params.Embeddings {
 		name, err := state.refs.add(params.Embeddings[i].Name)
@@ -366,6 +394,37 @@ func marshalContextParams(params ContextParams) (*marshaledContextParams, error)
 	}
 
 	return state, nil
+}
+
+// Match the diffusion module's backend assignment, not the placement of weights
+// or other modules. Automatic macOS selection is conservatively treated as Metal.
+func metalDiffusionBackend(assignment string) bool {
+	var fallback, diffusion string
+	for part := range strings.SplitSeq(strings.ToLower(assignment), ",") {
+		key, value, found := strings.Cut(part, "=")
+		if !found {
+			if name := strings.TrimSpace(part); name != "" {
+				fallback = name
+			}
+			continue
+		}
+		key = strings.ReplaceAll(strings.ReplaceAll(strings.TrimSpace(key), "-", ""), "_", "")
+		switch key {
+		case "all", "default", "*":
+			fallback = strings.TrimSpace(value)
+		case "diffusion", "model", "unet", "dit":
+			diffusion = strings.TrimSpace(value)
+		}
+	}
+	if diffusion == "" {
+		diffusion = fallback
+	}
+	switch diffusion {
+	case "", "auto", "default", "gpu":
+		return runtime.GOOS == "darwin"
+	default:
+		return strings.HasPrefix(diffusion, "metal") || strings.HasPrefix(diffusion, "mtl")
+	}
 }
 
 // FreeContext releases a Context previously returned by NewContext.

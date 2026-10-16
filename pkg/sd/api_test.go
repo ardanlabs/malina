@@ -1,6 +1,10 @@
 package sd
 
 import (
+	"encoding/binary"
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -30,6 +34,7 @@ func TestExtendedStructLayouts(t *testing.T) {
 		{"cRefVideo", unsafe.Sizeof(cRefVideo{}), 40},
 		{"cVidGenParams", unsafe.Sizeof(cVidGenParams{}), 584},
 		{"cADetailerParams", unsafe.Sizeof(cADetailerParams{}), 24},
+		{"PreviewInfo", unsafe.Sizeof(PreviewInfo{}), 8},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -80,11 +85,14 @@ func TestExtendedStructLayouts(t *testing.T) {
 		{"cContextParams.Backend", unsafe.Offsetof(context.Backend), 240},
 		{"cContextParams.RPCServers", unsafe.Offsetof(context.RPCServers), 272},
 		{"cContextParams.DisableSegmentedCompute", unsafe.Offsetof(context.DisableSegmentedCompute), 288},
+		{"cContextParams.BatchedCFG", unsafe.Offsetof(context.BatchedCFG), 289},
 		{"cContextParams.LinearScale", unsafe.Offsetof(context.LinearScale), 292},
 		{"cContextParams.AttnScale", unsafe.Offsetof(context.AttnScale), 296},
 		{"cContextParams.Tokenizer", unsafe.Offsetof(context.Tokenizer), 304},
 		{"cContextParams.SageAttn", unsafe.Offsetof(context.SageAttn), 312},
 		{"cContextParams.ConditioningCacheSize", unsafe.Offsetof(context.ConditioningCacheSize), 316},
+		{"cContextParams.FlashAttnMode", unsafe.Offsetof(context.FlashAttnMode), 320},
+		{"cContextParams.ConvDirectMode", unsafe.Offsetof(context.ConvDirectMode), 328},
 		{"cImgGenParams.InitImage", unsafe.Offsetof(image.InitImage), 40},
 		{"cImgGenParams.RefImages", unsafe.Offsetof(image.RefImages), 64},
 		{"cImgGenParams.MaskImage", unsafe.Offsetof(image.MaskImage), 88},
@@ -177,5 +185,72 @@ func TestPreprocessCannyTargetAPI(t *testing.T) {
 	}
 	if err := PreprocessCanny(image, CannyParams{HighThreshold: 0.08, LowThreshold: 0.08, Weak: 0.8, Strong: 1}); err != nil {
 		t.Fatalf("PreprocessCanny: %v", err)
+	}
+}
+
+func TestConvertWithComponentsLoras(t *testing.T) {
+	testSetup(t)
+	dir := t.TempDir()
+	model := filepath.Join(dir, "model.safetensors")
+	lora := filepath.Join(dir, "lora.safetensors")
+	// Small real safetensors fixtures exercise native merging, without a
+	// licensed model download. W + 0.5 * up * down = [4, 8; 9, 14].
+	writeTestSafetensors(t, model, `{"model.diffusion_model.input_blocks.0.0.weight":{"dtype":"F32","shape":[2,2],"data_offsets":[0,16]}}`, []float32{1, 2, 3, 2})
+	writeTestSafetensors(t, lora, `{"lora_unet_input_blocks_0_0.lora_down.weight":{"dtype":"F32","shape":[1,2],"data_offsets":[0,8]},"lora_unet_input_blocks_0_0.lora_up.weight":{"dtype":"F32","shape":[2,1],"data_offsets":[8,16]}}`, []float32{2, 4, 3, 6})
+	for _, tc := range []struct {
+		name  string
+		loras []Lora
+		want  []float32
+	}{
+		{"plain", nil, []float32{1, 2, 3, 2}},
+		{"merged", []Lora{{Path: lora, Multiplier: 0.5}}, []float32{4, 8, 9, 14}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			output := filepath.Join(dir, tc.name+".safetensors")
+			if err := ConvertWithComponents(ComponentConvertParams{ModelPath: model, OutputPath: output, OutputType: SDTypeF32, NThreads: 1, Loras: tc.loras}); err != nil {
+				t.Fatalf("ConvertWithComponents: %v", err)
+			}
+			data, err := os.ReadFile(output)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(data) < 8 {
+				t.Fatal("missing safetensors header")
+			}
+			headerEnd := 8 + binary.LittleEndian.Uint64(data[:8])
+			if headerEnd > uint64(len(data)) {
+				t.Fatal("truncated safetensors header")
+			}
+			var header map[string]struct {
+				Offsets [2]int `json:"data_offsets"`
+			}
+			if err := json.Unmarshal(data[8:headerEnd], &header); err != nil {
+				t.Fatal(err)
+			}
+			tensor, ok := header["model.diffusion_model.input_blocks.0.0.weight"]
+			if !ok {
+				t.Fatal("converted tensor missing")
+			}
+			got := make([]float32, 4)
+			if _, err := binary.Decode(data[headerEnd+uint64(tensor.Offsets[0]):], binary.LittleEndian, got); err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("converted weights: got %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func writeTestSafetensors(t *testing.T, path, header string, weights []float32) {
+	t.Helper()
+	data := binary.LittleEndian.AppendUint64(nil, uint64(len(header)))
+	data = append(data, header...)
+	data, err := binary.Append(data, binary.LittleEndian, weights)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		t.Fatal(err)
 	}
 }
