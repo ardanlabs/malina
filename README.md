@@ -35,11 +35,18 @@ Sometimes there are breaking changes to stable-diffusion.cpp that require an upd
 
 | stable-diffusion.cpp | malina      |
 | -------------------- | ----------- |
+| master-975-95b3090   | 1.1.8       |
 | master-969-8c442fb   | 1.1.6-1.1.7 |
 | master-929-3f8527a   | 1.1.4–1.1.5 |
-| master-908-88411ef   | 1.1.3       |
 
 The FFI binding includes image and native video generation, upscaling, ADetailer, ControlNet hot-swap, conversion, Canny preprocessing, cancellation, preview/backend callbacks, device and loaded-model identification, and every generation parameter in the target header. Pure-Go PNG/JPEG decode + Motion-JPEG AVI mux, the CLI (`install`, `system`, `info`, `model list|pull`), and runnable examples for the generation APIs have also landed. Kronk integration (an OpenAI-compatible `POST /v1/images/generations` endpoint) lives in the [kronk](https://github.com/ardanlabs/kronk) repo.
+
+The `master-975-95b3090` upgrade leaves the public C header and Malina's Go API
+unchanged. Batched CFG remains disabled for Metal, including automatic macOS
+backend selection: the bundled ggml Metal group-normalization kernel still
+leaves batch items after the first unwritten. The upstream conv1d fixes in this
+release do not fix group normalization. CPU and other backends keep their
+existing batched-CFG behavior.
 
 ## Owner Information
 
@@ -110,7 +117,7 @@ The architecture of malina mirrors bucky and yzma file-for-file so anyone who kn
                           │
                           ▼
             libstable-diffusion.{dylib|so|dll}
-              (stable-diffusion.cpp master-969)
+              (stable-diffusion.cpp master-975)
 ```
 
 ## Models
@@ -148,6 +155,16 @@ bundles. Official FLUX.3 weights are gated. The linked 17 MB MoSR checkpoint
 fits the upscaler role, but its weight release states the ambiguous license
 `CC-BY-0.4`; curation is deferred until the weight license is clarified.
 Existing ungated bundles remain the recommended validation fixtures.
+
+The `master-975-95b3090` release adds MOSS-Image and Diffusers-format MiniMax-H3
+LoRA support. MOSS-Image can use the existing diffusion, LLM, VAE, and tokenizer
+roles, but is not curated yet: its BF16 diffusion weights alone are 10.2 GB,
+plus a 5.7 GB Qwen3.5-9B Q4_K_M encoder, a FLUX.2 VAE, and the mandatory
+external Qwen3.5 tokenizer. Public Apache-2.0, revision-pinnable files exist;
+curation is deferred until a compact combination is model-validated. Callers
+can supply the files through `DiffusionModelPath`, `LLMPath`, `VAEPath`, and
+`Tokenizer` using upstream's [MOSS-Image guide](https://github.com/leejet/stable-diffusion.cpp/blob/master-975-95b3090/docs/moss_image.md).
+MiniMax-H3 LoRAs use Malina's existing LoRA parameters; no new binding is needed.
 
 The catalog also includes **Z-Image-Turbo**: an ungated Apache-2.0 bundle
 with Q4_K diffusion weights, a Q4_K_M Qwen3-4B-Instruct-2507 text encoder,

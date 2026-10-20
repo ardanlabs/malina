@@ -3,21 +3,26 @@
 Performance numbers for `pkg/sd` against the locally available model bundles.
 Recorded on an Apple M5 Max with
 128 GiB RAM (macOS 27.0.1, darwin/arm64) using the Metal backend from upstream
-stable-diffusion.cpp `master-969-8c442fb` artifact
-`sd-master-8c442fb-bin-Darwin-macOS-26.6.2-arm64.zip` (SHA-256
-`129b62de61772f368fa9f9ee8130d62a4dadd6ad99e7243b9734cff97f539191`).
+stable-diffusion.cpp `master-975-95b3090` artifact
+`sd-master-95b3090-bin-Darwin-macOS-26.6.2-arm64.zip` (SHA-256
+`2edf5a21c4b73f448c3a02c87925283b77aa94f1859c0d8e649134da68b40813`).
 The Go benchmarks all run against the extracted
 `./lib/libstable-diffusion.dylib` (SHA-256
-`b8d76b876ac598881b1fbeeb1ae5a63893176ee870b5f971e5f474c3723f9783`).
-Recorded October 16, 2026, using Go 1.27.2, automatic operator selection,
+`a43c6e892616753685ef06b42dbedf8b271b086d79111a8dff19894428378f31`).
+Recorded October 20, 2026, using Go 1.27.3, automatic operator selection,
 and Malina's Metal workaround: batched CFG is disabled at context creation.
 
 The official library's Metal group-normalization kernel leaves the second
 batch item unwritten. Disabling batched CFG avoids the reproduced all-white
-output; these measurements include that correctness workaround and replace
-the earlier unsafe batched-CFG timings. The model-backed suite and focused
-four-step img2img regression pass with the workaround. Timings alone are not
-an image-quality guarantee or evidence about untested models/backends.
+output; these freshly rerun measurements include that correctness workaround.
+The target release updates ggml's conv1d implementation, but its Metal
+group-normalization kernel is unchanged. A native four-step, 128x128 SD 1.5
+img2img probe against this exact dylib still returns 49,152/49,152 white bytes
+with batched CFG enabled; disabling it gives a pixel range of 0–255.
+The model-backed suite passes with the workaround. Timings alone are not
+an image-quality guarantee or evidence about untested models/backends, and
+single-iteration measurements do not establish a statistically reliable
+speedup over previous releases.
 
 Reproduce with:
 
@@ -62,16 +67,16 @@ and digest listed above. All measurements used
 
 | Workload                | Model/bundle       | Shape   | Steps | b.N | ns/op          | s/img | B/op    | allocs/op |
 |-------------------------|--------------------|---------|------:|----:|---------------:|------:|--------:|----------:|
-| text-to-image           | sd-1.5             | 512x512 |    20 |   1 | 17,736,649,125 | 17.74 | 798,912 |       253 |
-| text-to-image           | sdxl-base-1.0      | 512x512 |    20 |   1 |  8,167,759,666 |  8.17 | 798,912 |       253 |
-| image-to-image          | sd-1.5             | 512x512 |    16 |   1 | 15,035,871,792 | 15.04 | 798,824 |       249 |
+| text-to-image           | sd-1.5             | 512x512 |    20 |   1 | 6,768,739,250 |  6.77 | 798,896 |       253 |
+| text-to-image           | sdxl-base-1.0      | 512x512 |    20 |   1 | 8,064,147,041 |  8.06 | 798,896 |       253 |
+| image-to-image          | sd-1.5             | 512x512 |    16 |   1 | 6,098,921,084 |  6.10 | 798,840 |       249 |
 
 Actual benchmark output (`b.N=1`, after one untimed warm-up):
 
 ```text
-BenchmarkGenerateImageSD15-18                  1  17736649125 ns/op  262144 px  17.74 s/img  798912 B/op  253 allocs/op
-BenchmarkGenerateImageSDXL-18                  1   8167759666 ns/op  262144 px  8.168 s/img  798912 B/op  253 allocs/op
-BenchmarkGenerateImageImg2ImgSD15-18            1  15035871792 ns/op  262144 px  15.04 s/img  798824 B/op  249 allocs/op
+BenchmarkGenerateImageSD15-18                  1  6768739250 ns/op  262144 px  6.769 s/img  798896 B/op  253 allocs/op
+BenchmarkGenerateImageSDXL-18                  1  8064147041 ns/op  262144 px  8.064 s/img  798896 B/op  253 allocs/op
+BenchmarkGenerateImageImg2ImgSD15-18            1  6098921084 ns/op  262144 px  6.099 s/img  798840 B/op  249 allocs/op
 ```
 
 Run commands:
