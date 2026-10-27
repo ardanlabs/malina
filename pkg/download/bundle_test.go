@@ -24,6 +24,8 @@ func TestBundleByName(t *testing.T) {
 		{"sdxl-base-1.0", true},
 		{"llada-image-turbo", true},
 		{"z-image-turbo", true},
+		{"moss-image-sft", true},
+		{"z-image-turbo-controlnet-union", true},
 		{"flux2-klein-4b", true},
 		{"flux2-klein-9b", true},
 		{"  Flux2-Klein-4B  ", true},
@@ -42,7 +44,7 @@ func TestBundleByName(t *testing.T) {
 
 func TestBundleNames(t *testing.T) {
 	got := BundleNames()
-	want := []string{"adetailer-face-yolov8n", "animatediff-sd1.5", "controlnet-canny-sd1.5", "flux2-klein-4b", "flux2-klein-9b", "llada-image-turbo", "realesrgan-x4-anime", "sd-1.5", "sdxl-base-1.0", "wan2.2-s2v-14b", "z-image-turbo"}
+	want := []string{"adetailer-face-yolov8n", "animatediff-sd1.5", "controlnet-canny-sd1.5", "flux2-klein-4b", "flux2-klein-9b", "llada-image-turbo", "moss-image-sft", "realesrgan-x4-anime", "sd-1.5", "sdxl-base-1.0", "wan2.2-s2v-14b", "z-image-turbo", "z-image-turbo-controlnet-union"}
 	if len(got) != len(want) {
 		t.Fatalf("BundleNames: got %v, want %v", got, want)
 	}
@@ -140,6 +142,26 @@ func TestBundleShapes(t *testing.T) {
 				{RoleDiffusion, "z_image_turbo-Q4_K.gguf"},
 				{RoleLLM, "Qwen3-4B-Instruct-2507-Q4_K_M.gguf"},
 				{RoleVAE, "ae.safetensors"},
+			},
+		},
+		{
+			name:  "moss-image-sft",
+			gated: false,
+			files: []wantFile{
+				{RoleDiffusion, "MOSS-Image-SFT-Q4_0.gguf"},
+				{RoleLLM, "Qwen3.5-9B-Q4_K_M.gguf"},
+				{RoleVAE, "flux2-vae.safetensors"},
+				{RoleTokenizer, "tokenizer.json"},
+			},
+		},
+		{
+			name:  "z-image-turbo-controlnet-union",
+			gated: false,
+			files: []wantFile{
+				{RoleDiffusion, "z_image_turbo-Q4_K.gguf"},
+				{RoleLLM, "Qwen3-4B-Instruct-2507-Q4_K_M.gguf"},
+				{RoleVAE, "ae.safetensors"},
+				{RoleControlNet, "Z-Image-Turbo-Fun-Controlnet-Union-2.1-2601-8steps.safetensors"},
 			},
 		},
 		{

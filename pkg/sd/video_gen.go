@@ -25,7 +25,7 @@ type cRefVideo struct {
 	Audio      cAudio
 }
 
-// cVidGenParams mirrors sd_vid_gen_params_t. Size: 584 bytes.
+// cVidGenParams mirrors sd_vid_gen_params_t. Size: 592 bytes.
 type cVidGenParams struct {
 	Loras                 uintptr
 	LoraCount             uint32
@@ -66,6 +66,24 @@ type cVidGenParams struct {
 	CircularY             uint8
 	_                     [6]byte
 	ImagePreprocess       cImagePreprocessParams
+	RefImageArgs          *byte
+}
+
+// cVideoGenerationResult mirrors sd_video_generation_result_t. Size: 40 bytes.
+type cVideoGenerationResult struct {
+	Frames         *cImage
+	FrameCount     int32
+	Audio          *cAudio
+	FPS            int32
+	GenerationInfo *byte
+}
+
+// VideoGenerationResult holds Go-owned copies of the native video result.
+type VideoGenerationResult struct {
+	Frames         []*SDImage
+	Audio          *Audio
+	FPS            int32
+	GenerationInfo string
 }
 
 // VideoGenParams is the Go-side representation of sd_vid_gen_params_t.
@@ -96,19 +114,20 @@ type VideoGenParams struct {
 	CircularX       bool
 	CircularY       bool
 	ImagePreprocess ImagePreprocessParams
+	RefImageArgs    string
 }
 
 var (
 	vidGenParamsInitFunc ffi.Fun
 	generateVideoFunc    ffi.Fun
-	freeSDAudioFunc      ffi.Fun
+	freeVideoResultFunc  ffi.Fun
 )
 
 func loadVideoFuncs(lib ffi.Lib) {
 	vidGenParamsInitFunc = prepOptional(lib, "sd_vid_gen_params_init", &ffi.TypeVoid, &ffi.TypePointer)
 	generateVideoFunc = prepOptional(lib, "generate_video", &ffi.TypeUint8,
-		&ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer)
-	freeSDAudioFunc = prepOptional(lib, "free_sd_audio", &ffi.TypeVoid, &ffi.TypePointer)
+		&ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer)
+	freeVideoResultFunc = prepOptional(lib, "free_sd_video_generation_result", &ffi.TypeVoid, &ffi.TypePointer)
 }
 
 // VideoGenParamsInit returns VideoGenParams populated with native defaults.
@@ -137,6 +156,7 @@ func VideoGenParamsInit() (VideoGenParams, error) {
 		CircularX:       raw.CircularX != 0,
 		CircularY:       raw.CircularY != 0,
 		ImagePreprocess: ImagePreprocessParams{Rules: cString(raw.ImagePreprocess.Rules)},
+		RefImageArgs:    cString(raw.RefImageArgs),
 	}, nil
 }
 
@@ -185,6 +205,7 @@ func marshalVideoParams(params VideoGenParams) (*marshaledVideoParams, error) {
 		{&raw.Cache.SCMMask, params.Cache.SCMMask},
 		{&raw.Hires.ModelPath, params.Hires.ModelPath},
 		{&raw.ImagePreprocess.Rules, params.ImagePreprocess.Rules},
+		{&raw.RefImageArgs, params.RefImageArgs},
 	} {
 		value, err := state.refs.addPointer(item.value)
 		if err != nil {
@@ -340,49 +361,57 @@ func GenerateVideo(ctx Context, params VideoGenParams) ([]*SDImage, *Audio, erro
 // frame rate can differ from params.FPS when the model requires a fixed rate.
 // Native results are released with their matched allocators.
 func GenerateVideoWithFPS(ctx Context, params VideoGenParams) ([]*SDImage, *Audio, int32, error) {
-	if ctx == 0 {
-		return nil, nil, 0, errors.New("GenerateVideo: nil context")
-	}
-	if generateVideoFunc == (ffi.Fun{}) {
-		return nil, nil, 0, unsupported("generate_video")
-	}
-	if freeSDAudioFunc == (ffi.Fun{}) {
-		return nil, nil, 0, unsupported("free_sd_audio")
-	}
-	state, err := marshalVideoParams(params)
+	result, err := GenerateVideoWithInfo(ctx, params)
 	if err != nil {
 		return nil, nil, 0, err
 	}
+	return result.Frames, result.Audio, result.FPS, nil
+}
+
+// GenerateVideoWithInfo returns frames, audio, effective FPS and the native
+// sdcpp.generation/v1 JSON record. All data survives native result/context release.
+func GenerateVideoWithInfo(ctx Context, params VideoGenParams) (*VideoGenerationResult, error) {
+	if ctx == 0 {
+		return nil, errors.New("GenerateVideo: nil context")
+	}
+	if generateVideoFunc == (ffi.Fun{}) {
+		return nil, unsupported("generate_video")
+	}
+	if freeVideoResultFunc == (ffi.Fun{}) {
+		return nil, unsupported("free_sd_video_generation_result")
+	}
+	state, err := marshalVideoParams(params)
+	if err != nil {
+		return nil, err
+	}
 	rawPtr := &state.raw
-	var framePtr *cImage
-	var frameCount int32
-	var audioPtr *cAudio
-	fps := params.FPS
-	framePtrPtr := &framePtr
-	frameCountPtr := &frameCount
-	audioPtrPtr := &audioPtr
-	fpsPtr := &fps
+	var resultPtr *cVideoGenerationResult
+	resultPtrPtr := &resultPtr
 	var result ffi.Arg
-	generateVideoFunc.Call(&result, unsafe.Pointer(&ctx), unsafe.Pointer(&rawPtr), unsafe.Pointer(&framePtrPtr), unsafe.Pointer(&frameCountPtr), unsafe.Pointer(&audioPtrPtr), unsafe.Pointer(&fpsPtr))
+	clearLastLog()
+	generateVideoFunc.Call(&result, unsafe.Pointer(&ctx), unsafe.Pointer(&rawPtr), unsafe.Pointer(&resultPtrPtr))
 	runtime.KeepAlive(state)
 	runtime.KeepAlive(params)
-	if byte(result) == 0 {
+	if resultPtr != nil {
+		defer freeVideoResultFunc.Call(nil, unsafe.Pointer(&resultPtr))
+	}
+	if byte(result) == 0 || resultPtr == nil {
 		if last := LastError(); last != "" {
-			return nil, nil, 0, fmt.Errorf("generate_video failed: %s", last)
+			return nil, fmt.Errorf("generate_video failed: %s", last)
 		}
-		return nil, nil, 0, errors.New("generate_video failed (no log message captured)")
+		return nil, errors.New("generate_video failed (no log message captured)")
 	}
-	frames := make([]*SDImage, frameCount)
-	if framePtr != nil && frameCount > 0 {
-		rawFrames := unsafe.Slice(framePtr, int(frameCount))
+	out := VideoGenerationResult{
+		Frames:         make([]*SDImage, resultPtr.FrameCount),
+		Audio:          audioFromC(resultPtr.Audio),
+		FPS:            resultPtr.FPS,
+		GenerationInfo: cString(resultPtr.GenerationInfo),
+	}
+	if resultPtr.Frames != nil && resultPtr.FrameCount > 0 {
+		rawFrames := unsafe.Slice(resultPtr.Frames, int(resultPtr.FrameCount))
 		for i := range rawFrames {
-			frames[i] = sdImageFromC(&rawFrames[i])
+			out.Frames[i] = sdImageFromC(&rawFrames[i])
 		}
-		freeSDImagesFunc.Call(nil, unsafe.Pointer(&framePtr), unsafe.Pointer(&frameCount))
 	}
-	audio := audioFromC(audioPtr)
-	if audioPtr != nil {
-		freeSDAudioFunc.Call(nil, unsafe.Pointer(&audioPtr))
-	}
-	return frames, audio, fps, nil
+	return &out, nil
 }

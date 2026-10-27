@@ -4,6 +4,7 @@ package sd
 
 import (
 	"bytes"
+	"encoding/json"
 	"image"
 	"image/jpeg"
 	"os"
@@ -117,6 +118,19 @@ func TestGenerateImagesSD15BatchSmoke(t *testing.T) {
 		for i, image := range images {
 			if image == nil || len(image.Data) != 64*64*3 {
 				t.Fatalf("call %d image %d is invalid: %#v", call, i, image)
+			}
+			var info struct {
+				Schema string `json:"schema"`
+				Seed   string `json:"seed"`
+			}
+			if err := json.Unmarshal([]byte(image.GenerationInfo), &info); err != nil {
+				t.Fatalf("image %d generation metadata: %v", i, err)
+			}
+			// The second image must report the incremented native seed,
+			// not merely echo the request's starting seed.
+			wantSeed := []string{"42", "43"}[i]
+			if info.Schema != "sdcpp.generation/v1" || info.Seed != wantSeed {
+				t.Errorf("image %d metadata: got %+v, want schema sdcpp.generation/v1 and seed %s", i, info, wantSeed)
 			}
 		}
 		images[0].Data[0] ^= 0xff

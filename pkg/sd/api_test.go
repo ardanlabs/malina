@@ -19,6 +19,9 @@ func TestExtendedStructLayouts(t *testing.T) {
 	}{
 		{"cEmbedding", unsafe.Sizeof(cEmbedding{}), 16},
 		{"cImage", unsafe.Sizeof(cImage{}), 24},
+		{"cImageResult", unsafe.Sizeof(cImageResult{}), 32},
+		{"cImageGenerationResult", unsafe.Sizeof(cImageGenerationResult{}), 16},
+		{"cVideoGenerationResult", unsafe.Sizeof(cVideoGenerationResult{}), 40},
 		{"cSlgParams", unsafe.Sizeof(cSlgParams{}), 32},
 		{"cGuidanceParams", unsafe.Sizeof(cGuidanceParams{}), 48},
 		{"cSampleParams", unsafe.Sizeof(cSampleParams{}), 96},
@@ -32,7 +35,7 @@ func TestExtendedStructLayouts(t *testing.T) {
 		{"cImgGenParams", unsafe.Sizeof(cImgGenParams{}), 552},
 		{"cAudio", unsafe.Sizeof(cAudio{}), 24},
 		{"cRefVideo", unsafe.Sizeof(cRefVideo{}), 40},
-		{"cVidGenParams", unsafe.Sizeof(cVidGenParams{}), 584},
+		{"cVidGenParams", unsafe.Sizeof(cVidGenParams{}), 592},
 		{"cADetailerParams", unsafe.Sizeof(cADetailerParams{}), 24},
 		{"PreviewInfo", unsafe.Sizeof(PreviewInfo{}), 8},
 	}
@@ -58,6 +61,7 @@ func TestExtendedStructLayouts(t *testing.T) {
 		{"Hires", unsafe.Offsetof(video.Hires), 512},
 		{"CircularX", unsafe.Offsetof(video.CircularX), 568},
 		{"ImagePreprocess", unsafe.Offsetof(video.ImagePreprocess), 576},
+		{"RefImageArgs", unsafe.Offsetof(video.RefImageArgs), 584},
 	}
 	for _, tt := range offsets {
 		if tt.got != tt.want {
@@ -70,6 +74,9 @@ func TestExtendedStructLayouts(t *testing.T) {
 	var sample cSampleParams
 	var cache cCacheParams
 	var hires cHiresParams
+	var imageResult cImageResult
+	var imageGeneration cImageGenerationResult
+	var videoResult cVideoGenerationResult
 	criticalOffsets := []struct {
 		name string
 		got  uintptr
@@ -110,6 +117,12 @@ func TestExtendedStructLayouts(t *testing.T) {
 		{"cCacheParams.SpectrumW", unsafe.Offsetof(cache.SpectrumW), 68},
 		{"cHiresParams.ModelPath", unsafe.Offsetof(hires.ModelPath), 8},
 		{"cHiresParams.CustomSigmas", unsafe.Offsetof(hires.CustomSigmas), 40},
+		{"cImageResult.GenerationInfo", unsafe.Offsetof(imageResult.GenerationInfo), 24},
+		{"cImageGenerationResult.Count", unsafe.Offsetof(imageGeneration.Count), 8},
+		{"cVideoGenerationResult.FrameCount", unsafe.Offsetof(videoResult.FrameCount), 8},
+		{"cVideoGenerationResult.Audio", unsafe.Offsetof(videoResult.Audio), 16},
+		{"cVideoGenerationResult.FPS", unsafe.Offsetof(videoResult.FPS), 24},
+		{"cVideoGenerationResult.GenerationInfo", unsafe.Offsetof(videoResult.GenerationInfo), 32},
 	}
 	for _, tt := range criticalOffsets {
 		if tt.got != tt.want {
@@ -141,6 +154,12 @@ func TestExtendedTargetAPI(t *testing.T) {
 		t.Fatalf("ParseSampleMethod(%q) = %d, want %d", name, parsed, SampleEuler)
 	}
 
+	if err := AddRPCServers(""); err != nil {
+		t.Fatalf("AddRPCServers empty no-op: %v", err)
+	}
+	if err := AddRPCServers("bad\x00endpoint"); err == nil {
+		t.Fatal("AddRPCServers accepted an embedded NUL")
+	}
 	devices, err := ListDevices()
 	if err != nil {
 		t.Fatalf("ListDevices: %v", err)

@@ -38,13 +38,13 @@ var (
 func loadUpscalerFuncs(lib ffi.Lib) {
 	newUpscalerCtxFunc = prepOptional(lib, "new_upscaler_ctx", &ffi.TypePointer, &ffi.TypePointer, &ffi.TypeUint8, &ffi.TypeSint32, &ffi.TypeSint32, &ffi.TypePointer, &ffi.TypePointer)
 	freeUpscalerCtxFunc = prepOptional(lib, "free_upscaler_ctx", &ffi.TypeVoid, &ffi.TypePointer)
-	upscaleFunc = prepOptional(lib, "upscale", &ffi.TypeUint8, &ffi.TypePointer, &ffiTypeImage, &ffi.TypeUint32, &ffi.TypePointer, &ffi.TypePointer)
+	upscaleFunc = prepOptional(lib, "upscale", &ffi.TypeUint8, &ffi.TypePointer, &ffiTypeImage, &ffi.TypeUint32, &ffi.TypePointer)
 	getUpscaleFactorFunc = prepOptional(lib, "get_upscale_factor", &ffi.TypeSint32, &ffi.TypePointer)
 	getUpscalerScaleFunc = prepOptional(lib, "get_upscaler_model_scale", &ffi.TypeSint32, &ffi.TypePointer)
 
 	newADetailerCtxFunc = prepOptional(lib, "new_adetailer_ctx", &ffi.TypePointer, &ffi.TypePointer, &ffi.TypeSint32, &ffi.TypePointer, &ffi.TypePointer)
 	freeADetailerCtxFunc = prepOptional(lib, "free_adetailer_ctx", &ffi.TypeVoid, &ffi.TypePointer)
-	adetailImageFunc = prepOptional(lib, "adetail_image", &ffi.TypeUint8, &ffi.TypePointer, &ffi.TypePointer, &ffiTypeImage, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer)
+	adetailImageFunc = prepOptional(lib, "adetail_image", &ffi.TypeUint8, &ffi.TypePointer, &ffi.TypePointer, &ffiTypeImage, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer)
 }
 
 // NewUpscalerContext loads an ESRGAN model and returns an upscaler context.
@@ -217,24 +217,22 @@ func ADetailImage(adetailerCtx ADetailerContext, ctx Context, input *SDImage, pa
 }
 
 func callImageArray(fn ffi.Fun, args ...any) ([]*SDImage, error) {
-	var resultPtr *cImage
-	var resultCount int32
+	var resultPtr *cImageGenerationResult
 	resultPtrPtr := &resultPtr
-	resultCountPtr := &resultCount
-	args = append(args, unsafe.Pointer(&resultPtrPtr), unsafe.Pointer(&resultCountPtr))
+	args = append(args, unsafe.Pointer(&resultPtrPtr))
 	var result ffi.Arg
 	fn.Call(&result, args...)
-	if byte(result) == 0 || resultPtr == nil || resultCount <= 0 {
-		if resultPtr != nil && resultCount > 0 {
-			freeSDImagesFunc.Call(nil, unsafe.Pointer(&resultPtr), unsafe.Pointer(&resultCount))
-		}
+	if resultPtr != nil {
+		defer freeImageResultFunc.Call(nil, unsafe.Pointer(&resultPtr))
+	}
+	if byte(result) == 0 || resultPtr == nil || resultPtr.Count <= 0 {
 		return nil, errors.New("native image operation failed")
 	}
-	rawImages := unsafe.Slice(resultPtr, int(resultCount))
-	images := make([]*SDImage, resultCount)
+	rawImages := unsafe.Slice(resultPtr.Items, int(resultPtr.Count))
+	images := make([]*SDImage, resultPtr.Count)
 	for i := range rawImages {
-		images[i] = sdImageFromC(&rawImages[i])
+		images[i] = sdImageFromC(&rawImages[i].Image)
+		images[i].GenerationInfo = cString(rawImages[i].GenerationInfo)
 	}
-	freeSDImagesFunc.Call(nil, unsafe.Pointer(&resultPtr), unsafe.Pointer(&resultCount))
 	return images, nil
 }

@@ -4,6 +4,7 @@ package sd
 
 import (
 	"bytes"
+	"encoding/json"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -126,6 +127,17 @@ func TestUpscaleImage(t *testing.T) {
 	if images[0].Width != input.Width*uint32(factor) || images[0].Height != input.Height*uint32(factor) {
 		t.Errorf("upscaled dimensions: got %dx%d, want %dx%d", images[0].Width, images[0].Height, input.Width*uint32(factor), input.Height*uint32(factor))
 	}
+	var info struct {
+		Upscale struct {
+			Factor uint32 `json:"upscale_factor"`
+		} `json:"upscale"`
+	}
+	if err := json.Unmarshal([]byte(images[0].GenerationInfo), &info); err != nil {
+		t.Fatalf("upscale metadata: %v", err)
+	}
+	if info.Upscale.Factor != 4 {
+		t.Errorf("upscale metadata factor: got %d, want 4", info.Upscale.Factor)
+	}
 }
 
 func TestADetailImage(t *testing.T) {
@@ -186,6 +198,17 @@ func TestADetailImage(t *testing.T) {
 	if bytes.Equal(image.Data, before) {
 		t.Fatalf("ADetailImage did not refine the detected face; logs: %v", logs)
 	}
+	var info struct {
+		Inpaint struct {
+			Seed string `json:"seed"`
+		} `json:"inpaint_params"`
+	}
+	if err := json.Unmarshal([]byte(image.GenerationInfo), &info); err != nil {
+		t.Fatalf("ADetailer metadata: %v", err)
+	}
+	if info.Inpaint.Seed != "42" {
+		t.Errorf("ADetailer metadata seed: got %q, want 42", info.Inpaint.Seed)
+	}
 }
 
 func TestGenerateVideoAnimateDiff(t *testing.T) {
@@ -223,9 +246,21 @@ func TestGenerateVideoAnimateDiff(t *testing.T) {
 	params.VideoFrames = 4
 	params.FPS = 0
 	params.Seed = 42
-	frames, audio, fps, err := GenerateVideoWithFPS(ctx, params)
+	result, err := GenerateVideoWithInfo(ctx, params)
 	if err != nil {
-		t.Fatalf("GenerateVideoWithFPS: %v", err)
+		t.Fatalf("GenerateVideoWithInfo: %v", err)
+	}
+	frames, audio, fps := result.Frames, result.Audio, result.FPS
+	var info struct {
+		Schema string `json:"schema"`
+		FPS    int32  `json:"fps"`
+		Seed   string `json:"seed"`
+	}
+	if err := json.Unmarshal([]byte(result.GenerationInfo), &info); err != nil {
+		t.Fatalf("video metadata: %v", err)
+	}
+	if info.Schema != "sdcpp.generation/v1" || info.Seed != "42" || info.FPS != 1 {
+		t.Errorf("video metadata: got %+v, want schema sdcpp.generation/v1, seed 42 and resolved FPS 1 (requested 0)", info)
 	}
 	const wantFPS = 1
 	if fps != wantFPS {
