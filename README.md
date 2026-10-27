@@ -35,18 +35,25 @@ Sometimes there are breaking changes to stable-diffusion.cpp that require an upd
 
 | stable-diffusion.cpp | malina      |
 | -------------------- | ----------- |
+| master-1017-be48649  | 1.1.x (≥1.1.9) |
 | master-975-95b3090   | 1.1.8       |
 | master-969-8c442fb   | 1.1.6-1.1.7 |
-| master-929-3f8527a   | 1.1.4–1.1.5 |
 
 The FFI binding includes image and native video generation, upscaling, ADetailer, ControlNet hot-swap, conversion, Canny preprocessing, cancellation, preview/backend callbacks, device and loaded-model identification, and every generation parameter in the target header. Pure-Go PNG/JPEG decode + Motion-JPEG AVI mux, the CLI (`install`, `system`, `info`, `model list|pull`), and runnable examples for the generation APIs have also landed. Kronk integration (an OpenAI-compatible `POST /v1/images/generations` endpoint) lives in the [kronk](https://github.com/ardanlabs/kronk) repo.
 
-The `master-975-95b3090` upgrade leaves the public C header and Malina's Go API
-unchanged. Batched CFG remains disabled for Metal, including automatic macOS
-backend selection: the bundled ggml Metal group-normalization kernel still
-leaves batch items after the first unwritten. The upstream conv1d fixes in this
-release do not fix group normalization. CPU and other backends keep their
-existing batched-CFG behavior.
+The `master-1017-be48649` upgrade changes the native result ABI for image,
+video, upscaler, and ADetailer operations. Malina 1.1.9 requires this new ABI;
+1.1.8 and earlier bindings must not load it. Upgrade Malina and reinstall its
+pinned library together. Existing Go generation signatures are preserved.
+`SDImage.GenerationInfo` exposes each image's resolved `sdcpp.generation/v1`
+JSON (including its actual batch seed), and `GenerateVideoWithInfo` returns
+frames, audio, effective FPS, and sequence metadata as a `VideoGenerationResult`.
+Pixels, audio, and metadata are copied before the matched native result
+destructor runs. PNG/JPEG loading and saving remain pixel-only operations.
+`VideoGenParams.RefImageArgs`, the FLUX.3/H3 AV/Ming prediction values, and
+`AddRPCServers` (before `ListDevices`) expose the other header additions.
+Batched CFG remains disabled for Metal; other backends keep their existing
+behavior.
 
 ## Owner Information
 
@@ -117,7 +124,7 @@ The architecture of malina mirrors bucky and yzma file-for-file so anyone who kn
                           │
                           ▼
             libstable-diffusion.{dylib|so|dll}
-              (stable-diffusion.cpp master-975)
+              (stable-diffusion.cpp master-1017)
 ```
 
 ## Models
@@ -156,15 +163,29 @@ fits the upscaler role, but its weight release states the ambiguous license
 `CC-BY-0.4`; curation is deferred until the weight license is clarified.
 Existing ungated bundles remain the recommended validation fixtures.
 
-The `master-975-95b3090` release adds MOSS-Image and Diffusers-format MiniMax-H3
-LoRA support. MOSS-Image can use the existing diffusion, LLM, VAE, and tokenizer
-roles, but is not curated yet: its BF16 diffusion weights alone are 10.2 GB,
-plus a 5.7 GB Qwen3.5-9B Q4_K_M encoder, a FLUX.2 VAE, and the mandatory
-external Qwen3.5 tokenizer. Public Apache-2.0, revision-pinnable files exist;
-curation is deferred until a compact combination is model-validated. Callers
-can supply the files through `DiffusionModelPath`, `LLMPath`, `VAEPath`, and
-`Tokenizer` using upstream's [MOSS-Image guide](https://github.com/leejet/stable-diffusion.cpp/blob/master-975-95b3090/docs/moss_image.md).
-MiniMax-H3 LoRAs use Malina's existing LoRA parameters; no new binding is needed.
+The `master-1017-be48649` release adds Fibo 2.0 Dev/Edit Turbo support,
+Z-Image ControlNet, and compact GGUF links for the already-supported MOSS-Image
+and FLUX.3 families. The catalog now includes **MOSS-Image-SFT**: ungated
+Apache-2.0 Q4_0 diffusion, Qwen3.5-9B Q4_K_M LLM, full FLUX.2 VAE, and the
+mandatory external tokenizer (four immutable-revision files, about 9.4 GB).
+Map its roles to `DiffusionModelPath`, `LLMPath`, `VAEPath`, and `Tokenizer`;
+see the [target MOSS-Image guide](https://github.com/leejet/stable-diffusion.cpp/blob/master-1017-be48649/docs/moss_image.md).
+MiniMax-H3 LoRAs continue using existing LoRA parameters.
+
+**Z-Image-Turbo-ControlNet-Union** combines the existing Z-Image bundle with
+the upstream-tested 2601 Union 2.1 ControlNet weights (about 13.4 GB total,
+Apache-2.0). Supply a control map through `ControlImage` and the control model
+through `ControlNetPath`; disable VAE encode tiling as recommended upstream.
+Pose/depth preprocessing and simultaneous reference-image editing are not
+provided by this bundle. These two new bundles are opt-in; their pinned file
+availability and role coverage are checked, but they are not local inference
+validation fixtures.
+
+Fibo 2.0 is not curated: the original weights are gated, and the ungated
+mirror retains CC BY-NC 4.0 restrictions (commercial use requires a separate
+agreement). FLUX.3 remains deferred because its gated custom
+`flux-kommunity-license` has not been cleared for this catalog; an ungated
+GGUF mirror does not remove that requirement. Neither is used in validation.
 
 The catalog also includes **Z-Image-Turbo**: an ungated Apache-2.0 bundle
 with Q4_K diffusion weights, a Q4_K_M Qwen3-4B-Instruct-2507 text encoder,
@@ -187,6 +208,8 @@ $ malina model pull wan2.2-s2v-14b # four files; approximately 18.4 GB
 $ malina model pull sdxl-base-1.0
 $ malina model pull llada-image-turbo # five files; approximately 20.2 GB
 $ malina model pull z-image-turbo   # three files; approximately 6.7 GB; ungated
+$ malina model pull moss-image-sft  # four files; approximately 9.4 GB; ungated
+$ malina model pull z-image-turbo-controlnet-union # four files; approximately 13.4 GB
 $ malina model pull flux2-klein-4b   # license-gated; export HF_TOKEN first
 $ malina model pull flux2-klein-9b   # license-gated; export HF_TOKEN first
 ```

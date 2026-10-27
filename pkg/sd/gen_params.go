@@ -268,11 +268,11 @@ var (
 	// SD_API void sd_img_gen_params_init(sd_img_gen_params_t* sd_img_gen_params);
 	imgGenParamsInitFunc ffi.Fun
 
-	// SD_API bool generate_image(sd_ctx_t*, const sd_img_gen_params_t*, sd_image_t**, int*);
+	// SD_API bool generate_image(sd_ctx_t*, const sd_img_gen_params_t*, sd_image_generation_result_t**);
 	generateImageFunc ffi.Fun
 
-	// SD_API void free_sd_images(sd_image_t* result_images, int num_images);
-	freeSDImagesFunc ffi.Fun
+	// SD_API void free_sd_image_generation_result(sd_image_generation_result_t*);
+	freeImageResultFunc ffi.Fun
 
 	sampleParamsInitFunc ffi.Fun
 	cacheParamsInitFunc  ffi.Fun
@@ -286,12 +286,12 @@ func loadGenFuncs(lib ffi.Lib) error {
 		return loadError("sd_img_gen_params_init", err)
 	}
 
-	if generateImageFunc, err = lib.Prep("generate_image", &ffi.TypeUint8, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer); err != nil {
+	if generateImageFunc, err = lib.Prep("generate_image", &ffi.TypeUint8, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer); err != nil {
 		return loadError("generate_image", err)
 	}
 
-	if freeSDImagesFunc, err = lib.Prep("free_sd_images", &ffi.TypeVoid, &ffi.TypePointer, &ffi.TypeSint32); err != nil {
-		return loadError("free_sd_images", err)
+	if freeImageResultFunc, err = lib.Prep("free_sd_image_generation_result", &ffi.TypeVoid, &ffi.TypePointer); err != nil {
+		return loadError("free_sd_image_generation_result", err)
 	}
 
 	sampleParamsInitFunc = prepOptional(lib, "sd_sample_params_init", &ffi.TypeVoid, &ffi.TypePointer)
@@ -386,7 +386,7 @@ func HiresParamsInit() HiresParams {
 // returns a single decoded image. The returned SDImage owns its pixel data
 // (copied out of the C heap), so it remains valid after the context is
 // freed. The underlying result batch is released by stable-diffusion.cpp's
-// free_sd_images before this function returns.
+// free_sd_image_generation_result before this function returns.
 func GenerateImage(ctx Context, params ImgGenParams) (*SDImage, error) {
 	images, err := GenerateImages(ctx, params)
 	if err != nil {
@@ -397,7 +397,7 @@ func GenerateImage(ctx Context, params ImgGenParams) (*SDImage, error) {
 
 // GenerateImages runs the diffusion pipeline and returns every image produced
 // by the requested batch. All returned pixel buffers are copied into Go-owned
-// memory before the native result array is freed with free_sd_images.
+// memory, together with GenerationInfo, before the native result is freed.
 func GenerateImages(ctx Context, params ImgGenParams) ([]*SDImage, error) {
 	if ctx == 0 {
 		return nil, errors.New("GenerateImages: nil context")
@@ -412,38 +412,17 @@ func GenerateImages(ctx Context, params ImgGenParams) ([]*SDImage, error) {
 	clearLastLog()
 
 	rawPtr := &raw
-	var resultPtr *cImage
-	var resultCount int32
-	resultPtrPtr := &resultPtr
-	resultCountPtr := &resultCount
-	var result ffi.Arg
-	generateImageFunc.Call(
-		&result,
-		unsafe.Pointer(&ctx),
-		unsafe.Pointer(&rawPtr),
-		unsafe.Pointer(&resultPtrPtr),
-		unsafe.Pointer(&resultCountPtr),
-	)
+	out, err := callImageArray(generateImageFunc, unsafe.Pointer(&ctx), unsafe.Pointer(&rawPtr))
 	runtime.KeepAlive(state)
 	runtime.KeepAlive(params)
 	runtime.KeepAlive(&raw)
 
-	if byte(result) == 0 || resultPtr == nil || resultCount == 0 {
-		if resultPtr != nil && resultCount > 0 {
-			freeSDImagesFunc.Call(nil, unsafe.Pointer(&resultPtr), unsafe.Pointer(&resultCount))
-		}
+	if err != nil {
 		if last := LastError(); last != "" {
 			return nil, fmt.Errorf("generate_image failed: %s", last)
 		}
 		return nil, errors.New("generate_image failed (no log message captured)")
 	}
-
-	rawImages := unsafe.Slice(resultPtr, int(resultCount))
-	out := make([]*SDImage, resultCount)
-	for i := range rawImages {
-		out[i] = sdImageFromC(&rawImages[i])
-	}
-	freeSDImagesFunc.Call(nil, unsafe.Pointer(&resultPtr), unsafe.Pointer(&resultCount))
 
 	return out, nil
 }

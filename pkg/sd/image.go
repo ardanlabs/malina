@@ -95,6 +95,18 @@ type cImage struct {
 	Data    *byte // 16..24  (uint8 *)
 }
 
+// cImageResult mirrors sd_image_result_t. Size: 32 bytes.
+type cImageResult struct {
+	Image          cImage
+	GenerationInfo *byte
+}
+
+// cImageGenerationResult mirrors sd_image_generation_result_t. Size: 16 bytes.
+type cImageGenerationResult struct {
+	Items *cImageResult
+	Count int32
+}
+
 // ffiTypeImage describes sd_image_t for the few C APIs that pass the struct
 // by value rather than by pointer.
 var ffiTypeImage = ffi.NewType(&ffi.TypeUint32, &ffi.TypeUint32, &ffi.TypeUint32, &ffi.TypePointer)
@@ -111,6 +123,10 @@ type SDImage struct {
 	Height  uint32
 	Channel uint32
 	Data    []byte
+	// GenerationInfo is Go-owned sdcpp.generation/v1 JSON from the native
+	// result. It records resolved parameters, including the per-image seed.
+	// Loading or saving PNG/JPEG pixels does not restore or embed this record.
+	GenerationInfo string
 }
 
 // SavePNG writes the image to filename as a PNG. Grayscale (1-channel) and

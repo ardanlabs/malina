@@ -1,11 +1,11 @@
 {
   "version": 1,
   "repository": "leejet/stable-diffusion.cpp",
-  "tag": "master-975-95b3090",
-  "generated": "2026-10-20T15:40:35.242347Z",
+  "tag": "master-1017-be48649",
+  "generated": "2026-10-27T12:22:45.754622Z",
   "assets": {
     "cudart-sd-bin-win-cu12-x64.zip": {
-      "id": 653192175,
+      "id": 679084537,
       "size": 563452046,
       "sha256": "fe20366827d357c00797eebb58244dddab7fd9a348d70090c3871004c320f38d",
       "files": {
@@ -14,20 +14,20 @@
         "cudart64_12.dll": "c2c9a9c22a9bcba90e261825968836787b331038047a26770cffb7a583c28344"
       }
     },
-    "sd-master-95b3090-bin-Darwin-macOS-26.6.2-arm64.zip": {
-      "id": 653192686,
-      "size": 36488395,
-      "sha256": "2edf5a21c4b73f448c3a02c87925283b77aa94f1859c0d8e649134da68b40813",
+    "sd-master-be48649-bin-Darwin-macOS-26.6.2-arm64.zip": {
+      "id": 679085484,
+      "size": 37580315,
+      "sha256": "6478d12a084b5d7f4158d45606e1fbbd56698e44bea60363e90709c9d6d9aaf1",
       "files": {
-        "libstable-diffusion.dylib": "a43c6e892616753685ef06b42dbedf8b271b086d79111a8dff19894428378f31"
+        "libstable-diffusion.dylib": "6fea5a6615edd4ea68315a5eeeb081018e89e453e16bc7d9887db0589d6454bf"
       }
     },
-    "sd-master-95b3090-bin-Linux-Ubuntu-24.04-x86_64-rocm-10.1.0.zip": {
-      "id": 653192782,
-      "size": 295415674,
-      "sha256": "b0deb148e8f0c05c75b5c8b54876ff97f819e80f57fcf1398ebb5dbb727c7a16",
+    "sd-master-be48649-bin-Linux-Ubuntu-24.04-x86_64-rocm-10.1.0.zip": {
+      "id": 679085623,
+      "size": 296446002,
+      "sha256": "5d8d282f0be04a2f289a8719b13e4086020921005be138d83f108df4b87c930a",
       "files": {
-        "libggml-base.so.0.27.0": "339ca9d3bd94a8dab95a9c2a7338026912fd77a62cc07012a38bf1240660f96d",
+        "libggml-base.so.0.27.0": "6313a0b5bd5cd8010787de4d8c64131a2c7c11b1cd09f783b11fd4e7ee3393ac",
         "libggml-cpu-alderlake.so": "cdd81a307d66b21989ce1c20cbc3fe3d708ae9f78944716bd2c643f3f3451353",
         "libggml-cpu-cannonlake.so": "bc2c89d90bac798d56098f9b64da817a895a3c69ca8f1e7b4be7fb92b631f563",
         "libggml-cpu-cascadelake.so": "a5ce77464c28756ba5d7abce15685e901edb98881a176189b70baaf3a6dc9382",
@@ -45,7 +45,7 @@
         "libggml-hip.so": "88f3b4f10bd7a16479bdf1fc634cfa9ee647a9b43fa5c2b94719275a2f68e4ef",
         "libggml.so.0.27.0": "17c4490868a0839260437e89ddfc8de99cb340ea361d99ebe85400932ac12ec4",
         "libsharpyuv.so.0.1.2": "e3f4e7538dee717727cbbca87ad25630f079b012c5d9b0c37847978609c5a56e",
-        "libstable-diffusion.so": "de755e3f7b39e6c7eac6617d6dbeea7c5a78ac8f697e5a2ba9400b2ef5c41153",
+        "libstable-diffusion.so": "4dc5a645662b1dbb1729872e740e5fd0ad29579b1e2a7808695be4b00dfed058",
         "libwebm.so": "626e6fe6a56256672c9e475da947bf9a061f84a2e3751c26662a80168af649a8",
         "libwebp.so.7.2.0": "3dfa1445eda8ed4b2ef4f5d4ec2cdfe6cb85bf7ed4ff929b370c8b0709244a14",
         "libwebpmux.so.3.1.2": "f34d2b09290a0d31c4c327c664042b6cfdff4de76980e6a569bb5428ed283684"
@@ -63,14 +63,14 @@
         "libwebpmux.so.3": "libwebpmux.so.3.1.2"
       }
     },
-    "sd-master-95b3090-bin-Linux-Ubuntu-24.04-x86_64-vulkan.zip": {
-      "id": 653193155,
-      "size": 36612523,
-      "sha256": "703f547a0bbe254979940ec6142a87b4af6acbc01d34e37358f4feabb430a225",
+    "sd-master-be48649-bin-Linux-Ubuntu-24.04-x86_64-vulkan.zip": {
+      "id": 679086134,
+      "size": 37646815,
+      "sha256": "794c913d077aaf72025e772b2acfb6a30f49156e92d072461ae15ce958d95c14",
       "files": {
-        "libggml-base.so": "339ca9d3bd94a8dab95a9c2a7338026912fd77a62cc07012a38bf1240660f96d",
-        "libggml-base.so.0": "339ca9d3bd94a8dab95a9c2a7338026912fd77a62cc07012a38bf1240660f96d",
-        "libggml-base.so.0.27.0": "339ca9d3bd94a8dab95a9c2a7338026912fd77a62cc07012a38bf1240660f96d",
+        "libggml-base.so": "6313a0b5bd5cd8010787de4d8c64131a2c7c11b1cd09f783b11fd4e7ee3393ac",
+        "libggml-base.so.0": "6313a0b5bd5cd8010787de4d8c64131a2c7c11b1cd09f783b11fd4e7ee3393ac",
+        "libggml-base.so.0.27.0": "6313a0b5bd5cd8010787de4d8c64131a2c7c11b1cd09f783b11fd4e7ee3393ac",
         "libggml-cpu-alderlake.so": "8b09c3860e640b1b1635b6b0e5fd864838f384b1008de3aa4f7ec59e68560c42",
         "libggml-cpu-cannonlake.so": "d58f4bb8087f7ecf0599c89f3a7c3fea97b6b1976af8db92c2a8131447f47707",
         "libggml-cpu-cascadelake.so": "a1e66a306ee847f7256cae739cc9099ed7d64eff606755f4e088986c70da2f42",
@@ -85,14 +85,14 @@
         "libggml-cpu-sse42.so": "8f31833cf48287578f9b6f9acc3128cdaa6d5973711d7538915455fa978b4f88",
         "libggml-cpu-x64.so": "40cfa6714d114ee5522cdfa0cc2027e79077e59639faf8b533bfcc9d8ad92aaf",
         "libggml-cpu-zen4.so": "9477bd4f3b21bc69d1e32642d1e601546dee5ae79eaf8e1500edf20ae91e5589",
-        "libggml-vulkan.so": "a8f22f003aedd9b0194f9ec235ae66b43c9f9aad687768f2cfe1459b45b87a82",
+        "libggml-vulkan.so": "7ad2613697f638e172322ea9f0ec69ad8c4c163b4ff958ead12a99f45af8f91c",
         "libggml.so": "17c4490868a0839260437e89ddfc8de99cb340ea361d99ebe85400932ac12ec4",
         "libggml.so.0": "17c4490868a0839260437e89ddfc8de99cb340ea361d99ebe85400932ac12ec4",
         "libggml.so.0.27.0": "17c4490868a0839260437e89ddfc8de99cb340ea361d99ebe85400932ac12ec4",
         "libsharpyuv.so": "e3f4e7538dee717727cbbca87ad25630f079b012c5d9b0c37847978609c5a56e",
         "libsharpyuv.so.0": "e3f4e7538dee717727cbbca87ad25630f079b012c5d9b0c37847978609c5a56e",
         "libsharpyuv.so.0.1.2": "e3f4e7538dee717727cbbca87ad25630f079b012c5d9b0c37847978609c5a56e",
-        "libstable-diffusion.so": "175cba87ed9b0b0e9538fed3601b6d6832f927b8a50b84c5d981cb3567c96466",
+        "libstable-diffusion.so": "9c98cec9f6e7389ea6adc75ad3aa06be423bb297b117e19cbc9cb33799a6ae93",
         "libwebm.so": "bf2debfb3ff6906547b5463c31470ac2a1aed22c1c40aa604259c8e277be4736",
         "libwebp.so": "3dfa1445eda8ed4b2ef4f5d4ec2cdfe6cb85bf7ed4ff929b370c8b0709244a14",
         "libwebp.so.7": "3dfa1445eda8ed4b2ef4f5d4ec2cdfe6cb85bf7ed4ff929b370c8b0709244a14",
@@ -102,14 +102,14 @@
         "libwebpmux.so.3.1.2": "f34d2b09290a0d31c4c327c664042b6cfdff4de76980e6a569bb5428ed283684"
       }
     },
-    "sd-master-95b3090-bin-Linux-Ubuntu-24.04-x86_64.zip": {
-      "id": 653193217,
-      "size": 26289165,
-      "sha256": "23757b2d46edd68ec59ad252e6e3d6c1854ab01d6be5d47a06e0bc751c2eee2a",
+    "sd-master-be48649-bin-Linux-Ubuntu-24.04-x86_64.zip": {
+      "id": 679086244,
+      "size": 27322693,
+      "sha256": "1016ea927e00b0176ca23aa9f5dc5de68290ea7e115eb3fe6c2399acca41701f",
       "files": {
-        "libggml-base.so": "339ca9d3bd94a8dab95a9c2a7338026912fd77a62cc07012a38bf1240660f96d",
-        "libggml-base.so.0": "339ca9d3bd94a8dab95a9c2a7338026912fd77a62cc07012a38bf1240660f96d",
-        "libggml-base.so.0.27.0": "339ca9d3bd94a8dab95a9c2a7338026912fd77a62cc07012a38bf1240660f96d",
+        "libggml-base.so": "6313a0b5bd5cd8010787de4d8c64131a2c7c11b1cd09f783b11fd4e7ee3393ac",
+        "libggml-base.so.0": "6313a0b5bd5cd8010787de4d8c64131a2c7c11b1cd09f783b11fd4e7ee3393ac",
+        "libggml-base.so.0.27.0": "6313a0b5bd5cd8010787de4d8c64131a2c7c11b1cd09f783b11fd4e7ee3393ac",
         "libggml-cpu-alderlake.so": "8b09c3860e640b1b1635b6b0e5fd864838f384b1008de3aa4f7ec59e68560c42",
         "libggml-cpu-cannonlake.so": "d58f4bb8087f7ecf0599c89f3a7c3fea97b6b1976af8db92c2a8131447f47707",
         "libggml-cpu-cascadelake.so": "a1e66a306ee847f7256cae739cc9099ed7d64eff606755f4e088986c70da2f42",
@@ -130,7 +130,7 @@
         "libsharpyuv.so": "e3f4e7538dee717727cbbca87ad25630f079b012c5d9b0c37847978609c5a56e",
         "libsharpyuv.so.0": "e3f4e7538dee717727cbbca87ad25630f079b012c5d9b0c37847978609c5a56e",
         "libsharpyuv.so.0.1.2": "e3f4e7538dee717727cbbca87ad25630f079b012c5d9b0c37847978609c5a56e",
-        "libstable-diffusion.so": "175cba87ed9b0b0e9538fed3601b6d6832f927b8a50b84c5d981cb3567c96466",
+        "libstable-diffusion.so": "9c98cec9f6e7389ea6adc75ad3aa06be423bb297b117e19cbc9cb33799a6ae93",
         "libwebm.so": "bf2debfb3ff6906547b5463c31470ac2a1aed22c1c40aa604259c8e277be4736",
         "libwebp.so": "3dfa1445eda8ed4b2ef4f5d4ec2cdfe6cb85bf7ed4ff929b370c8b0709244a14",
         "libwebp.so.7": "3dfa1445eda8ed4b2ef4f5d4ec2cdfe6cb85bf7ed4ff929b370c8b0709244a14",
@@ -140,86 +140,86 @@
         "libwebpmux.so.3.1.2": "f34d2b09290a0d31c4c327c664042b6cfdff4de76980e6a569bb5428ed283684"
       }
     },
-    "sd-master-95b3090-bin-win-cpu-x64.zip": {
-      "id": 653193252,
-      "size": 17706677,
-      "sha256": "945ed74a22a5c6abbae480201312e439f16ad029166dd94e58cef9a2ecb2dba8",
+    "sd-master-be48649-bin-win-cpu-x64.zip": {
+      "id": 679086325,
+      "size": 18080575,
+      "sha256": "f0f76c8176a90cafc431ca7d5049cbe8c5cea61ca7cb92b78e07361d41d8fb21",
       "files": {
-        "ggml-base.dll": "78e3ad8c97578c9a06bd2c9dfe66e71792fce04e03dbf6a3fd7bfadf63f3b093",
-        "ggml-cpu-alderlake.dll": "29028e6a211d72f2792b86265374199241db29e66e0cee8147fedeb1809f1bb3",
-        "ggml-cpu-cannonlake.dll": "99876243849fd747d2a9a3758c08a6eb7267b98803a9572cd88124b94c68a648",
-        "ggml-cpu-cascadelake.dll": "86bfff415e95b8220fb95101e8368cc8f5af19cc79f3f18ab720b45211251d70",
-        "ggml-cpu-haswell.dll": "60928a1fbcc0ecce4312418f9758a8c6e0b78b2b6824c22288e4f59d94d91ab8",
-        "ggml-cpu-icelake.dll": "ba0b1959f84e9ec5735c6d322ed6a0190f8db245d8535c8746a6cf98e2acca48",
-        "ggml-cpu-sandybridge.dll": "365a63abe52a447abca106d3d7f5a2476bfde7b5dd610c7e42925a83e43e8725",
-        "ggml-cpu-skylakex.dll": "f051eb6b71e92b0a92eae0ec8ab0c872ad123de735e7c3d7eec22fce309e8f0c",
-        "ggml-cpu-sse42.dll": "54d70fc038bacb0253aeb76ed29a0bd40c52e51d143e5cd2681133fb01cfb4d7",
-        "ggml-cpu-x64.dll": "cba809ff28222d94844398ffb9bc59b69b425c7143bba85882816a4eef7fc389",
-        "ggml.dll": "b967be5b9a24f11dd84e2eca58caebd814861f3defca0878eebd9888fd9b7ee5",
-        "libsharpyuv.dll": "0fa040d39a6dd7481f15ca8bea44b07c1a5c2dc07877653b06e60a9da0c647aa",
-        "libwebp.dll": "4b2ba9791545e338b3f91ad38dc007e7e498d83a459ef4f66502db35863c5a28",
-        "libwebpmux.dll": "b0449d392aeb5486f094453eb0af03dc35163e93fac71f74bcfb08ae79ffeded",
-        "stable-diffusion.dll": "d8188b5cfd5bfda0f56b56e381ed31b781d8cd6f82ad82aeae178fb8f3664304",
-        "webm.dll": "57b26de3bcea51a6589058346c82d3f806ffe07525c584e291437c401bdebb9a"
+        "ggml-base.dll": "8a91daa983475ba26643c411886f0a7e9f51b99e06b344c3cc5e96038e6e1e21",
+        "ggml-cpu-alderlake.dll": "894f538f5f7a363f7bf4ea315049dd1852480e06b876795b18d57a6041157197",
+        "ggml-cpu-cannonlake.dll": "bab4e24e69ff05a0419a47472eaba2c191c36903dc62bfb2b408a647e8da436f",
+        "ggml-cpu-cascadelake.dll": "a59e09036e99e58a32c7da14a8b68687786c39d634e130f7953968488dc62f88",
+        "ggml-cpu-haswell.dll": "5802022db0c50fd5341665def9b1177ed7a5be3cad29be3d008165a0435749c1",
+        "ggml-cpu-icelake.dll": "f86f537fd345ebb109b7ddfe45694ebb80d3924a7aee443c69a97815afd06686",
+        "ggml-cpu-sandybridge.dll": "85fc05069f3555d8d824f3c4ef911625409ca5b2fd3acdc440509f72c1ee0ab9",
+        "ggml-cpu-skylakex.dll": "97cd2e676e538a215bc680560518989c5f67965970799b77196a3222d7a17b6e",
+        "ggml-cpu-sse42.dll": "e50141cf6b384ee895bef8c07962151736f946de515b471adf42cb269db7cd45",
+        "ggml-cpu-x64.dll": "bb48b57b03157da0565c693c3fcd438cf86f2f56adc590be16defa1504725600",
+        "ggml.dll": "e096c7d42ed3fe0c50d10df5850a3ca918a83f659416f13765e35ac362c85afa",
+        "libsharpyuv.dll": "27b5c5f5e77895959fdafab596dddc7a77376f3542b9b787c72789cf926d0f69",
+        "libwebp.dll": "01a5cded64e92c4dcb3fe4b64d8cf7afb8ebed518246791e03ec7ef0dddbbd32",
+        "libwebpmux.dll": "4ab81bd8e536e65bd28ec86162998db9a0f99eaea0be431a8c88938bb0ce94f0",
+        "stable-diffusion.dll": "ab0b591859440a8b5717fc90b33cc23b727415d06d2dca0cd48f640bf36e198e",
+        "webm.dll": "9e3f02bc9bb9fd4f273460a66974fb232179ca82fee6e389a892e10e8bc8e65c"
       }
     },
-    "sd-master-95b3090-bin-win-cuda12-x64.zip": {
-      "id": 653193302,
-      "size": 343630973,
-      "sha256": "b935f5902fbedefe6db0b68c8930ae3e7c0f3cc778bd5d501a3c7f7ee7336338",
+    "sd-master-be48649-bin-win-cuda12-x64.zip": {
+      "id": 679086437,
+      "size": 343541244,
+      "sha256": "a63c85596fb76cfd0668cd82dd3faff7cc511325891f0411117c99ee1f360c84",
       "files": {
-        "ggml-base.dll": "cad48ba5cda3849e08c387512ad8bb7d2d14ed8e0758e539c1073af42274487a",
-        "ggml-cpu-alderlake.dll": "cab3f3cae36c4382c7f01e72c57aaaf44c9076b6d6031f560e3917954a24b807",
-        "ggml-cpu-cannonlake.dll": "83cc02d010d0f9f371a2fa70860d865da014b3767bc0c1a454f6926b67b977cc",
-        "ggml-cpu-cascadelake.dll": "deb0079c5b60881611a0d5b24a454048e88bd561a9a65440166290367f987d97",
-        "ggml-cpu-haswell.dll": "6a550455a33640132cc5a1df0024d509a21493eafbf462da7cf7148456bfce0f",
-        "ggml-cpu-icelake.dll": "fcf9c203822010264b5e93173f8c31c06312644372989ca20d2e551720c6d28f",
-        "ggml-cpu-sandybridge.dll": "c64132af09fdc2fa3907a384bdfb61e6ae90556d6536a541d9f6ee5056f974fa",
-        "ggml-cpu-skylakex.dll": "4cf7d729fe14b797663d5600b737b02a6189c479ee8c72ea0a9626af68887b73",
-        "ggml-cpu-sse42.dll": "7d702586de3a80df4fc9096dced9cb65e04d2751497e64131400fa01df086902",
-        "ggml-cpu-x64.dll": "be073f6a41c9674f97199894ad03a15fe76dd727495bee667aad17ce2f998372",
-        "ggml-cuda.dll": "f01d295a2ba3b2a78dda9e1207a9d71988191b303f54082f76ee809b36279db5",
-        "ggml.dll": "49c06f243fe0a52b5feb5e333a34b6b8299e4f1c67c721709f60b4443a102e7e",
-        "libsharpyuv.dll": "0ebe265c41d54c392a5daf22cc2b41197bfc43f56b6153949ed4fc48c048dbd9",
-        "libwebp.dll": "8394a782bd428e76119ec434af8059cf23a7c3b6327333c295b96ba2f41c6fdb",
-        "libwebpmux.dll": "2fe7a48e795009586c7b81d7fc8fc57c3014776b748bf42dad7b9cd9ac12795c",
-        "stable-diffusion.dll": "8535b234262db21c6f7f17e7ea2f34e1a19f8350fa557cc9d1627ecf310835dd",
-        "webm.dll": "90fb2ccb32b4beb14c2255e4f514c3b05c561da45606837ce13bdd5d35f8533a"
+        "ggml-base.dll": "1a515c3f7a2662ad9edf9144fce1b999006819686f246782f0cff30257832e0e",
+        "ggml-cpu-alderlake.dll": "042afd73a713430f98931c55c3822c3f0807d6b0c88c47ae73c5640f499ab3e3",
+        "ggml-cpu-cannonlake.dll": "144d3fd1380d6df97db61e534426d54ac590eb6106e23ff23fd2e0e3638b424c",
+        "ggml-cpu-cascadelake.dll": "806498281e174a1c331d4b4e8114951814bc3aa2a9a50259c71f5957d86846fe",
+        "ggml-cpu-haswell.dll": "a5c1e8f7b3ed7d32916069abdf640e634295d4ce53a72942e0ec6cb3bdd4dc9d",
+        "ggml-cpu-icelake.dll": "9c0ad1eb62287087507ecf69ae8c321af5babbdc063daa93d492b691f9b8ea29",
+        "ggml-cpu-sandybridge.dll": "4ad8c868fa5f77331b88b95f71479b564550c379433448f13dbc9f8fa5a574e1",
+        "ggml-cpu-skylakex.dll": "76295b5e5f36cd730cbf4294216d5a99e9e4168f453aabbb79a9f12470a49906",
+        "ggml-cpu-sse42.dll": "8ca4d70003dc56f77d912eb92756146d4f06ac3bfa00512d477b864d2c7a94cd",
+        "ggml-cpu-x64.dll": "2dba8da95ee1bfd84172ade57dab118f5b66509df163eb000e2116cf5ea094a9",
+        "ggml-cuda.dll": "de1ef6d19a8242febba9f3a701deffac976a8b476bf88416f5fa9cad70a3cebc",
+        "ggml.dll": "63f2c60313d2bacbdcb42d956ae1d00042172c732af0d01d4e536dccb51a0448",
+        "libsharpyuv.dll": "b61d5565c311fe1bfdca8575c2abc9e018a01777215653d76cad013c4ff3012e",
+        "libwebp.dll": "cc3631cc11085946983eb631e96023550af6b654516524492cd487cdd863305f",
+        "libwebpmux.dll": "6b5662d38cbdc17d8c1e9076a71da2b27b296098fcbf9e80535aa163d97765b2",
+        "stable-diffusion.dll": "fdf21efa73235131399c55ee642f5586e4e80d9694a7290ab155b9911e9bfa01",
+        "webm.dll": "221cfe5afa14fc7a43c9e2913341569cba63a2a6c184b4598feb5de3cc7b2d54"
       }
     },
-    "sd-master-95b3090-bin-win-rocm-10.1.0-x64.zip": {
-      "id": 653193653,
-      "size": 263997742,
-      "sha256": "cecec9f455f4675b4560b0e604f4f852c6e1ecdc9f2d12ce4aee5eb7e9679195",
+    "sd-master-be48649-bin-win-rocm-10.1.0-x64.zip": {
+      "id": 679086921,
+      "size": 264569038,
+      "sha256": "13e643b777c3155f81943ee710148b94aa90207022c1a6967cbf24afc2c0a23a",
       "files": {
         "amd_comgr.dll": "da9527847c99efd3df99bd46fe24abae7920b04df0f51e7c677abcccd4924e58",
         "amdhip64_7.dll": "f20e2065cee5889789bf73df0c2d1f4efb481e74ade30488c352fd65ad80ac83",
         "rocm_kpack.dll": "2e9734ffe6f6eefe1ff660a55dc85fffbcd2d66f794fce4878c6d95a55787b48",
-        "stable-diffusion.dll": "6d3eed465d5b6479fb7a3cf2ab51f1521496bfb0d1501a0074c1941ea421200e"
+        "stable-diffusion.dll": "4692965e5f96e9da6fd05b70c3d64c99147aa9317157b8ae088fdf26ae24e70f"
       }
     },
-    "sd-master-95b3090-bin-win-vulkan-x64.zip": {
-      "id": 653193992,
-      "size": 29371165,
-      "sha256": "17398d07ba89c2fba21b8662db69ecdd917888373e4f82779b7599e97a6b4bd3",
+    "sd-master-be48649-bin-win-vulkan-x64.zip": {
+      "id": 679087222,
+      "size": 29744133,
+      "sha256": "833414dfe255d9709c6184e699017028ee8d5522058ad53b201d9602805c6b41",
       "files": {
-        "ggml-base.dll": "6073c7abed1e4d7eb095f1d8bf77d7f0275a083cf4f1a5321c95b3623443cb53",
-        "ggml-cpu-alderlake.dll": "e9c00762de177e62de8f712d47331ba3fdbbd6e2141d50ba12e70639c3217ad7",
-        "ggml-cpu-cannonlake.dll": "b569000c236b6312c2a512cec4b39b93410a9a6ae6d9e4c1f4ab7b98d361dc2f",
-        "ggml-cpu-cascadelake.dll": "f7addf3b355b5abae4cbc02ebbe1ee6d2e9b083750fe5852871c513d1d9541b7",
-        "ggml-cpu-haswell.dll": "c2215cee51d15464ee225c4a649ca63ddd1773b104e54b44fc60f90334abaf5c",
-        "ggml-cpu-icelake.dll": "261c4ad9a033831b2a50f33302d9ad1e0a24fa2dcdad459b68ee6fe6809bfb76",
-        "ggml-cpu-sandybridge.dll": "7b00dc5dc4c4fdd7d9de11253b0628e6e3f0e28ba8517c71fcb38a133f9f6b34",
-        "ggml-cpu-skylakex.dll": "7a6285cd95fef25714e175e0c250c040ddba0c408307c2e2e9f1b02a6af7feae",
-        "ggml-cpu-sse42.dll": "ddaf34852156041487962d7e6ea6f5ef5f47adc3b170756c0347dba32fc0a2fe",
-        "ggml-cpu-x64.dll": "5c2bb9cb093cb7e7b479780bacb0802b7de8031c1b031a500afb5d994830d995",
-        "ggml-vulkan.dll": "2d58b24eb2ba6f8fd7ea7afd3e86f0360c4aa48e8d3e00c4a7d2ef72c4221556",
-        "ggml.dll": "34fec1745f4e1cef9bbe95b35a6c768beec84046e641b8464400d4da7aa0f6fd",
-        "libsharpyuv.dll": "32cfda54492bbf8661ee0de0ec0e2abd5527f6488899e5126d5298b62cad23cf",
-        "libwebp.dll": "ad83824cebfadf8dc94335365399a28d2ffb53d4538b1c9070bee2cff57615aa",
-        "libwebpmux.dll": "f5fcf1d0f2f4937a382073202f383c5350a5ba3b59c4b234086d6a82d2ba1e90",
-        "stable-diffusion.dll": "a0e168dbf7481cadaebc2df0bdc17ede55d1b345072b11b5f4343042fd7cfcf8",
-        "webm.dll": "5c4ecbaab5efda134db35e65fcaa26a1811d3e3a50e81576235951c5e9605c39"
+        "ggml-base.dll": "70b0d00828b0b26f6f9cee34604de3dee0ce4bfa5fcacfa92a292adbe1c77930",
+        "ggml-cpu-alderlake.dll": "8f26f1fe4eecb9e4a7fa83200643964f60402cd7553ad06504fa09eefcc3c4d7",
+        "ggml-cpu-cannonlake.dll": "2d77c533c529bfb880d37a8669a51b0c33f3e1b1e8754cfba2d264ebb9e4e290",
+        "ggml-cpu-cascadelake.dll": "4574afb39f2f9554595e96cf726fb4ae7a55232238f9931df17d585f3e4bec80",
+        "ggml-cpu-haswell.dll": "0467a30852b55a174ac86d4063bfadb3da45d1a62b3d3c56bfaf3ec5ae2405cc",
+        "ggml-cpu-icelake.dll": "580f8c57302be68c3afc0ead80f67990f98e7f4eaa47a5d771d9ec363e8192ed",
+        "ggml-cpu-sandybridge.dll": "cdb1d8ebbeab46a00007ffb427ec5bc607b70ba9be22c006f871aadf2e0b581a",
+        "ggml-cpu-skylakex.dll": "a54766a2c93956818375e85b50c21f2bd8535e775635afa9a88ff4b6554fbd61",
+        "ggml-cpu-sse42.dll": "2571964b973d3ed0a81451188d0847082141b8c70b7bce83c2970f4a53b00722",
+        "ggml-cpu-x64.dll": "ae534d38b69a17ec73493ddbfb2619838b444d1bd5cb839a280eea578b4e613e",
+        "ggml-vulkan.dll": "2ac4b04047e7890433fb9342bb1cc22d3c09cbd939a832af59eb29ba38fc01b6",
+        "ggml.dll": "d3481e73c4023c1affc82756e592dfcd1b9f253f3e1ce466840535486597661b",
+        "libsharpyuv.dll": "30042a79a0247ae172cb04f6f19558f9e8b0aca06fe9b40e77eb79ba99b625da",
+        "libwebp.dll": "4c3329145515781837639310a4f48c76fea731ab255bc88a721a9e1ab0e72930",
+        "libwebpmux.dll": "25ff65607e33770883436dc6118b4c20793a3872aecd388d447c01305fe46561",
+        "stable-diffusion.dll": "4bae0e2ea9025f4c747a840e9f214a4b9c4c7d91d0936c65f14f348e66d4f78d",
+        "webm.dll": "9db0c5c36a55b7b3ff8d6d3d1bcbb272fe2ec90cf1e00c7455c7498823adcce6"
       }
     }
   }

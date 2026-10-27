@@ -207,6 +207,7 @@ func TestMarshalVideoParams(t *testing.T) {
 		VAETiling: TilingParams{Enabled: true, TemporalTiling: true, TileSizeX: 32, TileSizeY: 40, TargetOverlap: 0.2, RelativeSizeX: 0.3, RelativeSizeY: 0.4, ExtraArgs: "video-tiling"},
 		Cache:     testCacheParams(), Hires: testHiresParams(), CircularX: true, CircularY: true,
 		ImagePreprocess: ImagePreprocessParams{Rules: "target=control,key=value"},
+		RefImageArgs:    "0=first reference;1=second reference",
 	}
 
 	state, err := marshalVideoParams(params)
@@ -227,6 +228,7 @@ func TestMarshalVideoParams(t *testing.T) {
 		{"RefVideosCount", raw.RefVideosCount, int32(1)}, {"RefAudiosCount", raw.RefAudiosCount, int32(1)},
 		{"ControlFramesSize", raw.ControlFramesSize, int32(2)}, {"CircularX", raw.CircularX, uint8(1)}, {"CircularY", raw.CircularY, uint8(1)},
 		{"ImagePreprocess.Rules", cString(raw.ImagePreprocess.Rules), params.ImagePreprocess.Rules},
+		{"RefImageArgs", cString(raw.RefImageArgs), params.RefImageArgs},
 	}
 	for _, item := range values {
 		if item.got != item.want {

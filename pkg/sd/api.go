@@ -41,6 +41,7 @@ var (
 
 	commitFunc            ffi.Fun
 	listDevicesFunc       ffi.Fun
+	addRPCServersFunc     ffi.Fun
 	convertFunc           ffi.Fun
 	convertComponentsFunc ffi.Fun
 	preprocessCannyFunc   ffi.Fun
@@ -80,6 +81,7 @@ func loadExtendedFuncs(lib ffi.Lib) {
 
 	commitFunc = prepOptional(lib, "sd_commit", &ffi.TypePointer)
 	listDevicesFunc = prepOptional(lib, "sd_list_devices", &ffi.TypeUint64, &ffi.TypePointer, &ffi.TypeUint64)
+	addRPCServersFunc = prepOptional(lib, "sd_add_rpc_servers", &ffi.TypeUint8, &ffi.TypePointer)
 	convertFunc = prepOptional(lib, "convert", &ffi.TypeUint8, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypeSint32, &ffi.TypePointer, &ffi.TypeUint8)
 	convertComponentsFunc = prepOptional(lib, "convert_with_components", &ffi.TypeUint8, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypeSint32, &ffi.TypePointer, &ffi.TypeUint8, &ffi.TypeSint32, &ffi.TypePointer, &ffi.TypeSint32)
 	preprocessCannyFunc = prepOptional(lib, "preprocess_canny", &ffi.TypeUint8, &ffiTypeImage, &ffi.TypeFloat, &ffi.TypeFloat, &ffi.TypeFloat, &ffi.TypeFloat, &ffi.TypeUint8)
@@ -355,6 +357,24 @@ func Commit() (string, error) {
 		return "", nil
 	}
 	return utils.BytePtrToString(ptr), nil
+}
+
+// AddRPCServers registers comma-separated host:port endpoints before ListDevices.
+// Empty input is a no-op. Repeated endpoints are safe.
+func AddRPCServers(servers string) error {
+	if addRPCServersFunc == (ffi.Fun{}) {
+		return unsupported("sd_add_rpc_servers")
+	}
+	ptr, err := utils.BytePtrFromString(servers)
+	if err != nil {
+		return err
+	}
+	ok := callBool(addRPCServersFunc, unsafe.Pointer(&ptr))
+	runtime.KeepAlive(ptr)
+	if !ok {
+		return errors.New("sd_add_rpc_servers: RPC unavailable or endpoint has no usable devices")
+	}
+	return nil
 }
 
 // ListDevices returns every stable-diffusion.cpp backend device.

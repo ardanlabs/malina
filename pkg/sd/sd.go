@@ -147,15 +147,18 @@ const (
 type Prediction int32
 
 const (
-	PredictionEPS         Prediction = 0
-	PredictionV           Prediction = 1
-	PredictionEDMV        Prediction = 2
-	PredictionFlow        Prediction = 3
-	PredictionFluxFlow    Prediction = 4
-	PredictionSeFiFlow    Prediction = 5
-	PredictionMinit2IFlow Prediction = 6
-	PredictionSenseNovaU1 Prediction = 7
-	PredictionCount       Prediction = 8
+	PredictionEPS           Prediction = 0
+	PredictionV             Prediction = 1
+	PredictionEDMV          Prediction = 2
+	PredictionFlow          Prediction = 3
+	PredictionFluxFlow      Prediction = 4
+	PredictionSeFiFlow      Prediction = 5
+	PredictionMinit2IFlow   Prediction = 6
+	PredictionSenseNovaU1   Prediction = 7
+	PredictionFlux3Flow     Prediction = 8
+	PredictionH3AVFlow      Prediction = 9
+	PredictionMingImageFlow Prediction = 10
+	PredictionCount         Prediction = 11
 )
 
 // LogLevel mirrors enum sd_log_level_t.
