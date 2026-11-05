@@ -33,11 +33,11 @@ $ go run ./examples/hello "a lovely cat"
 
 Sometimes there are breaking changes to stable-diffusion.cpp that require an update to malina. Here are the known compatible versions:
 
-| stable-diffusion.cpp | malina         |
-| -------------------- | -------------- |
-| master-1052-f5df5f8  | 1.2.x          |
-| master-1017-be48649  | 1.1.x (≥1.1.9) |
-| master-975-95b3090   | 1.1.8          |
+| stable-diffusion.cpp | malina         | Linux prebuilt requirements |
+| -------------------- | -------------- | --------------------------- |
+| master-1052-f5df5f8  | 1.2.x          | CPU/Vulkan: Ubuntu 26.04 (glibc ≥2.43); ROCm archive: Ubuntu 24.04 |
+| master-1017-be48649  | 1.1.x (≥1.1.9) | See upstream release assets |
+| master-975-95b3090   | 1.1.8          | See upstream release assets |
 
 ## Owner Information
 
