@@ -19,10 +19,12 @@ concurrency:
 # leejet currently publishes no linux/cuda asset, so these jobs test the CPU
 # build. The primary job excludes model-backed tests; the model-test matrix
 # downloads and caches each advanced fixture independently.
+# The upstream CPU archive requires glibc 2.43 (Ubuntu 26.04). Pin both jobs
+# rather than relying on ubuntu-latest during GitHub's runner-image rollout.
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -97,7 +99,7 @@ jobs:
 
   model-test:
     name: Model / ${{ matrix.name }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     strategy:
       fail-fast: false
       matrix:
