@@ -3,21 +3,21 @@
 Performance numbers for `pkg/sd` against the locally available model bundles.
 Recorded on an Apple M5 Max with
 128 GiB RAM (macOS 27.0.1, darwin/arm64) using the Metal backend from upstream
-stable-diffusion.cpp `master-1017-be48649` artifact
-`sd-master-be48649-bin-Darwin-macOS-26.6.2-arm64.zip` (SHA-256
-`6478d12a084b5d7f4158d45606e1fbbd56698e44bea60363e90709c9d6d9aaf1`,
-GitHub asset ID 679085484, 37,580,315 bytes).
+stable-diffusion.cpp `master-1052-f5df5f8` artifact
+`sd-master-f5df5f8-bin-Darwin-macOS-26.6.2-arm64.zip` (SHA-256
+`2592c4abd774e53cbc9c2b767d45439de01d516824b935d3c76a2530240b7a25`,
+GitHub asset ID 714480787, 37,747,681 bytes).
 The Go benchmarks all run against the extracted
 `./lib/libstable-diffusion.dylib` (SHA-256
-`6fea5a6615edd4ea68315a5eeeb081018e89e453e16bc7d9887db0589d6454bf`).
-Recorded October 27, 2026, using Go 1.27.3, automatic operator selection,
+`7a4fc12d3fae063e81034b2632d19ae4dee7e2c99d7982e44209f0b6cd2f3960`).
+Recorded November 5, 2026, using Go 1.27.3, automatic operator selection,
 and Malina's Metal workaround: batched CFG is disabled at context creation.
 
 The Metal batched-CFG workaround is retained from Malina 1.1.8. The earlier
 `master-975-95b3090` four-step 128x128 img2img probe returned 49,152/49,152
 white bytes with batched CFG enabled and a range of 0–255 with it disabled.
 That diagnostic was not rerun here; these new measurements use disabled
-batched CFG and include the new native generation metadata and result copying.
+batched CFG and retain native generation metadata and result copying.
 The model-backed suite passes with that configuration. Timings alone are not
 an image-quality guarantee or evidence about untested models/backends, and
 single-iteration measurements do not establish a statistically reliable
@@ -66,17 +66,32 @@ and digest listed above. All measurements used
 
 | Workload       | Model/bundle  | Shape   | Steps | b.N |         ns/op | s/img |    B/op | allocs/op |
 | -------------- | ------------- | ------- | ----: | --: | ------------: | ----: | ------: | --------: |
-| text-to-image  | sd-1.5        | 512x512 |    20 |   1 | 6,743,723,084 |  6.74 | 799,696 |       258 |
-| text-to-image  | sdxl-base-1.0 | 512x512 |    20 |   1 | 8,209,774,291 |  8.21 | 799,696 |       258 |
-| image-to-image | sd-1.5        | 512x512 |    16 |   1 | 6,093,918,083 |  6.09 | 802,416 |       257 |
+| text-to-image  | sd-1.5        | 512x512 |    20 |   1 | 6,583,301,167 |  6.58 | 800,112 |       266 |
+| text-to-image  | sdxl-base-1.0 | 512x512 |    20 |   1 | 7,127,083,583 |  7.13 | 800,112 |       266 |
+| image-to-image | sd-1.5        | 512x512 |    16 |   1 | 14,914,690,209 | 14.91 | 800,224 |       266 |
 
 Actual benchmark output (`b.N=1`, after one untimed warm-up):
 
 ```text
-BenchmarkGenerateImageSD15-18                  1  6743723084 ns/op  262144 px  6.744 s/img  799696 B/op  258 allocs/op
-BenchmarkGenerateImageSDXL-18                  1  8209774291 ns/op  262144 px  8.210 s/img  799696 B/op  258 allocs/op
-BenchmarkGenerateImageImg2ImgSD15-18            1  6093918083 ns/op  262144 px  6.094 s/img  802416 B/op  257 allocs/op
+BenchmarkGenerateImageSD15-18                  1  6583301167 ns/op  262144 px  6.583 s/img  800112 B/op  266 allocs/op
+BenchmarkGenerateImageSDXL-18                  1  7127083583 ns/op  262144 px  7.127 s/img  800112 B/op  266 allocs/op
+BenchmarkGenerateImageImg2ImgSD15-18            1  14914690209 ns/op  262144 px  14.91 s/img  800224 B/op  266 allocs/op
 ```
+
+The img2img result was slower than the October 27 measurement of 6.094 s/img
+on `master-1017-be48649`, so it was repeated in a separate process with:
+
+```
+make bench-img2img-sd-1.5 BENCHTIME=1x MALINA_LIB="$PWD/lib"
+```
+
+```text
+BenchmarkGenerateImageImg2ImgSD15-18            1  6252000375 ns/op  262144 px  6.252 s/img  800240 B/op  266 allocs/op
+```
+
+Both target-release samples are retained. The slowdown did not persist in
+the repeat, but its cause was not established; these one-iteration runs do
+not establish a performance regression or a speedup.
 
 Run commands:
 
