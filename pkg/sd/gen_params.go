@@ -140,7 +140,7 @@ type cImagePreprocessParams struct {
 	Rules *byte
 }
 
-// cImgGenParams mirrors sd_img_gen_params_t. Size: 552 bytes.
+// cImgGenParams mirrors sd_img_gen_params_t. Size: 560 bytes.
 type cImgGenParams struct {
 	Loras             uintptr // 0..8
 	LoraCount         uint32  // 8..12
@@ -179,6 +179,8 @@ type cImgGenParams struct {
 	CircularY         uint8                  // 541
 	_                 [2]byte                // 542..544
 	ImagePreprocess   cImagePreprocessParams // 544..552
+	ControlType       int32                  // 552..556
+	_                 [4]byte                // 556..560
 }
 
 // =============================================================================
@@ -262,6 +264,9 @@ type ImgGenParams struct {
 	Hires             HiresParams
 	QwenImageLayers   int32
 	ImagePreprocess   ImagePreprocessParams
+	// ControlType selects the task for a ControlNet Union model, which requires
+	// an explicit supported type. Ordinary ControlNet models ignore this field.
+	ControlType ControlType
 }
 
 var (
@@ -336,6 +341,7 @@ func ImgGenParamsInit() ImgGenParams {
 		Hires:             hiresParamsFromC(raw.Hires),
 		QwenImageLayers:   raw.QwenImageLayers,
 		ImagePreprocess:   ImagePreprocessParams{Rules: cString(raw.ImagePreprocess.Rules)},
+		ControlType:       ControlType(raw.ControlType),
 	}
 }
 
@@ -459,6 +465,7 @@ func marshalImgGenParams(params ImgGenParams) (*marshaledImgGenParams, error) {
 	raw.ControlStrength = params.ControlStrength
 	raw.IPAdapterStrength = params.IPAdapterStrength
 	raw.QwenImageLayers = params.QwenImageLayers
+	raw.ControlType = int32(params.ControlType)
 
 	for _, item := range []struct {
 		dst   **byte

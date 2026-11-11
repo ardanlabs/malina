@@ -70,7 +70,11 @@ diff:
 # Default the per-bundle test env vars to the layout `malina model pull`
 # writes under $(MODELS_DIR). When a contributor has downloaded the bundles
 # via `make download-models`, `make test` exercises every per-bundle model test
-# in pkg/sd. A test skips when its environment variable is unset, but fails
+# in pkg/sd except the optional SDXL Union task test. To enable it, run
+# `go run . model pull -y controlnet-union-sdxl` and export
+# MALINA_CONTROLNET_UNION_TEST_MODEL=$(MODELS_DIR)/controlnet-union-sdxl/diffusion_pytorch_model.safetensors.
+# This uses MALINA_SDXL_TEST_MODEL for the base SDXL checkpoint.
+# A test skips when its environment variable is unset, but fails
 # when a configured file or directory is missing so CI cannot silently pass
 # without the requested fixture.
 MALINA_TEST_MODEL      ?= $(MODELS_DIR)/sd-1.5/v1-5-pruned-emaonly.safetensors

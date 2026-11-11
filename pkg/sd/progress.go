@@ -1,6 +1,7 @@
 package sd
 
 import (
+	"errors"
 	"fmt"
 	"runtime"
 	"sync"
@@ -13,6 +14,32 @@ import (
 // progress. SecondsPerStep is the average elapsed time per completed step.
 type ProgressCallback func(step int, steps int, secondsPerStep float32)
 
+// GenerationProgress is a Go-owned copy of a context-local native event.
+// Total == 0 means unknown. SamplePass counts from one since registration.
+type GenerationProgress struct {
+	Stage      string
+	Detail     string
+	Unit       string
+	SamplePass int32
+	Completed  int64
+	Total      int64
+}
+
+// GenerationProgressCallback receives synchronous generation events, separate
+// from previews and legacy progress. It must not panic or reenter the context.
+type GenerationProgressCallback func(GenerationProgress)
+
+// cGenerationProgress mirrors sd_generation_progress_t (LP64/LLP64: 48 bytes).
+type cGenerationProgress struct {
+	Stage      *byte
+	Detail     *byte
+	Unit       *byte
+	SamplePass int32
+	_          [4]byte
+	Completed  int64
+	Total      int64
+}
+
 var (
 	// SD_API void sd_set_progress_callback(sd_progress_cb_t cb, void* data);
 	setProgressCallbackFunc ffi.Fun
@@ -24,6 +51,13 @@ var (
 
 	progressMu          sync.Mutex
 	progressUserHandler ProgressCallback
+
+	setGenerationProgressFunc  ffi.Fun
+	generationProgressCif      ffi.Cif
+	generationProgressClosure  *ffi.Closure
+	generationProgressCode     unsafe.Pointer
+	generationProgressFun      uintptr
+	generationProgressHandlers map[Context]GenerationProgressCallback
 )
 
 func loadProgressFuncs(lib ffi.Lib) error {
@@ -39,6 +73,22 @@ func loadProgressFuncs(lib ffi.Lib) error {
 		return err
 	}
 	setProgressCallbackFunc = fn
+
+	setGenerationProgressFunc = prepOptional(lib, "sd_set_generation_progress_callback", &ffi.TypeVoid,
+		&ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer)
+	if setGenerationProgressFunc != (ffi.Fun{}) && generationProgressClosure == nil {
+		if status := ffi.PrepCif(&generationProgressCif, ffi.DefaultAbi, 2, &ffi.TypeVoid,
+			&ffi.TypePointer, &ffi.TypePointer); status != ffi.OK {
+			return fmt.Errorf("PrepCif sd_generation_progress_cb_t: %v", status)
+		}
+		closure, code, callback, err := allocateCallbackClosure("sd_generation_progress_cb_t", &generationProgressCif, generationProgressTrampoline)
+		if err != nil {
+			return err
+		}
+		generationProgressClosure = closure
+		generationProgressCode = code
+		generationProgressFun = callback
+	}
 
 	return nil
 }
@@ -128,5 +178,50 @@ func progressTrampoline(_ *ffi.Cif, _ unsafe.Pointer, args *unsafe.Pointer, _ un
 		handler(step, steps, secondsPerStep)
 	}
 
+	return 0
+}
+
+// SetGenerationProgressCallback installs a context-local generation callback.
+// Register or clear it only while ctx is idle. Pass nil to clear it; FreeContext
+// also releases the Go handler. Different contexts can report concurrently.
+func SetGenerationProgressCallback(ctx Context, callback GenerationProgressCallback) error {
+	if ctx == 0 {
+		return errors.New("SetGenerationProgressCallback: nil context")
+	}
+	progressMu.Lock()
+	defer progressMu.Unlock()
+	if setGenerationProgressFunc == (ffi.Fun{}) {
+		return unsupported("sd_set_generation_progress_callback")
+	}
+	var code unsafe.Pointer
+	if callback == nil {
+		delete(generationProgressHandlers, ctx)
+	} else {
+		if generationProgressHandlers == nil {
+			generationProgressHandlers = make(map[Context]GenerationProgressCallback)
+		}
+		generationProgressHandlers[ctx] = callback
+		code = generationProgressCode
+	}
+	// The opaque native context address is the lookup key, not a Go pointer.
+	data := uintptr(ctx)
+	setGenerationProgressFunc.Call(nil, unsafe.Pointer(&ctx), unsafe.Pointer(&code), unsafe.Pointer(&data))
+	runtime.KeepAlive(generationProgressFun)
+	return nil
+}
+
+func generationProgressTrampoline(_ *ffi.Cif, _ unsafe.Pointer, args *unsafe.Pointer, _ unsafe.Pointer) uintptr {
+	arguments := (*[2]unsafe.Pointer)(unsafe.Pointer(args))
+	raw := *(**cGenerationProgress)(arguments[0])
+	ctx := Context(*(*uintptr)(arguments[1]))
+	progressMu.Lock()
+	handler := generationProgressHandlers[ctx]
+	progressMu.Unlock()
+	if handler != nil && raw != nil {
+		handler(GenerationProgress{
+			Stage: cString(raw.Stage), Detail: cString(raw.Detail), Unit: cString(raw.Unit),
+			SamplePass: raw.SamplePass, Completed: raw.Completed, Total: raw.Total,
+		})
+	}
 	return 0
 }

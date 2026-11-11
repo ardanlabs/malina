@@ -81,6 +81,60 @@ func TestControlNetGeneration(t *testing.T) {
 	}
 }
 
+// TestControlNetUnionTask verifies that task selection reaches the native
+// Union network, rather than being ignored or only stored in Go state.
+func TestControlNetUnionTask(t *testing.T) {
+	testSetup(t)
+	controlPath := testEnvModelFile(t, "MALINA_CONTROLNET_UNION_TEST_MODEL")
+	modelPath := testEnvModelFile(t, "MALINA_SDXL_TEST_MODEL")
+	cparams := ContextParamsInit()
+	cparams.ModelPath = modelPath
+	cparams.ControlNetPath = controlPath
+	ctx, err := NewContext(cparams)
+	if err != nil {
+		t.Fatalf("NewContext: %v", err)
+	}
+	defer FreeContext(ctx)
+
+	control := &SDImage{Width: 64, Height: 64, Channel: 3, Data: make([]byte, 64*64*3)}
+	for y := range 64 {
+		for x := range 64 {
+			for channel := range 3 {
+				control.Data[(y*64+x)*3+channel] = byte(x*3 + y)
+			}
+		}
+	}
+	params := ImgGenParamsInit()
+	params.Prompt = "a blue house on a hillside"
+	params.Width, params.Height = 64, 64
+	params.Steps, params.Seed = 2, 42
+	params.ControlImage = control
+	params.ControlStrength = 1
+	if _, err := GenerateImage(ctx, params); err == nil {
+		t.Fatal("Union generation accepted the default ControlTypeNone")
+	}
+	params.ControlType = ControlTypeDepth
+	depth, err := GenerateImage(ctx, params)
+	if err != nil {
+		t.Fatalf("GenerateImage depth: %v", err)
+	}
+	params.ControlType = ControlTypeCanny
+	canny, err := GenerateImage(ctx, params)
+	if err != nil {
+		t.Fatalf("GenerateImage canny: %v", err)
+	}
+	if bytes.Equal(depth.Data, canny.Data) {
+		t.Fatal("depth and canny tasks produced identical pixels")
+	}
+	repeated, err := GenerateImage(ctx, params)
+	if err != nil {
+		t.Fatalf("GenerateImage repeated canny: %v", err)
+	}
+	if !bytes.Equal(canny.Data, repeated.Data) {
+		t.Fatal("same seed and canny task produced different pixels; task comparison is inconclusive")
+	}
+}
+
 func TestUpscaleImage(t *testing.T) {
 	testSetup(t)
 	bundleDir := testEnvBundleDir(t, "MALINA_UPSCALER_TEST_DIR")

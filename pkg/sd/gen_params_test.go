@@ -26,7 +26,7 @@ func TestNestedStructSizes(t *testing.T) {
 		{"cCacheParams", unsafe.Sizeof(cCacheParams{}), 96},
 		{"cHiresParams", unsafe.Sizeof(cHiresParams{}), 56},
 		{"cImagePreprocessParams", unsafe.Sizeof(cImagePreprocessParams{}), 8},
-		{"cImgGenParams", unsafe.Sizeof(cImgGenParams{}), 552},
+		{"cImgGenParams", unsafe.Sizeof(cImgGenParams{}), 560},
 	}
 	for _, c := range cases {
 		if c.got != c.want {
@@ -59,6 +59,7 @@ func TestImgGenParamsInitDefaults(t *testing.T) {
 		{"Strength", p.Strength, float32(0.75)},
 		{"CircularX", p.CircularX, false},
 		{"CircularY", p.CircularY, false},
+		{"ControlType", p.ControlType, ControlTypeNone},
 	}
 	for _, c := range cases {
 		if c.got != c.want {

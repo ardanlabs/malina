@@ -18,6 +18,8 @@ func TestTargetAPISymbolManifest(t *testing.T) {
 		{"sd_version", versionFunc}, {"sd_commit", commitFunc}, {"sd_get_system_info", getSystemInfoFunc},
 		{"sd_get_num_physical_cores", getNumPhysicalCoresFunc}, {"sd_set_log_callback", setLogCallbackFunc},
 		{"sd_set_progress_callback", setProgressCallbackFunc}, {"sd_set_preview_callback", setPreviewCallbackFunc},
+		{"sd_set_generation_progress_callback", setGenerationProgressFunc},
+		{"sd_control_type_name", controlTypeNameFunc}, {"str_to_sd_control_type", strToControlTypeFunc},
 		{"sd_get_preview_info", getPreviewInfoFunc},
 		{"sd_set_backend_eval_callback", setBackendEvalCallbackFunc}, {"sd_type_name", typeNameFunc},
 		{"str_to_sd_type", strToTypeFunc}, {"sd_rng_type_name", rngTypeNameFunc}, {"str_to_rng_type", strToRngTypeFunc},
@@ -47,8 +49,8 @@ func TestTargetAPISymbolManifest(t *testing.T) {
 		{"sd_list_devices", listDevicesFunc},
 		{"sd_add_rpc_servers", addRPCServersFunc},
 	}
-	if len(symbols) != 63 {
-		t.Fatalf("wrapped symbol count: got %d, want 63", len(symbols))
+	if len(symbols) != 66 {
+		t.Fatalf("wrapped symbol count: got %d, want 66", len(symbols))
 	}
 	for _, symbol := range symbols {
 		if symbol.fn == (ffi.Fun{}) {
@@ -79,6 +81,7 @@ func TestEnumValues(t *testing.T) {
 		{"SDVaeFormat", enumInts([]SDVaeFormat{SDVaeFormatAuto, SDVaeFormatFlux, SDVaeFormatSD3, SDVaeFormatFlux2, SDVaeFormatWan, SDVaeFormatCount}), []int32{-1, 0, 1, 2, 3, 4}},
 		{"LoraApplyMode", enumInts([]LoraApplyMode{LoraApplyAuto, LoraApplyImmediately, LoraApplyAtRuntime, LoraApplyModeCount}), sequence(0, 4)},
 		{"PreviewMode", enumInts([]PreviewMode{PreviewNone, PreviewProj, PreviewTAE, PreviewVAE, PreviewCount}), sequence(0, 5)},
+		{"ControlType", enumInts([]ControlType{ControlTypeNone, ControlTypeOpenPose, ControlTypeDepth, ControlTypeScribble, ControlTypeCanny, ControlTypeNormal, ControlTypeSegment, ControlTypeTile, ControlTypeRepaint, ControlTypeCount}), sequence(0, 10)},
 		{"CacheMode", enumInts([]CacheMode{CacheDisabled, CacheEasyCache, CacheUCache, CacheDBCache, CacheTaylorseer, CacheDiT, CacheSpectrum}), sequence(0, 7)},
 		{"HiresUpscaler", enumInts([]HiresUpscaler{HiresUpscalerNone, HiresUpscalerLatent, HiresUpscalerLatentNearest, HiresUpscalerLatentNearestExact, HiresUpscalerLatentAntialiased, HiresUpscalerLatentBicubic, HiresUpscalerLatentBicubicAntialiased, HiresUpscalerLanczos, HiresUpscalerNearest, HiresUpscalerModel, HiresUpscalerCount}), sequence(0, 11)},
 		{"CancelMode", enumInts([]CancelMode{CancelAll, CancelNewLatents, CancelReset}), sequence(0, 3)},

@@ -6,6 +6,22 @@ import "errors"
 // predates an optional API used by the caller.
 var ErrUnsupportedAPI = errors.New("stable-diffusion.cpp API is not available")
 
+// ControlType selects a ControlNet Union task, matching sd_control_type_t.
+type ControlType int32
+
+const (
+	ControlTypeNone     ControlType = 0
+	ControlTypeOpenPose ControlType = 1
+	ControlTypeDepth    ControlType = 2
+	ControlTypeScribble ControlType = 3
+	ControlTypeCanny    ControlType = 4
+	ControlTypeNormal   ControlType = 5
+	ControlTypeSegment  ControlType = 6
+	ControlTypeTile     ControlType = 7
+	ControlTypeRepaint  ControlType = 8
+	ControlTypeCount    ControlType = 9
+)
+
 // PreviewMode mirrors enum preview_t.
 type PreviewMode int32
 

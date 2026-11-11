@@ -40,7 +40,7 @@ var (
 // Bumping this value is a deliberate, reviewable change that should be paired
 // with regenerating that manifest and re-running the FFI sizeof tests in
 // pkg/sd.
-const DefaultSDVersion = "master-1052-f5df5f8@sha256:f3ed77571fd835ec2b712733fabbf7fe8e7fbe1f7e46493779a2d829548e5d0a"
+const DefaultSDVersion = "master-1088-32d516c@sha256:5f91839d47bc65edda35fafb9e6943db249c69c1d91f42f68d007c1eaa96770c"
 
 // SDRepo is the upstream GitHub repo we fetch prebuilt libraries from.
 const SDRepo = "leejet/stable-diffusion.cpp"
@@ -200,7 +200,7 @@ func LibraryName(operatingSystem string) string {
 //	architecture: "amd64" or "arm64"
 //	osName:       "linux", "darwin", or "windows"
 //	processor:    "cpu", "cuda", "metal", "vulkan", or "rocm"
-//	version:      a leejet release tag (e.g. "master-1052-f5df5f8")
+//	version:      a leejet release tag (e.g. "master-1088-32d516c")
 //	dest:         destination directory for the extracted libraries
 func Get(architecture, osName, processor, version, dest string) error {
 	return GetWithProgress(architecture, osName, processor, version, dest, ProgressTracker)

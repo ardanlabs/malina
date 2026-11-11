@@ -1,5 +1,5 @@
-STABLE_DIFF_VERSION = master-1052-f5df5f8
-MALINA_VERSION = v1.2.0
+STABLE_DIFF_VERSION = master-1088-32d516c
+MALINA_VERSION = v1.2.1
 
 Upgrade this Malina repository to stable-diffusion.cpp
 <STABLE_DIFF_VERSION> and prepare Malina release <MALINA_VERSION>.
@@ -257,6 +257,10 @@ Update `BENCHMARKS.md` with the actual output from the target library:
 - `ns/op` and `s/img`
 - `B/op` and `allocs/op`
 - img2img results when that benchmark is part of `make bench`
+
+Add a version-over-version comparison against the measurements in `BENCHMARKS.md` at the latest published Malina tag before this work. Identify both Malina versions, native-library releases, measurement dates, and the baseline Git tag. For each matching workload, show previous/current seconds per image, the absolute time difference, percentage time change calculated from unrounded `ns/op`, and changes in `B/op` and `allocs/op`. Define negative time change as faster and positive as slower.
+
+Compare like-for-like model, shape, steps, host, backend, and benchmark methodology; disclose toolchain or configuration differences. Mark unmatched workloads as not comparable rather than calculating misleading deltas. Preserve all recorded repeats and outliers instead of selecting the baseline that makes the upgrade look best. Describe single-sample differences as observations, not statistically established speedups or regressions. Append each upgrade's comparison to the document's comparison history without removing earlier comparisons. If the baseline has no measurements, state that a comparison is unavailable and establish the current measurements as the future baseline.
 
 Keep or improve exact reproduction instructions. Never change only the
 stable-diffusion.cpp version label while retaining measurements produced by

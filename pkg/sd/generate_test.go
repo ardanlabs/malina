@@ -9,6 +9,7 @@ import (
 	"image/jpeg"
 	"os"
 	"path/filepath"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -223,6 +224,78 @@ func TestPreviewCallbackSD15Smoke(t *testing.T) {
 	}
 	if callbacks.Load() == 0 {
 		t.Fatal("preview callback was not invoked")
+	}
+}
+
+func TestGenerationProgressSD15(t *testing.T) {
+	testSetup(t)
+	modelPath := testEnvModelFile(t, "MALINA_TEST_MODEL")
+	cparams := ContextParamsInit()
+	cparams.ModelPath = modelPath
+	ctx, err := NewContext(cparams)
+	if err != nil {
+		t.Fatalf("NewContext: %v", err)
+	}
+	defer FreeContext(ctx)
+
+	var mu sync.Mutex
+	var events []GenerationProgress
+	callback := func(event GenerationProgress) {
+		mu.Lock()
+		events = append(events, event)
+		mu.Unlock()
+	}
+	if err := SetGenerationProgressCallback(ctx, callback); err != nil {
+		t.Fatalf("SetGenerationProgressCallback: %v", err)
+	}
+	params := ImgGenParamsInit()
+	params.Prompt = "a blue cat"
+	params.Width, params.Height = 64, 64
+	params.Steps = 2
+	params.Seed = 42
+	// Native progress must report the four-step schedule, not echo Steps=2.
+	params.CustomSigmas = []float32{14, 8, 3, 1, 0}
+	for _, pass := range []int32{1, 2, 1} {
+		if pass == 1 {
+			if err := SetGenerationProgressCallback(ctx, callback); err != nil {
+				t.Fatalf("reset callback: %v", err)
+			}
+		}
+		mu.Lock()
+		events = nil
+		mu.Unlock()
+		if _, err := GenerateImage(ctx, params); err != nil {
+			t.Fatalf("GenerateImage: %v", err)
+		}
+		mu.Lock()
+		captured := append([]GenerationProgress(nil), events...)
+		mu.Unlock()
+		var completed bool
+		for _, event := range captured {
+			if event.Stage == "sampling" {
+				if event.SamplePass != pass || event.Total != 4 || event.Unit != "steps" {
+					t.Errorf("sampling event: got %+v, want pass %d, total 4, unit steps", event, pass)
+				}
+				completed = completed || event.Completed == 4
+			}
+		}
+		if !completed {
+			t.Fatalf("missing completed sampling event: %+v", captured)
+		}
+	}
+	if err := SetGenerationProgressCallback(ctx, nil); err != nil {
+		t.Fatalf("clear callback: %v", err)
+	}
+	mu.Lock()
+	events = nil
+	mu.Unlock()
+	if _, err := GenerateImage(ctx, params); err != nil {
+		t.Fatalf("GenerateImage after clear: %v", err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(events) != 0 {
+		t.Errorf("events after clear: got %d, want 0", len(events))
 	}
 }
 

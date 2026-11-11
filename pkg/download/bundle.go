@@ -190,6 +190,25 @@ func Catalog() []Bundle {
 			},
 		},
 		{
+			Name:        "controlnet-union-sdxl",
+			Description: "SDXL base with multi-task ControlNet Union. Set ImgGenParams.ControlType and supply a preprocessed control image. Two files (~9.5 GB total).",
+			License:     "CreativeML Open RAIL++-M / Apache-2.0",
+			Files: []BundleFile{
+				{
+					Role:     RoleModel,
+					Filename: "sd_xl_base_1.0.safetensors",
+					URL:      "https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/resolve/462165984030d82259a11f4367a4eed129e94a7b/sd_xl_base_1.0.safetensors",
+					Size:     "6.9 GB",
+				},
+				{
+					Role:     RoleControlNet,
+					Filename: "diffusion_pytorch_model.safetensors",
+					URL:      "https://huggingface.co/xinsir/controlnet-union-sdxl-1.0/resolve/801a4a3fa3d4c936f4feea95b98607bc6726f80c/diffusion_pytorch_model.safetensors",
+					Size:     "2.5 GB",
+				},
+			},
+		},
+		{
 			Name:        "llada-image-turbo",
 			Description: "LLaDA-Image-Turbo — 4-step text-to-image and image editing with quantized diffusion and text-encoder models. Five files (~20.2 GB total).",
 			License:     "Apache-2.0",

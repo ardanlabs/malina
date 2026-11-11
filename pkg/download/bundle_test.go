@@ -17,6 +17,7 @@ func TestBundleByName(t *testing.T) {
 	}{
 		{"sd-1.5", true},
 		{"controlnet-canny-sd1.5", true},
+		{"controlnet-union-sdxl", true},
 		{"realesrgan-x4-anime", true},
 		{"adetailer-face-yolov8n", true},
 		{"animatediff-sd1.5", true},
@@ -44,7 +45,7 @@ func TestBundleByName(t *testing.T) {
 
 func TestBundleNames(t *testing.T) {
 	got := BundleNames()
-	want := []string{"adetailer-face-yolov8n", "animatediff-sd1.5", "controlnet-canny-sd1.5", "flux2-klein-4b", "flux2-klein-9b", "llada-image-turbo", "moss-image-sft", "realesrgan-x4-anime", "sd-1.5", "sdxl-base-1.0", "wan2.2-s2v-14b", "z-image-turbo", "z-image-turbo-controlnet-union"}
+	want := []string{"adetailer-face-yolov8n", "animatediff-sd1.5", "controlnet-canny-sd1.5", "controlnet-union-sdxl", "flux2-klein-4b", "flux2-klein-9b", "llada-image-turbo", "moss-image-sft", "realesrgan-x4-anime", "sd-1.5", "sdxl-base-1.0", "wan2.2-s2v-14b", "z-image-turbo", "z-image-turbo-controlnet-union"}
 	if len(got) != len(want) {
 		t.Fatalf("BundleNames: got %v, want %v", got, want)
 	}
@@ -82,6 +83,13 @@ func TestBundleShapes(t *testing.T) {
 			files: []wantFile{
 				{RoleModel, "stable-diffusion-v1-5-pruned-emaonly-Q4_0.gguf"},
 				{RoleControlNet, "control_canny-fp16.safetensors"},
+			},
+		},
+		{
+			name: "controlnet-union-sdxl",
+			files: []wantFile{
+				{RoleModel, "sd_xl_base_1.0.safetensors"},
+				{RoleControlNet, "diffusion_pytorch_model.safetensors"},
 			},
 		},
 		{

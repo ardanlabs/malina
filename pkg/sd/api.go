@@ -35,6 +35,8 @@ var (
 	strToLoraApplyModeFunc     ffi.Fun
 	hiresUpscalerNameFunc      ffi.Fun
 	strToHiresUpscalerFunc     ffi.Fun
+	controlTypeNameFunc        ffi.Fun
+	strToControlTypeFunc       ffi.Fun
 	getDefaultSampleMethodFunc ffi.Fun
 	getDefaultSchedulerFunc    ffi.Fun
 	getModelVersionNameFunc    ffi.Fun
@@ -75,6 +77,8 @@ func loadExtendedFuncs(lib ffi.Lib) {
 	strToLoraApplyModeFunc = prepOptional(lib, "str_to_lora_apply_mode", &ffi.TypeSint32, &ffi.TypePointer)
 	hiresUpscalerNameFunc = prepOptional(lib, "sd_hires_upscaler_name", &ffi.TypePointer, &ffi.TypeSint32)
 	strToHiresUpscalerFunc = prepOptional(lib, "str_to_sd_hires_upscaler", &ffi.TypeSint32, &ffi.TypePointer)
+	controlTypeNameFunc = prepOptional(lib, "sd_control_type_name", &ffi.TypePointer, &ffi.TypeSint32)
+	strToControlTypeFunc = prepOptional(lib, "str_to_sd_control_type", &ffi.TypeSint32, &ffi.TypePointer)
 	getDefaultSampleMethodFunc = prepOptional(lib, "sd_get_default_sample_method", &ffi.TypeSint32, &ffi.TypePointer)
 	getDefaultSchedulerFunc = prepOptional(lib, "sd_get_default_scheduler", &ffi.TypeSint32, &ffi.TypePointer, &ffi.TypeSint32)
 	getModelVersionNameFunc = prepOptional(lib, "sd_get_model_version_name", &ffi.TypePointer, &ffi.TypePointer)
@@ -221,6 +225,18 @@ func HiresUpscalerName(value HiresUpscaler) (string, error) {
 func ParseHiresUpscaler(value string) (HiresUpscaler, error) {
 	result, err := callParseEnum(strToHiresUpscalerFunc, value, "str_to_sd_hires_upscaler")
 	return HiresUpscaler(result), err
+}
+
+// ControlTypeName returns the native name for a ControlNet Union task.
+func ControlTypeName(value ControlType) (string, error) {
+	return callEnumName(controlTypeNameFunc, int32(value), "sd_control_type_name")
+}
+
+// ParseControlType converts a task name or alias (such as lineart or hed).
+// Unknown names return ControlTypeCount.
+func ParseControlType(value string) (ControlType, error) {
+	result, err := callParseEnum(strToControlTypeFunc, value, "str_to_sd_control_type")
+	return ControlType(result), err
 }
 
 // ContextSupportsImageGeneration reports whether the loaded context can generate images.

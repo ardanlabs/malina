@@ -35,9 +35,19 @@ Sometimes there are breaking changes to stable-diffusion.cpp that require an upd
 
 | stable-diffusion.cpp | malina         | Linux prebuilt requirements |
 | -------------------- | -------------- | --------------------------- |
-| master-1052-f5df5f8  | 1.2.x          | CPU/Vulkan: Ubuntu 26.04 (glibc ≥2.43); ROCm archive: Ubuntu 24.04 |
+| master-1088-32d516c  | 1.2.x (≥1.2.1) | CPU/Vulkan: Ubuntu 26.04 (glibc ≥2.43); ROCm archive: Ubuntu 24.04 |
+| master-1052-f5df5f8  | 1.2.0          | CPU/Vulkan: Ubuntu 26.04 (glibc ≥2.43); ROCm archive: Ubuntu 24.04 |
 | master-1017-be48649  | 1.1.x (≥1.1.9) | See upstream release assets |
-| master-975-95b3090   | 1.1.8          | See upstream release assets |
+
+Malina 1.2.1 updates the native image-parameter ABI (560 bytes, previously
+552). Upgrade Malina and its native library together; do not use the new
+library with Malina 1.2.0 or the previous library with 1.2.1. The Go API is
+additive: `ImgGenParams.ControlType` selects ControlNet Union tasks, with
+`ParseControlType` / `ControlTypeName` for native names and aliases.
+`SetGenerationProgressCallback` reports context-local stage, detail, unit,
+sample pass, completed work, and total work independently of previews.
+Register or clear this callback only while the context is idle; strings are
+copied into Go-owned memory and `FreeContext` releases the handler.
 
 ## Owner Information
 
@@ -103,6 +113,7 @@ do not represent runtime memory requirements.
 | ------ | --- | -------: |
 | `sd-1.5` | General-purpose image generation; a good starting point | 4.3 GB |
 | `sdxl-base-1.0` | Higher-quality image generation with Stable Diffusion XL | 6.9 GB |
+| `controlnet-union-sdxl` | SDXL base with multi-task ControlNet Union; set `ImgGenParams.ControlType` | 9.5 GB |
 | `z-image-turbo` | Fast text-to-image generation | 6.7 GB |
 | `moss-image-sft` | Text-to-image generation with MOSS-Image | 9.4 GB |
 | `llada-image-turbo` | Text-to-image generation and image editing | 20.2 GB |

@@ -128,6 +128,7 @@ func TestMarshalImgGenParams(t *testing.T) {
 		VAETiling:  TilingParams{Enabled: true, TemporalTiling: true, TileSizeX: 64, TileSizeY: 72, TargetOverlap: 0.25, RelativeSizeX: 0.4, RelativeSizeY: 0.5, ExtraArgs: "tile-args"},
 		Cache:      testCacheParams(), Hires: testHiresParams(), QwenImageLayers: 6,
 		ImagePreprocess: ImagePreprocessParams{Rules: "target=init,key=value"},
+		ControlType:     ControlTypeRepaint,
 	}
 
 	state, err := marshalImgGenParams(params)
@@ -153,6 +154,7 @@ func TestMarshalImgGenParams(t *testing.T) {
 		{"PuLID.IDEmbeddingPath", cString(raw.PulidParams.IDEmbeddingPath), params.PuLID.IDEmbeddingPath},
 		{"PuLID.IDWeight", raw.PulidParams.IDWeight, params.PuLID.IDWeight}, {"QwenImageLayers", raw.QwenImageLayers, params.QwenImageLayers},
 		{"ImagePreprocess.Rules", cString(raw.ImagePreprocess.Rules), params.ImagePreprocess.Rules},
+		{"ControlType", raw.ControlType, int32(8)},
 		{"LoraCount", raw.LoraCount, uint32(1)},
 	}
 	for _, item := range values {

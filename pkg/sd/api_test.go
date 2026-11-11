@@ -32,7 +32,8 @@ func TestExtendedStructLayouts(t *testing.T) {
 		{"cLora", unsafe.Sizeof(cLora{}), 16},
 		{"cHiresParams", unsafe.Sizeof(cHiresParams{}), 56},
 		{"cImagePreprocessParams", unsafe.Sizeof(cImagePreprocessParams{}), 8},
-		{"cImgGenParams", unsafe.Sizeof(cImgGenParams{}), 552},
+		{"cImgGenParams", unsafe.Sizeof(cImgGenParams{}), 560},
+		{"cGenerationProgress", unsafe.Sizeof(cGenerationProgress{}), 48},
 		{"cAudio", unsafe.Sizeof(cAudio{}), 24},
 		{"cRefVideo", unsafe.Sizeof(cRefVideo{}), 40},
 		{"cVidGenParams", unsafe.Sizeof(cVidGenParams{}), 592},
@@ -111,6 +112,10 @@ func TestExtendedStructLayouts(t *testing.T) {
 		{"cImgGenParams.Hires", unsafe.Offsetof(image.Hires), 480},
 		{"cImgGenParams.CircularX", unsafe.Offsetof(image.CircularX), 540},
 		{"cImgGenParams.ImagePreprocess", unsafe.Offsetof(image.ImagePreprocess), 544},
+		{"cImgGenParams.ControlType", unsafe.Offsetof(image.ControlType), 552},
+		{"cGenerationProgress.SamplePass", unsafe.Offsetof(cGenerationProgress{}.SamplePass), 24},
+		{"cGenerationProgress.Completed", unsafe.Offsetof(cGenerationProgress{}.Completed), 32},
+		{"cGenerationProgress.Total", unsafe.Offsetof(cGenerationProgress{}.Total), 40},
 		{"cSampleParams.CustomSigmas", unsafe.Offsetof(sample.CustomSigmas), 72},
 		{"cSampleParams.ExtraSampleArgs", unsafe.Offsetof(sample.ExtraSampleArgs), 88},
 		{"cCacheParams.SCMMask", unsafe.Offsetof(cache.SCMMask), 56},
@@ -184,6 +189,35 @@ func TestExtendedTargetAPI(t *testing.T) {
 	}
 	if videoParams.Width == 0 || videoParams.Height == 0 {
 		t.Fatalf("VideoGenParamsInit dimensions = %dx%d", videoParams.Width, videoParams.Height)
+	}
+}
+
+func TestControlTypeNames(t *testing.T) {
+	testSetup(t)
+	for _, tc := range []struct {
+		input string
+		want  ControlType
+		name  string
+	}{
+		{"depth", ControlTypeDepth, "depth"},
+		{"hed", ControlTypeScribble, "scribble"},
+		{"lineart", ControlTypeCanny, "canny"},
+		{"outpaint", ControlTypeRepaint, "repaint"},
+	} {
+		got, err := ParseControlType(tc.input)
+		if err != nil || got != tc.want {
+			t.Fatalf("ParseControlType(%q): got %v, %v, want %v", tc.input, got, err, tc.want)
+		}
+		name, err := ControlTypeName(got)
+		if err != nil || name != tc.name {
+			t.Errorf("ControlTypeName(%v): got %q, %v, want %q", got, name, err, tc.name)
+		}
+	}
+	if got, err := ParseControlType("unknown-task"); err != nil || got != ControlTypeCount {
+		t.Errorf("unknown task: got %v, %v, want ControlTypeCount", got, err)
+	}
+	if _, err := ParseControlType("depth\x00canny"); err == nil {
+		t.Error("ParseControlType accepted an embedded NUL")
 	}
 }
 

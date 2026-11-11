@@ -433,6 +433,9 @@ func FreeContext(ctx Context) {
 		return
 	}
 	freeSDCtxFunc.Call(nil, unsafe.Pointer(&ctx))
+	progressMu.Lock()
+	delete(generationProgressHandlers, ctx)
+	progressMu.Unlock()
 }
 
 // =============================================================================

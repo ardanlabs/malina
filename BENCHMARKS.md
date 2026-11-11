@@ -3,14 +3,14 @@
 Performance numbers for `pkg/sd` against the locally available model bundles.
 Recorded on an Apple M5 Max with
 128 GiB RAM (macOS 27.0.1, darwin/arm64) using the Metal backend from upstream
-stable-diffusion.cpp `master-1052-f5df5f8` artifact
-`sd-master-f5df5f8-bin-Darwin-macOS-26.6.2-arm64.zip` (SHA-256
-`2592c4abd774e53cbc9c2b767d45439de01d516824b935d3c76a2530240b7a25`,
-GitHub asset ID 714480787, 37,747,681 bytes).
+stable-diffusion.cpp `master-1088-32d516c` artifact
+`sd-master-32d516c-bin-Darwin-macOS-26.7.2-arm64.zip` (SHA-256
+`b6588e81e788d9f2f24498831ba398d7523152e7ec280ff282f39c2009465b77`,
+GitHub asset ID 732523972, 38,105,745 bytes).
 The Go benchmarks all run against the extracted
 `./lib/libstable-diffusion.dylib` (SHA-256
-`7a4fc12d3fae063e81034b2632d19ae4dee7e2c99d7982e44209f0b6cd2f3960`).
-Recorded November 5, 2026, using Go 1.27.3, automatic operator selection,
+`70c9529bfcfc09e0926ba6c7fccd99ce608223c22f54343afff8b8dec216714d`).
+Recorded November 11, 2026, using Go 1.27.4, automatic operator selection,
 and Malina's Metal workaround: batched CFG is disabled at context creation.
 
 The Metal batched-CFG workaround is retained from Malina 1.1.8. The earlier
@@ -66,32 +66,61 @@ and digest listed above. All measurements used
 
 | Workload       | Model/bundle  | Shape   | Steps | b.N |         ns/op | s/img |    B/op | allocs/op |
 | -------------- | ------------- | ------- | ----: | --: | ------------: | ----: | ------: | --------: |
-| text-to-image  | sd-1.5        | 512x512 |    20 |   1 | 6,583,301,167 |  6.58 | 800,112 |       266 |
-| text-to-image  | sdxl-base-1.0 | 512x512 |    20 |   1 | 7,127,083,583 |  7.13 | 800,112 |       266 |
-| image-to-image | sd-1.5        | 512x512 |    16 |   1 | 14,914,690,209 | 14.91 | 800,224 |       266 |
+| text-to-image  | sd-1.5        | 512x512 |    20 |   1 | 6,577,103,166 |  6.58 | 800,144 |       266 |
+| text-to-image  | sdxl-base-1.0 | 512x512 |    20 |   1 | 7,240,571,042 |  7.24 | 800,144 |       266 |
+| image-to-image | sd-1.5        | 512x512 |    16 |   1 | 5,921,617,708 |  5.92 | 800,288 |       266 |
 
 Actual benchmark output (`b.N=1`, after one untimed warm-up):
 
 ```text
-BenchmarkGenerateImageSD15-18                  1  6583301167 ns/op  262144 px  6.583 s/img  800112 B/op  266 allocs/op
-BenchmarkGenerateImageSDXL-18                  1  7127083583 ns/op  262144 px  7.127 s/img  800112 B/op  266 allocs/op
-BenchmarkGenerateImageImg2ImgSD15-18            1  14914690209 ns/op  262144 px  14.91 s/img  800224 B/op  266 allocs/op
+BenchmarkGenerateImageSD15-18                  1  6577103166 ns/op  262144 px  6.577 s/img  800144 B/op  266 allocs/op
+BenchmarkGenerateImageSDXL-18                  1  7240571042 ns/op  262144 px  7.241 s/img  800144 B/op  266 allocs/op
+BenchmarkGenerateImageImg2ImgSD15-18            1  5921617708 ns/op  262144 px  5.922 s/img  800288 B/op  266 allocs/op
 ```
 
-The img2img result was slower than the October 27 measurement of 6.094 s/img
-on `master-1017-be48649`, so it was repeated in a separate process with:
+All three targets completed without skips. These one-iteration runs do not
+establish a statistically reliable performance regression or speedup.
 
-```
-make bench-img2img-sd-1.5 BENCHTIME=1x MALINA_LIB="$PWD/lib"
-```
+## Version-over-version comparison
 
-```text
-BenchmarkGenerateImageImg2ImgSD15-18            1  6252000375 ns/op  262144 px  6.252 s/img  800240 B/op  266 allocs/op
-```
+### Malina 1.2.0 → 1.2.1
 
-Both target-release samples are retained. The slowdown did not persist in
-the repeat, but its cause was not established; these one-iteration runs do
-not establish a performance regression or a speedup.
+Previous measurements come from `git show v1.2.0:BENCHMARKS.md`, recorded
+November 5, 2026 with stable-diffusion.cpp `master-1052-f5df5f8` and Go
+1.27.3. Current measurements above were recorded November 11 with
+`master-1088-32d516c` and Go 1.27.4. Both used the same Apple M5 Max,
+128 GiB RAM, macOS 27.0.1, Metal backend, model bundles, 512x512 shapes,
+step counts, disabled batched CFG, and `BENCHTIME=1x` methodology.
+The Go toolchain also changed, so differences cannot be attributed solely
+to the native-library upgrade.
+
+Time change is (current ns/op ÷ previous ns/op − 1) × 100, calculated from
+the unrounded measurements. **Negative means less time per image (faster);
+positive means more time per image (slower).**
+
+| Workload / sample                    | Previous s/img | Current s/img | Change, seconds | Time change |
+| ------------------------------------ | -------------: | ------------: | --------------: | ----------: |
+| SD 1.5 text-to-image                 |          6.583 |         6.577 |          −0.006 |      −0.09% |
+| SDXL text-to-image                   |          7.127 |         7.241 |          +0.113 |      +1.59% |
+| SD 1.5 img2img, previous initial run |         14.915 |         5.922 |          −8.993 |     −60.30% |
+| SD 1.5 img2img, previous repeat      |          6.252 |         5.922 |          −0.330 |      −5.28% |
+
+The two img2img rows compare the **same current sample** against both
+previous samples, not two new runs. The previous 14.915-second initial
+sample did not persist in its 6.252-second repeat; its cause remains
+unknown. Showing only the initial sample would exaggerate the apparent
+improvement. SD 1.5 text-to-image was nearly unchanged in these samples,
+SDXL took slightly longer, and img2img took less time than either previous
+sample. None of these single-iteration comparisons establishes a reliable
+speedup or regression; repeated samples are needed to distinguish a trend
+from run-to-run variation.
+
+Go allocation counts remain 266/image for all workloads. Text-to-image
+memory rises from 800,112 to 800,144 B/op (+32). Img2img rises from
+800,224 B/op in the previous initial run or 800,240 B/op in its repeat to
+800,288 B/op (+64 or +48 respectively). These exclude native allocations.
+
+## Benchmark commands
 
 Run commands:
 
