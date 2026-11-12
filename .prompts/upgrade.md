@@ -1,5 +1,5 @@
 STABLE_DIFF_VERSION = master-1088-32d516c
-MALINA_VERSION = v1.2.1
+MALINA_VERSION = v1.2.2
 
 Upgrade this Malina repository to stable-diffusion.cpp
 <STABLE_DIFF_VERSION> and prepare Malina release <MALINA_VERSION>.
