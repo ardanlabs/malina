@@ -5,14 +5,139 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
+
+func TestConcurrentLibraryDownloads(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	firstStarted, secondStarted, firstDone := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	const filename = "sd-master-999-aaaa-bin-Darwin-15.7.7-arm64.zip"
+	archive := makeZip(t, "libstable-diffusion.dylib", "native library")
+	digest := hashBytes(archive)
+	var serverURL string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/repos/") {
+			first := strings.HasSuffix(r.URL.Path, "master-999-aaaa")
+			name, tag := "second.zip", "master-1000-bbbb"
+			if first {
+				name, tag = "first.zip", "master-999-aaaa"
+			}
+			if err := json.NewEncoder(w).Encode(map[string]any{
+				"tag_name": tag,
+				"assets":   []releaseAsset{{ID: 1, Name: filename, Size: int64(len(archive)), Digest: "sha256:" + digest, State: "uploaded", DownloadURL: serverURL + "/" + name}},
+			}); err != nil {
+				t.Errorf("encode release: %v", err)
+			}
+			return
+		}
+		if r.Method == http.MethodHead {
+			wait := firstDone
+			if r.URL.Path == "/first.zip" {
+				close(firstStarted)
+				wait = secondStarted
+			} else {
+				close(secondStarted)
+			}
+			select {
+			case <-wait:
+			case <-ctx.Done():
+				return
+			}
+		}
+		w.Header().Set("Content-Length", fmt.Sprint(len(archive)))
+		if r.Method != http.MethodHead {
+			_, _ = w.Write(archive)
+		}
+	}))
+	defer server.Close()
+	serverURL = server.URL
+	// Only release metadata uses http.DefaultTransport. Asset URLs returned by the
+	// local release response exercise the real go-getter download path.
+	oldTransport := http.DefaultTransport
+	http.DefaultTransport = downloadRoundTripper(func(r *http.Request) (*http.Response, error) {
+		r = r.Clone(r.Context())
+		r.URL = r.URL.Clone()
+		r.URL.Scheme, r.URL.Host = "http", strings.TrimPrefix(server.URL, "http://")
+		return oldTransport.RoundTrip(r)
+	})
+	t.Cleanup(func() { http.DefaultTransport = oldTransport })
+	firstDir, secondDir := t.TempDir(), t.TempDir()
+	results := make(chan error, 2)
+	go func() {
+		defer close(firstDone)
+		results <- GetWithContext(ctx, "arm64", "darwin", "metal", "master-999-aaaa", firstDir, libraryProgressCheck{t, "first.zip"})
+	}()
+	select {
+	case <-firstStarted:
+	case err := <-results:
+		t.Fatalf("first download stopped before HEAD: %v", err)
+	case <-ctx.Done():
+		t.Fatal("first download did not start")
+	}
+	go func() {
+		results <- GetWithContext(ctx, "arm64", "darwin", "metal", "master-1000-bbbb", secondDir, libraryProgressCheck{t, "second.zip"})
+	}()
+	for range 2 {
+		if err := <-results; err != nil {
+			t.Errorf("GetWithContext: %v", err)
+		}
+	}
+	for _, dir := range []string{firstDir, secondDir} {
+		got, err := os.ReadFile(filepath.Join(dir, "libstable-diffusion.dylib"))
+		if err != nil || string(got) != "native library" {
+			t.Errorf("installed library: got %q, %v; want native library", got, err)
+		}
+	}
+}
+
+type downloadRoundTripper func(*http.Request) (*http.Response, error)
+
+func (f downloadRoundTripper) RoundTrip(r *http.Request) (*http.Response, error) {
+	return f(r)
+}
+
+type libraryProgressCheck struct {
+	t    *testing.T
+	want string
+}
+
+func (p libraryProgressCheck) TrackProgress(src string, _, _ int64, stream io.ReadCloser) io.ReadCloser {
+	if src != p.want {
+		p.t.Errorf("progress source: got %q, want %q", src, p.want)
+	}
+	return stream
+}
+
+func TestDefaultProgressTrackerIndependentStreams(t *testing.T) {
+	tracker := DefaultProgressTracker()
+	streams := []struct {
+		stream io.ReadCloser
+		want   string
+	}{
+		{tracker.TrackProgress("first", 0, 5, io.NopCloser(strings.NewReader("first"))), "first"},
+		{tracker.TrackProgress("second", 0, 6, io.NopCloser(strings.NewReader("second"))), "second"},
+	}
+	for _, test := range streams {
+		got, err := io.ReadAll(test.stream)
+		if err != nil || string(got) != test.want {
+			t.Errorf("ReadAll: got %q, %v; want %q", got, err, test.want)
+		}
+		if err := test.stream.Close(); err != nil {
+			t.Errorf("Close: %v", err)
+		}
+	}
+}
 
 func TestTrustedManifestMatchesDefaultVersion(t *testing.T) {
 	tag, digest, err := ParsePinnedVersion(DefaultSDVersion)

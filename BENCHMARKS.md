@@ -83,7 +83,7 @@ establish a statistically reliable performance regression or speedup.
 
 ## Version-over-version comparison
 
-### Malina 1.2.0 → 1.2.1
+### Malina 1.2.0 → 1.2.2
 
 Previous measurements come from `git show v1.2.0:BENCHMARKS.md`, recorded
 November 5, 2026 with stable-diffusion.cpp `master-1052-f5df5f8` and Go

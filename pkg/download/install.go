@@ -463,6 +463,10 @@ func downloadAndExtract(ctx context.Context, url, dest string, osVal OS, wantDig
 		Src:  src,
 		Dst:  downloadFile,
 		Mode: getter.ClientModeFile,
+		Getters: map[string]getter.Getter{
+			"http":  &getter.HttpGetter{Netrc: true},
+			"https": &getter.HttpGetter{Netrc: true},
+		},
 	}
 	if progress != nil {
 		client.ProgressListener = progress

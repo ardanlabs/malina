@@ -62,6 +62,9 @@ func (pr *progressReader) TrackProgress(src string, currentSize, totalSize int64
 		return stream
 	}
 
+	// A tracker can be reused, but each response needs its own reader state.
+	reader := *pr
+	pr = &reader
 	pr.src = src
 	pr.currentSize = currentSize
 	pr.totalSize = totalSize

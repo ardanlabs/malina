@@ -33,21 +33,11 @@ $ go run ./examples/hello "a lovely cat"
 
 Sometimes there are breaking changes to stable-diffusion.cpp that require an update to malina. Here are the known compatible versions:
 
-| stable-diffusion.cpp | malina         | Linux prebuilt requirements |
-| -------------------- | -------------- | --------------------------- |
-| master-1088-32d516c  | 1.2.x (≥1.2.1) | CPU/Vulkan: Ubuntu 26.04 (glibc ≥2.43); ROCm archive: Ubuntu 24.04 |
+| stable-diffusion.cpp | malina         | Linux prebuilt requirements                                        |
+| -------------------- | -------------- | ------------------------------------------------------------------ |
+| master-1088-32d516c  | 1.2.x (≥1.2.2) | CPU/Vulkan: Ubuntu 26.04 (glibc ≥2.43); ROCm archive: Ubuntu 24.04 |
 | master-1052-f5df5f8  | 1.2.0          | CPU/Vulkan: Ubuntu 26.04 (glibc ≥2.43); ROCm archive: Ubuntu 24.04 |
-| master-1017-be48649  | 1.1.x (≥1.1.9) | See upstream release assets |
-
-Malina 1.2.1 updates the native image-parameter ABI (560 bytes, previously
-552). Upgrade Malina and its native library together; do not use the new
-library with Malina 1.2.0 or the previous library with 1.2.1. The Go API is
-additive: `ImgGenParams.ControlType` selects ControlNet Union tasks, with
-`ParseControlType` / `ControlTypeName` for native names and aliases.
-`SetGenerationProgressCallback` reports context-local stage, detail, unit,
-sample pass, completed work, and total work independently of previews.
-Register or clear this callback only while the context is idle; strings are
-copied into Go-owned memory and `FreeContext` releases the handler.
+| master-1017-be48649  | 1.1.x (≥1.1.9) | See upstream release assets                                        |
 
 ## Owner Information
 
@@ -109,22 +99,22 @@ Start with a curated bundle: Malina downloads the files needed for each
 workflow and keeps them together. Download sizes below are approximate and
 do not represent runtime memory requirements.
 
-| Bundle | Use | Download |
-| ------ | --- | -------: |
-| `sd-1.5` | General-purpose image generation; a good starting point | 4.3 GB |
-| `sdxl-base-1.0` | Higher-quality image generation with Stable Diffusion XL | 6.9 GB |
-| `controlnet-union-sdxl` | SDXL base with multi-task ControlNet Union; set `ImgGenParams.ControlType` | 9.5 GB |
-| `z-image-turbo` | Fast text-to-image generation | 6.7 GB |
-| `moss-image-sft` | Text-to-image generation with MOSS-Image | 9.4 GB |
-| `llada-image-turbo` | Text-to-image generation and image editing | 20.2 GB |
-| `flux2-klein-4b` | Compact FLUX image generation; license-gated | 5.3 GB |
-| `flux2-klein-9b` | Larger FLUX image generation; license-gated | 16 GB |
-| `controlnet-canny-sd1.5` | Guide image generation with Canny edges | 2.3 GB |
-| `z-image-turbo-controlnet-union` | Guide Z-Image generation with supplied control maps | 13.4 GB |
-| `realesrgan-x4-anime` | Enlarge anime-style images 4× | 18 MB |
-| `adetailer-face-yolov8n` | Detect and refine faces | 1.6 GB |
-| `animatediff-sd1.5` | Generate video with AnimateDiff | 2.4 GB |
-| `wan2.2-s2v-14b` | Audio-conditioned video generation | 18.4 GB |
+| Bundle                           | Use                                                                        | Download |
+| -------------------------------- | -------------------------------------------------------------------------- | -------: |
+| `sd-1.5`                         | General-purpose image generation; a good starting point                    |   4.3 GB |
+| `sdxl-base-1.0`                  | Higher-quality image generation with Stable Diffusion XL                   |   6.9 GB |
+| `controlnet-union-sdxl`          | SDXL base with multi-task ControlNet Union; set `ImgGenParams.ControlType` |   9.5 GB |
+| `z-image-turbo`                  | Fast text-to-image generation                                              |   6.7 GB |
+| `moss-image-sft`                 | Text-to-image generation with MOSS-Image                                   |   9.4 GB |
+| `llada-image-turbo`              | Text-to-image generation and image editing                                 |  20.2 GB |
+| `flux2-klein-4b`                 | Compact FLUX image generation; license-gated                               |   5.3 GB |
+| `flux2-klein-9b`                 | Larger FLUX image generation; license-gated                                |    16 GB |
+| `controlnet-canny-sd1.5`         | Guide image generation with Canny edges                                    |   2.3 GB |
+| `z-image-turbo-controlnet-union` | Guide Z-Image generation with supplied control maps                        |  13.4 GB |
+| `realesrgan-x4-anime`            | Enlarge anime-style images 4×                                              |    18 MB |
+| `adetailer-face-yolov8n`         | Detect and refine faces                                                    |   1.6 GB |
+| `animatediff-sd1.5`              | Generate video with AnimateDiff                                            |   2.4 GB |
+| `wan2.2-s2v-14b`                 | Audio-conditioned video generation                                         |  18.4 GB |
 
 List the catalog and download a bundle:
 
@@ -149,11 +139,11 @@ for requirements beyond the curated catalog.
 Malina installs prebuilt libraries from [stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp/releases)
 for these platforms:
 
-| OS | CPU | Backends |
-| --- | --- | -------- |
-| macOS | arm64 | Metal |
+| OS      | CPU   | Backends                |
+| ------- | ----- | ----------------------- |
+| macOS   | arm64 | Metal                   |
 | Windows | amd64 | CPU, CUDA, Vulkan, ROCm |
-| Linux | amd64 | CPU, Vulkan, ROCm |
+| Linux   | amd64 | CPU, Vulkan, ROCm       |
 
 Use the compatible library listed in the grid above. The installer selects
 the default for your Malina installation; you do not need to choose an
