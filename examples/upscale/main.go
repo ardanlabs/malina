@@ -28,12 +28,15 @@ func main() {
 	}
 
 	libDir := download.DefaultLibrariesDir()
+
 	if err := download.VerifyDefaultInstall(context.Background(), libDir); err != nil {
 		log.Fatalf("verify default libraries: %v (did you run `malina install -u`?)", err)
 	}
+
 	if err := sd.Load(libDir); err != nil {
 		log.Fatalf("sd.Load: %v", err)
 	}
+
 	if err := sd.Init(libDir); err != nil {
 		log.Fatalf("sd.Init: %v", err)
 	}
@@ -42,6 +45,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("load input image: %v", err)
 	}
+
 	ctx, err := sd.NewUpscalerContext(manifest.Files[string(download.RoleUpscaler)], false, sd.NumPhysicalCores(), 0, "", "")
 	if err != nil {
 		log.Fatalf("create upscaler context: %v", err)
@@ -52,12 +56,15 @@ func main() {
 	if err != nil {
 		log.Fatalf("get upscale factor: %v", err)
 	}
-	images, err := sd.Upscale(ctx, input, uint32(factor))
+
+	images, err := sd.UpscaleImage(ctx, input)
 	if err != nil {
 		log.Fatalf("upscale image: %v", err)
 	}
+
 	if err := images[0].SavePNG(*outPath); err != nil {
 		log.Fatalf("save output: %v", err)
 	}
+
 	fmt.Printf("wrote %s (%dx%d, %dx upscale)\n", *outPath, images[0].Width, images[0].Height, factor)
 }

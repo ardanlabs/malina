@@ -32,9 +32,11 @@ func main() {
 	if err := download.VerifyDefaultInstall(context.Background(), libDir); err != nil {
 		log.Fatalf("verify default libraries: %v (did you run `malina install -u`?)", err)
 	}
+
 	if err := sd.Load(libDir); err != nil {
 		log.Fatalf("sd.Load: %v", err)
 	}
+
 	if err := sd.Init(libDir); err != nil {
 		log.Fatalf("sd.Init: %v", err)
 	}
@@ -43,8 +45,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("load input image: %v", err)
 	}
+
 	cparams := sd.ContextParamsInit()
 	cparams.ModelPath = manifest.Files[string(download.RoleModel)]
+
 	ctx, err := sd.NewContext(cparams)
 	if err != nil {
 		log.Fatalf("create generation context: %v", err)
@@ -61,6 +65,7 @@ func main() {
 	inpaint.Prompt = *prompt
 	inpaint.Width = int32(input.Width)
 	inpaint.Height = int32(input.Height)
+
 	images, err := sd.ADetailImage(detailer, ctx, input, sd.ADetailerParams{
 		Prompt:    *prompt,
 		ExtraArgs: "input_size=640,confidence=0.3,inpaint_width=64,inpaint_height=64",
@@ -68,9 +73,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("refine image: %v", err)
 	}
+
 	result := images[len(images)-1]
 	if err := result.SavePNG(*outPath); err != nil {
 		log.Fatalf("save output: %v", err)
 	}
+
 	fmt.Printf("wrote %s (%dx%d)\n", *outPath, result.Width, result.Height)
 }

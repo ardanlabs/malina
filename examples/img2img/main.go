@@ -58,14 +58,17 @@ func main() {
 	if err := download.VerifyDefaultInstall(context.Background(), libPath); err != nil {
 		log.Fatalf("verify default libraries: %v (did you run `malina install -u`?)", err)
 	}
+
 	if err := sd.Load(libPath); err != nil {
 		log.Fatalf("sd.Load: %v", err)
 	}
+
 	if err := sd.Init(libPath); err != nil {
 		log.Fatalf("sd.Init: %v", err)
 	}
 
 	fmt.Println("loading source image from", *inPath, "...")
+
 	src, err := sd.LoadImage(*inPath)
 	if err != nil {
 		log.Fatalf("sd.LoadImage: %v", err)
@@ -93,14 +96,17 @@ func main() {
 
 	fmt.Printf("generating from prompt %q (strength=%.2f, steps=%d) ...\n", *prompt, *strength, *steps)
 	start := time.Now()
+
 	img, err := sd.GenerateImage(ctx, params)
 	if err != nil {
 		log.Fatalf("sd.GenerateImage: %v", err)
 	}
+
 	elapsed := time.Since(start)
 
 	if err := img.SavePNG(*outPath); err != nil {
 		log.Fatalf("SavePNG: %v", err)
 	}
+
 	fmt.Printf("wrote %s (%dx%d, %d channels) in %s\n", *outPath, img.Width, img.Height, img.Channel, elapsed.Round(time.Millisecond))
 }

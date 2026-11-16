@@ -42,7 +42,7 @@ func TestContextAPIsRejectNilContext(t *testing.T) {
 func TestImageAPIsRejectNilInput(t *testing.T) {
 	testSetup(t)
 
-	if _, err := Upscale(1, nil, 2); err == nil {
+	if _, err := UpscaleImage(1, nil); err == nil {
 		t.Fatal("Upscale nil input: got nil error")
 	}
 	if _, err := ADetailImage(1, 1, nil, ADetailerParams{}, ImgGenParams{}); err == nil {

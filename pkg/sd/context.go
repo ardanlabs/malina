@@ -1,8 +1,6 @@
 package sd
 
 import (
-	"errors"
-	"fmt"
 	"runtime"
 	"strings"
 	"unsafe"
@@ -11,102 +9,11 @@ import (
 	"github.com/jupiterrider/ffi"
 )
 
-// cContextParams mirrors struct sd_ctx_params_t from include/stable-diffusion.h.
-//
-// On the LP64 / LLP64 platforms stable-diffusion.cpp targets, the C compiler
-// applies natural alignment per type. Go's struct layout follows the same
-// rules, so matching the field order with explicit padding produces a
-// binary-compatible struct on darwin/arm64, darwin/amd64, linux/amd64 and
-// windows/amd64.
-//
-// Total size: 336 bytes.
-type cContextParams struct {
-	ModelPath                   uintptr // 0..8
-	ClipLPath                   uintptr // 8..16
-	ClipGPath                   uintptr // 16..24
-	ClipVisionPath              uintptr // 24..32
-	T5XXLPath                   uintptr // 32..40
-	LLMPath                     uintptr // 40..48
-	LLMVisionPath               uintptr // 48..56
-	DiffusionModelPath          uintptr // 56..64
-	HighNoiseDiffusionModelPath uintptr // 64..72
-	UncondDiffusionModelPath    uintptr // 72..80
-	EmbeddingsConnectorsPath    uintptr // 80..88
-	VAEPath                     uintptr // 88..96
-	AudioVAEPath                uintptr // 96..104
-	AudioEncoderPath            uintptr // 104..112
-	TAESDPath                   uintptr // 112..120
-	ControlNetPath              uintptr // 120..128
-	IPAdapterPath               uintptr // 128..136
-	MotionModulePath            uintptr // 136..144
-	Embeddings                  uintptr // 144..152
-	EmbeddingCount              uint32  // 152..156
-	_                           [4]byte // 156..160
-	PhotoMakerPath              uintptr // 160..168
-	PulidWeightsPath            uintptr // 168..176
-	TensorTypeRules             uintptr // 176..184
-
-	NThreads       int32 // 184..188
-	Wtype          int32 // 188..192
-	RngType        int32 // 192..196
-	SamplerRngType int32 // 196..200
-	Prediction     int32 // 200..204
-	LoraApplyMode  int32 // 204..208
-
-	EnableMmap              uint8 // 208
-	FlashAttn               uint8 // 209
-	DiffusionFlashAttn      uint8 // 210
-	TaePreviewOnly          uint8 // 211
-	DiffusionConvDirect     uint8 // 212
-	VAEConvDirect           uint8 // 213
-	ForceSDXLVAEConvScale   uint8 // 214
-	_                       [1]byte
-	VaeFormat               int32   // 216..220
-	_                       [4]byte // 220..224
-	MaxVram                 uintptr // 224..232
-	DisablePrefetch         uint8   // 232
-	EagerLoad               uint8   // 233
-	_                       [6]byte // 234..240
-	Backend                 uintptr // 240..248
-	ParamsBackend           uintptr // 248..256
-	SplitMode               uintptr // 256..264
-	AutoFit                 uint8   // 264
-	_                       [7]byte // 265..272
-	RPCServers              uintptr // 272..280
-	ModelArgs               uintptr // 280..288
-	DisableSegmentedCompute uint8   // 288
-	BatchedCFG              uint8   // 289
-	_                       [2]byte // 290..292
-	LinearScale             float32 // 292..296
-	AttnScale               float32 // 296..300
-	_                       [4]byte // 300..304
-	Tokenizer               uintptr // 304..312
-	SageAttn                uint8   // 312
-	_                       [3]byte // 313..316
-	ConditioningCacheSize   int32   // 316..320
-	FlashAttnMode           *byte   // 320..328
-	ConvDirectMode          *byte   // 328..336
-}
-
-// cEmbedding mirrors sd_embedding_t. Size: 16 bytes.
-type cEmbedding struct {
-	Name uintptr
-	Path uintptr
-}
-
-// The C API takes sd_ctx_params_t by pointer (sd_ctx_params_init,
-// new_sd_ctx), so we never need a libffi struct descriptor for it — every
-// callsite uses &ffi.TypePointer for the argument and passes a
-// pointer-to-pointer-to-struct through ffi.Fun.Call.
-
-// =============================================================================
-
-// ContextParams is the Go-side representation of sd_ctx_params_t. Use
-// ContextParamsInit to obtain a value populated with the library defaults,
-// then set the file paths and tuning knobs your model requires before passing
-// it to NewContext.
+// ContextParams configures model loading. Start with ContextParamsInit.
+// Fields equal to its defaults are left unset in native options, allowing model
+// recipes to choose defaults. Options explicitly overrides fields, including
+// default-looking values; a nil option value requests native unset.
 type ContextParams struct {
-	// File paths. Empty string means "not set".
 	ModelPath                   string
 	ClipLPath                   string
 	ClipGPath                   string
@@ -129,275 +36,96 @@ type ContextParams struct {
 	PhotoMakerPath              string
 	PulidWeightsPath            string
 	TensorTypeRules             string
-
-	// NThreads sets the CPU thread count used by ggml ops. Defaults to the
-	// number of physical cores reported by sd_get_num_physical_cores.
-	NThreads int32
-
-	Wtype          SDType
-	RngType        RngType
-	SamplerRngType RngType
-	Prediction     Prediction
-	LoraApplyMode  LoraApplyMode
-
-	EnableMmap            bool
-	FlashAttn             bool
-	DiffusionFlashAttn    bool
-	TaePreviewOnly        bool
-	DiffusionConvDirect   bool
-	VAEConvDirect         bool
-	ForceSDXLVAEConvScale bool
-
-	// VaeFormat selects the VAE numerical format. Defaults to
-	// SDVaeFormatAuto (-1), which lets the C library pick the matching
-	// format based on the loaded model checkpoint.
-	VaeFormat SDVaeFormat
-
-	// MaxVram sets an optional per-device GiB budget for managed weights and
-	// runner buffers. Empty uses the live free VRAM without an explicit budget.
-	MaxVram                 string
-	DisablePrefetch         bool
-	EagerLoad               bool
-	DisableSegmentedCompute bool
-
-	// Backend selects the ggml backend by name (e.g. "cuda", "metal",
-	// "vulkan"). Empty means use the library default.
-	Backend       string
-	ParamsBackend string
-	SplitMode     string
-	AutoFit       bool
-	RPCServers    string
-	ModelArgs     string
-
-	// LinearScale and AttnScale override numerical scaling used to avoid NaN
-	// output on some backend, device, model, and weight-format combinations.
-	// Zero preserves the model defaults; overrides must be finite and positive.
-	LinearScale float32
-	AttnScale   float32
-
-	// Tokenizer selects tokenizer.json files for model families whose
-	// tokenizer is not embedded. It accepts a single path or upstream's
-	// main=FILE,clip-l=FILE,clip-g=FILE assignment syntax.
-	Tokenizer string
-
-	// SageAttn enables SageAttention in supported diffusion models.
-	SageAttn bool
-
-	// ConditioningCacheSize limits cached conditioning entries per context.
-	// Zero disables caching. The native default is 4.
-	ConditioningCacheSize int32
-
-	// BatchedCFG batches conditional and unconditional UNet branches when
-	// supported. The native default is true; unsupported workflows fall back.
-	// NewContext disables it for Metal (including automatic macOS selection)
-	// until upstream group normalization handles every batch item correctly.
-	BatchedCFG bool
-
-	// FlashAttnMode and ConvDirectMode select on/off/auto policies, optionally
-	// per module (e.g. "auto,te=off"). Empty uses automatic selection while
-	// honoring the legacy true flags above. Use "off" to explicitly disable.
+	NThreads                    int32
+	Wtype                       SDType
+	RngType                     RngType
+	SamplerRngType              RngType
+	Prediction                  Prediction
+	LoraApplyMode               LoraApplyMode
+	EnableMmap                  bool
+	FlashAttn                   bool
+	DiffusionFlashAttn          bool
+	TaePreviewOnly              bool
+	DiffusionConvDirect         bool
+	VAEConvDirect               bool
+	ForceSDXLVAEConvScale       bool
+	VaeFormat                   SDVaeFormat
+	MaxVram                     string
+	DisablePrefetch             bool
+	EagerLoad                   bool
+	DisableSegmentedCompute     bool
+	Backend                     string
+	ParamsBackend               string
+	SplitMode                   string
+	AutoFit                     bool
+	RPCServers                  string
+	ModelArgs                   string
+	LinearScale                 float32
+	AttnScale                   float32
+	Tokenizer                   string
+	SageAttn                    bool
+	ConditioningCacheSize       int32
+	// BatchedCFG is forced off for Metal until upstream's batched group
+	// normalization is correct. This also overrides Options["batched_cfg"].
+	BatchedCFG     bool
 	FlashAttnMode  string
 	ConvDirectMode string
+	Options        Options
 }
 
-var (
-	// SD_API void sd_ctx_params_init(sd_ctx_params_t* sd_ctx_params);
-	ctxParamsInitFunc ffi.Fun
+// cEmbedding mirrors the live sd_embedding_t descriptor.
+type cEmbedding struct{ Name, Path uintptr }
 
-	// SD_API sd_ctx_t* new_sd_ctx(const sd_ctx_params_t* sd_ctx_params);
-	newSDCtxFunc ffi.Fun
-
-	// SD_API void free_sd_ctx(sd_ctx_t* sd_ctx);
-	freeSDCtxFunc ffi.Fun
-)
+var newSDCtxFunc, freeSDCtxFunc ffi.Fun
 
 func loadContextFuncs(lib ffi.Lib) error {
 	var err error
-
-	if ctxParamsInitFunc, err = lib.Prep("sd_ctx_params_init", &ffi.TypeVoid, &ffi.TypePointer); err != nil {
-		return loadError("sd_ctx_params_init", err)
+	if err = loadOptionFuncs(lib); err != nil {
+		return err
 	}
-
-	if newSDCtxFunc, err = lib.Prep("new_sd_ctx", &ffi.TypePointer, &ffi.TypePointer); err != nil {
-		return loadError("new_sd_ctx", err)
+	if newSDCtxFunc, err = lib.Prep("sd_ctx_create", &ffi.TypeSint32, &ffi.TypePointer, &ffi.TypePointer); err != nil {
+		return loadError("sd_ctx_create", err)
 	}
-
-	if freeSDCtxFunc, err = lib.Prep("free_sd_ctx", &ffi.TypeVoid, &ffi.TypePointer); err != nil {
-		return loadError("free_sd_ctx", err)
+	if freeSDCtxFunc, err = lib.Prep("sd_ctx_free", &ffi.TypeVoid, &ffi.TypePointer); err != nil {
+		return loadError("sd_ctx_free", err)
 	}
-
 	return nil
 }
 
-// ContextParamsInit returns a ContextParams populated with the defaults from
-// sd_ctx_params_init. Callers may modify fields before passing to NewContext.
+// ContextParamsInit returns Go compatibility defaults. Native options, rather
+// than removed public C parameter layouts, own inference defaults.
 func ContextParamsInit() ContextParams {
-	var raw cContextParams
-	rawPtr := &raw
-	ctxParamsInitFunc.Call(nil, unsafe.Pointer(&rawPtr))
-
-	return ContextParams{
-		NThreads:                raw.NThreads,
-		Wtype:                   SDType(raw.Wtype),
-		RngType:                 RngType(raw.RngType),
-		SamplerRngType:          RngType(raw.SamplerRngType),
-		Prediction:              Prediction(raw.Prediction),
-		LoraApplyMode:           LoraApplyMode(raw.LoraApplyMode),
-		EnableMmap:              raw.EnableMmap != 0,
-		FlashAttn:               raw.FlashAttn != 0,
-		DiffusionFlashAttn:      raw.DiffusionFlashAttn != 0,
-		TaePreviewOnly:          raw.TaePreviewOnly != 0,
-		DiffusionConvDirect:     raw.DiffusionConvDirect != 0,
-		VAEConvDirect:           raw.VAEConvDirect != 0,
-		ForceSDXLVAEConvScale:   raw.ForceSDXLVAEConvScale != 0,
-		VaeFormat:               SDVaeFormat(raw.VaeFormat),
-		DisablePrefetch:         raw.DisablePrefetch != 0,
-		EagerLoad:               raw.EagerLoad != 0,
-		AutoFit:                 raw.AutoFit != 0,
-		DisableSegmentedCompute: raw.DisableSegmentedCompute != 0,
-		LinearScale:             raw.LinearScale,
-		AttnScale:               raw.AttnScale,
-		SageAttn:                raw.SageAttn != 0,
-		ConditioningCacheSize:   raw.ConditioningCacheSize,
-		BatchedCFG:              raw.BatchedCFG != 0,
-		FlashAttnMode:           utils.BytePtrToString(raw.FlashAttnMode),
-		ConvDirectMode:          utils.BytePtrToString(raw.ConvDirectMode),
-	}
+	return ContextParams{NThreads: NumPhysicalCores(), Wtype: SDTypeCount, RngType: RngCuda, SamplerRngType: RngTypeCount, Prediction: PredictionCount, VaeFormat: SDVaeFormatAuto, AutoFit: true, ConditioningCacheSize: 4, BatchedCFG: true}
 }
 
-// NewContext loads the configured model files and returns a Context handle
-// that must be released with FreeContext when no longer needed. Returns an
-// error if the underlying new_sd_ctx returns NULL.
+// NewContext loads configured models. Release the returned handle with FreeContext.
 func NewContext(params ContextParams) (Context, error) {
-	state, err := marshalContextParams(params)
+	clearLastLog()
+	o, err := newOptions("ctx")
 	if err != nil {
 		return 0, err
 	}
-	raw := state.raw
-
-	clearLastLog()
-
-	rawPtr := &raw
-	var handle Context
-	newSDCtxFunc.Call(unsafe.Pointer(&handle), unsafe.Pointer(&rawPtr))
-	runtime.KeepAlive(state)
-	runtime.KeepAlive(params)
-	runtime.KeepAlive(&raw)
-
-	if handle == 0 {
-		if last := LastError(); last != "" {
-			return 0, fmt.Errorf("new_sd_ctx returned NULL: %s", last)
+	defer o.free()
+	if err := o.fields(params, ContextParamsInit(), ""); err != nil {
+		return 0, err
+	}
+	backend := params.Backend
+	if value, ok := params.Options["backend"].(string); ok {
+		backend = value
+	}
+	if metalDiffusionBackend(backend) {
+		if err := o.set("batched_cfg", false); err != nil {
+			return 0, err
 		}
-		return 0, errors.New("new_sd_ctx returned NULL (no log message captured; check that ModelPath / DiffusionModelPath exist and are readable)")
+	}
+	var handle Context
+	out := &handle
+	if err := statusCall(newSDCtxFunc, unsafe.Pointer(&o.ptr), unsafe.Pointer(&out)); err != nil {
+		return 0, err
 	}
 	return handle, nil
 }
 
-type marshaledContextParams struct {
-	raw        cContextParams
-	refs       cStringRefs
-	embeddings []cEmbedding
-}
-
-func marshalContextParams(params ContextParams) (*marshaledContextParams, error) {
-	state := &marshaledContextParams{}
-	raw := &state.raw
-	*raw = cContextParams{
-		NThreads:                params.NThreads,
-		Wtype:                   int32(params.Wtype),
-		RngType:                 int32(params.RngType),
-		SamplerRngType:          int32(params.SamplerRngType),
-		Prediction:              int32(params.Prediction),
-		LoraApplyMode:           int32(params.LoraApplyMode),
-		EnableMmap:              boolToU8(params.EnableMmap),
-		FlashAttn:               boolToU8(params.FlashAttn),
-		DiffusionFlashAttn:      boolToU8(params.DiffusionFlashAttn),
-		TaePreviewOnly:          boolToU8(params.TaePreviewOnly),
-		DiffusionConvDirect:     boolToU8(params.DiffusionConvDirect),
-		VAEConvDirect:           boolToU8(params.VAEConvDirect),
-		ForceSDXLVAEConvScale:   boolToU8(params.ForceSDXLVAEConvScale),
-		VaeFormat:               int32(params.VaeFormat),
-		DisablePrefetch:         boolToU8(params.DisablePrefetch),
-		EagerLoad:               boolToU8(params.EagerLoad),
-		AutoFit:                 boolToU8(params.AutoFit),
-		DisableSegmentedCompute: boolToU8(params.DisableSegmentedCompute),
-		LinearScale:             params.LinearScale,
-		AttnScale:               params.AttnScale,
-		SageAttn:                boolToU8(params.SageAttn),
-		ConditioningCacheSize:   params.ConditioningCacheSize,
-		BatchedCFG:              boolToU8(params.BatchedCFG && !metalDiffusionBackend(params.Backend)),
-	}
-
-	for _, m := range []struct {
-		dst *uintptr
-		s   string
-	}{
-		{&raw.ModelPath, params.ModelPath},
-		{&raw.ClipLPath, params.ClipLPath},
-		{&raw.ClipGPath, params.ClipGPath},
-		{&raw.ClipVisionPath, params.ClipVisionPath},
-		{&raw.T5XXLPath, params.T5XXLPath},
-		{&raw.LLMPath, params.LLMPath},
-		{&raw.LLMVisionPath, params.LLMVisionPath},
-		{&raw.DiffusionModelPath, params.DiffusionModelPath},
-		{&raw.HighNoiseDiffusionModelPath, params.HighNoiseDiffusionModelPath},
-		{&raw.UncondDiffusionModelPath, params.UncondDiffusionModelPath},
-		{&raw.EmbeddingsConnectorsPath, params.EmbeddingsConnectorsPath},
-		{&raw.VAEPath, params.VAEPath},
-		{&raw.AudioVAEPath, params.AudioVAEPath},
-		{&raw.AudioEncoderPath, params.AudioEncoderPath},
-		{&raw.TAESDPath, params.TAESDPath},
-		{&raw.ControlNetPath, params.ControlNetPath},
-		{&raw.IPAdapterPath, params.IPAdapterPath},
-		{&raw.MotionModulePath, params.MotionModulePath},
-		{&raw.PhotoMakerPath, params.PhotoMakerPath},
-		{&raw.PulidWeightsPath, params.PulidWeightsPath},
-		{&raw.TensorTypeRules, params.TensorTypeRules},
-		{&raw.MaxVram, params.MaxVram},
-		{&raw.Backend, params.Backend},
-		{&raw.ParamsBackend, params.ParamsBackend},
-		{&raw.SplitMode, params.SplitMode},
-		{&raw.RPCServers, params.RPCServers},
-		{&raw.ModelArgs, params.ModelArgs},
-		{&raw.Tokenizer, params.Tokenizer},
-	} {
-		p, err := state.refs.add(m.s)
-		if err != nil {
-			return nil, err
-		}
-		*m.dst = p
-	}
-
-	var err error
-	if raw.FlashAttnMode, err = state.refs.addPointer(params.FlashAttnMode); err != nil {
-		return nil, err
-	}
-	if raw.ConvDirectMode, err = state.refs.addPointer(params.ConvDirectMode); err != nil {
-		return nil, err
-	}
-
-	state.embeddings = make([]cEmbedding, len(params.Embeddings))
-	for i := range params.Embeddings {
-		name, err := state.refs.add(params.Embeddings[i].Name)
-		if err != nil {
-			return nil, err
-		}
-		path, err := state.refs.add(params.Embeddings[i].Path)
-		if err != nil {
-			return nil, err
-		}
-		state.embeddings[i] = cEmbedding{Name: name, Path: path}
-	}
-	if len(state.embeddings) > 0 {
-		raw.Embeddings = uintptr(unsafe.Pointer(&state.embeddings[0]))
-		raw.EmbeddingCount = uint32(len(state.embeddings))
-	}
-
-	return state, nil
-}
-
-// Match the diffusion module's backend assignment, not the placement of weights
-// or other modules. Automatic macOS selection is conservatively treated as Metal.
 func metalDiffusionBackend(assignment string) bool {
 	var fallback, diffusion string
 	for part := range strings.SplitSeq(strings.ToLower(assignment), ",") {
@@ -427,33 +155,23 @@ func metalDiffusionBackend(assignment string) bool {
 	}
 }
 
-// FreeContext releases a Context previously returned by NewContext.
+// FreeContext releases a context. Zero is ignored.
 func FreeContext(ctx Context) {
 	if ctx == 0 {
 		return
 	}
 	freeSDCtxFunc.Call(nil, unsafe.Pointer(&ctx))
+	clearPromptImage(ctx)
 	progressMu.Lock()
 	delete(generationProgressHandlers, ctx)
 	progressMu.Unlock()
 }
 
-// =============================================================================
-
-// cStringRefs holds Go byte-slice backings for C-string pointers handed off
-// through the FFI boundary. Use add to allocate a null-terminated copy of a
-// Go string and obtain the matching uintptr to store in a struct field.
-// runtime.KeepAlive(refs.keep) keeps the backings alive across the FFI call.
-type cStringRefs struct {
-	keep []*byte
-}
+type cStringRefs struct{ keep []*byte }
 
 func (r *cStringRefs) add(s string) (uintptr, error) {
 	p, err := r.addPointer(s)
-	if err != nil || p == nil {
-		return 0, err
-	}
-	return uintptr(unsafe.Pointer(p)), nil
+	return uintptr(unsafe.Pointer(p)), err
 }
 
 func (r *cStringRefs) addPointer(s string) (*byte, error) {

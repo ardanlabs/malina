@@ -6,8 +6,14 @@ import (
 )
 
 func TestPreviewTrampolineCopiesFrames(t *testing.T) {
+	testSetup(t)
 	pixels := []byte{1, 2, 3, 4, 5, 6}
-	rawFrames := []cImage{{Width: 2, Height: 1, Channel: 3, Data: &pixels[0]}}
+	tensor, err := imageTensor(&SDImage{Width: 2, Height: 1, Channel: 3, Data: pixels})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer freeTensor(tensor)
+	rawFrames := []uintptr{tensor}
 	step := int32(4)
 	count := int32(len(rawFrames))
 	frames := &rawFrames[0]

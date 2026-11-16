@@ -9,9 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"unsafe"
-
-	"github.com/jupiterrider/ffi"
 )
 
 // LoadImage decodes a PNG or JPEG file from disk into an SDImage with 3
@@ -78,39 +75,6 @@ func loadImageWith(filename string, fnName string, decode func(io.Reader) (imgpk
 	return &out, nil
 }
 
-// cImage mirrors struct sd_image_t.
-//
-// Data is held as *byte (rather than uintptr) so the unsafe.Slice in
-// sdImageFromC does not trigger a "possible misuse of unsafe.Pointer" vet
-// warning. The Go GC does not track the C-heap memory it points at; we copy
-// out into a Go slice before returning to the caller.
-//
-// Total size: 24 bytes on darwin/arm64 (12 bytes of fields + 4 pad + 8-byte
-// pointer).
-type cImage struct {
-	Width   uint32 // 0..4
-	Height  uint32 // 4..8
-	Channel uint32 // 8..12
-	_       [4]byte
-	Data    *byte // 16..24  (uint8 *)
-}
-
-// cImageResult mirrors sd_image_result_t. Size: 32 bytes.
-type cImageResult struct {
-	Image          cImage
-	GenerationInfo *byte
-}
-
-// cImageGenerationResult mirrors sd_image_generation_result_t. Size: 16 bytes.
-type cImageGenerationResult struct {
-	Items *cImageResult
-	Count int32
-}
-
-// ffiTypeImage describes sd_image_t for the few C APIs that pass the struct
-// by value rather than by pointer.
-var ffiTypeImage = ffi.NewType(&ffi.TypeUint32, &ffi.TypeUint32, &ffi.TypeUint32, &ffi.TypePointer)
-
 // SDImage is a Go-side representation of a generated image. Data holds raw
 // pixel bytes in row-major order with Channel bytes per pixel (typically 3
 // for RGB output from stable-diffusion.cpp).
@@ -171,51 +135,4 @@ func (img *SDImage) SavePNG(filename string) error {
 		return fmt.Errorf("SavePNG: %w", err)
 	}
 	return nil
-}
-
-// bindCImage populates dst so the C library can read src's pixel buffer
-// in place. The caller MUST keep src reachable across the FFI call (via
-// runtime.KeepAlive) so the Go GC does not collect the backing array.
-// field names the destination so validation errors are self-describing.
-func bindCImage(dst *cImage, src *SDImage, field string) error {
-	if src == nil {
-		return fmt.Errorf("%s: nil image", field)
-	}
-	if src.Width == 0 || src.Height == 0 {
-		return fmt.Errorf("%s: zero dimension (%dx%d)", field, src.Width, src.Height)
-	}
-	if src.Channel != 3 {
-		return fmt.Errorf("%s: channel count %d, want 3 (RGB)", field, src.Channel)
-	}
-	want := int(src.Width) * int(src.Height) * int(src.Channel)
-	if len(src.Data) != want {
-		return fmt.Errorf("%s: data length %d, want %d for %dx%dx%d", field, len(src.Data), want, src.Width, src.Height, src.Channel)
-	}
-
-	dst.Width = src.Width
-	dst.Height = src.Height
-	dst.Channel = src.Channel
-	dst.Data = &src.Data[0]
-	return nil
-}
-
-// sdImageFromC copies the raw pixel buffer out of the C heap into a Go slice
-// so it survives independently of the C-side allocation.
-func sdImageFromC(c *cImage) *SDImage {
-	if c == nil {
-		return nil
-	}
-	size := int(c.Width) * int(c.Height) * int(c.Channel)
-	out := &SDImage{
-		Width:   c.Width,
-		Height:  c.Height,
-		Channel: c.Channel,
-	}
-	if size == 0 || c.Data == nil {
-		return out
-	}
-	src := unsafe.Slice(c.Data, size)
-	out.Data = make([]byte, size)
-	copy(out.Data, src)
-	return out
 }

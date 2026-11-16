@@ -37,7 +37,8 @@ type (
 	Context uintptr
 )
 
-// SDType mirrors enum sd_type_t. Values match enum ggml_type.
+// SDType preserves Go compatibility values matching ggml_type. Option setters
+// translate these values to native type strings.
 type SDType int32
 
 const (
@@ -81,7 +82,7 @@ const (
 	SDTypeCount  SDType = 45
 )
 
-// RngType mirrors enum rng_type_t.
+// RngType preserves Go compatibility values mapped to native RNG option strings.
 type RngType int32
 
 const (
@@ -91,7 +92,7 @@ const (
 	RngTypeCount  RngType = 3
 )
 
-// SampleMethod mirrors enum sample_method_t.
+// SampleMethod preserves Go compatibility values mapped to native sampler strings.
 type SampleMethod int32
 
 const (
@@ -119,7 +120,7 @@ const (
 	SampleMethodCount  SampleMethod = 21
 )
 
-// Scheduler mirrors enum scheduler_t.
+// Scheduler preserves Go compatibility values mapped to native scheduler strings.
 type Scheduler int32
 
 const (
@@ -143,7 +144,7 @@ const (
 	SchedulerCount       Scheduler = 17
 )
 
-// Prediction mirrors enum prediction_t.
+// Prediction preserves Go compatibility values mapped to native prediction strings.
 type Prediction int32
 
 const (
@@ -172,11 +173,9 @@ const (
 	LogError   LogLevel = 4
 )
 
-// SDVaeFormat mirrors enum sd_vae_format_t. The C library uses this to
-// select the VAE numerical format for image decoding. AUTO is the
-// default written by sd_ctx_params_init and is the right choice for
-// most models — the C library picks the matching format based on the
-// loaded checkpoint.
+// SDVaeFormat preserves Go compatibility values mapped to native VAE format
+// option strings. SDVaeFormatAuto is the ContextParamsInit default: leaving
+// the option unset lets the native model recipe select the matching format.
 type SDVaeFormat int32
 
 const (
@@ -188,7 +187,7 @@ const (
 	SDVaeFormatCount SDVaeFormat = 4
 )
 
-// LoraApplyMode mirrors enum lora_apply_mode_t.
+// LoraApplyMode preserves Go compatibility values mapped to native LoRA mode strings.
 type LoraApplyMode int32
 
 const (
@@ -262,6 +261,9 @@ func Load(path string) error {
 	loadVideoFuncs(lib)
 	loadUpscalerFuncs(lib)
 	if err := loadCallbacksFuncs(lib); err != nil {
+		return err
+	}
+	if err := loadPromptImageFunc(lib); err != nil {
 		return err
 	}
 

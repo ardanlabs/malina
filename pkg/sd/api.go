@@ -19,27 +19,9 @@ var (
 	ctxHasControlFunc    ffi.Fun
 	cancelGenerationFunc ffi.Fun
 
-	typeNameFunc               ffi.Fun
-	strToTypeFunc              ffi.Fun
-	rngTypeNameFunc            ffi.Fun
-	strToRngTypeFunc           ffi.Fun
-	sampleMethodNameFunc       ffi.Fun
-	strToSampleMethodFunc      ffi.Fun
-	schedulerNameFunc          ffi.Fun
-	strToSchedulerFunc         ffi.Fun
-	predictionNameFunc         ffi.Fun
-	strToPredictionFunc        ffi.Fun
-	previewNameFunc            ffi.Fun
-	strToPreviewFunc           ffi.Fun
-	loraApplyModeNameFunc      ffi.Fun
-	strToLoraApplyModeFunc     ffi.Fun
-	hiresUpscalerNameFunc      ffi.Fun
-	strToHiresUpscalerFunc     ffi.Fun
-	controlTypeNameFunc        ffi.Fun
-	strToControlTypeFunc       ffi.Fun
-	getDefaultSampleMethodFunc ffi.Fun
-	getDefaultSchedulerFunc    ffi.Fun
-	getModelVersionNameFunc    ffi.Fun
+	typeNameFunc            ffi.Fun
+	strToTypeFunc           ffi.Fun
+	getModelVersionNameFunc ffi.Fun
 
 	commitFunc            ffi.Fun
 	listDevicesFunc       ffi.Fun
@@ -63,24 +45,6 @@ func loadExtendedFuncs(lib ffi.Lib) {
 
 	typeNameFunc = prepOptional(lib, "sd_type_name", &ffi.TypePointer, &ffi.TypeSint32)
 	strToTypeFunc = prepOptional(lib, "str_to_sd_type", &ffi.TypeSint32, &ffi.TypePointer)
-	rngTypeNameFunc = prepOptional(lib, "sd_rng_type_name", &ffi.TypePointer, &ffi.TypeSint32)
-	strToRngTypeFunc = prepOptional(lib, "str_to_rng_type", &ffi.TypeSint32, &ffi.TypePointer)
-	sampleMethodNameFunc = prepOptional(lib, "sd_sample_method_name", &ffi.TypePointer, &ffi.TypeSint32)
-	strToSampleMethodFunc = prepOptional(lib, "str_to_sample_method", &ffi.TypeSint32, &ffi.TypePointer)
-	schedulerNameFunc = prepOptional(lib, "sd_scheduler_name", &ffi.TypePointer, &ffi.TypeSint32)
-	strToSchedulerFunc = prepOptional(lib, "str_to_scheduler", &ffi.TypeSint32, &ffi.TypePointer)
-	predictionNameFunc = prepOptional(lib, "sd_prediction_name", &ffi.TypePointer, &ffi.TypeSint32)
-	strToPredictionFunc = prepOptional(lib, "str_to_prediction", &ffi.TypeSint32, &ffi.TypePointer)
-	previewNameFunc = prepOptional(lib, "sd_preview_name", &ffi.TypePointer, &ffi.TypeSint32)
-	strToPreviewFunc = prepOptional(lib, "str_to_preview", &ffi.TypeSint32, &ffi.TypePointer)
-	loraApplyModeNameFunc = prepOptional(lib, "sd_lora_apply_mode_name", &ffi.TypePointer, &ffi.TypeSint32)
-	strToLoraApplyModeFunc = prepOptional(lib, "str_to_lora_apply_mode", &ffi.TypeSint32, &ffi.TypePointer)
-	hiresUpscalerNameFunc = prepOptional(lib, "sd_hires_upscaler_name", &ffi.TypePointer, &ffi.TypeSint32)
-	strToHiresUpscalerFunc = prepOptional(lib, "str_to_sd_hires_upscaler", &ffi.TypeSint32, &ffi.TypePointer)
-	controlTypeNameFunc = prepOptional(lib, "sd_control_type_name", &ffi.TypePointer, &ffi.TypeSint32)
-	strToControlTypeFunc = prepOptional(lib, "str_to_sd_control_type", &ffi.TypeSint32, &ffi.TypePointer)
-	getDefaultSampleMethodFunc = prepOptional(lib, "sd_get_default_sample_method", &ffi.TypeSint32, &ffi.TypePointer)
-	getDefaultSchedulerFunc = prepOptional(lib, "sd_get_default_scheduler", &ffi.TypeSint32, &ffi.TypePointer, &ffi.TypeSint32)
 	getModelVersionNameFunc = prepOptional(lib, "sd_get_model_version_name", &ffi.TypePointer, &ffi.TypePointer)
 
 	commitFunc = prepOptional(lib, "sd_commit", &ffi.TypePointer)
@@ -88,7 +52,7 @@ func loadExtendedFuncs(lib ffi.Lib) {
 	addRPCServersFunc = prepOptional(lib, "sd_add_rpc_servers", &ffi.TypeUint8, &ffi.TypePointer)
 	convertFunc = prepOptional(lib, "convert", &ffi.TypeUint8, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypeSint32, &ffi.TypePointer, &ffi.TypeUint8)
 	convertComponentsFunc = prepOptional(lib, "convert_with_components", &ffi.TypeUint8, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypeSint32, &ffi.TypePointer, &ffi.TypeUint8, &ffi.TypeSint32, &ffi.TypePointer, &ffi.TypeSint32)
-	preprocessCannyFunc = prepOptional(lib, "preprocess_canny", &ffi.TypeUint8, &ffiTypeImage, &ffi.TypeFloat, &ffi.TypeFloat, &ffi.TypeFloat, &ffi.TypeFloat, &ffi.TypeUint8)
+	preprocessCannyFunc = prepOptional(lib, "sd_preprocess_canny", &ffi.TypeSint32, &ffi.TypePointer, &ffi.TypeFloat, &ffi.TypeFloat, &ffi.TypeFloat, &ffi.TypeFloat, &ffi.TypeUint8, &ffi.TypePointer)
 	loadImatrixFunc = prepOptional(lib, "load_imatrix", &ffi.TypeUint8, &ffi.TypePointer)
 	saveImatrixFunc = prepOptional(lib, "save_imatrix", &ffi.TypeVoid, &ffi.TypePointer)
 	enableImatrixFunc = prepOptional(lib, "enable_imatrix_collection", &ffi.TypeVoid)
@@ -152,90 +116,103 @@ func ParseSDType(value string) (SDType, error) {
 
 // RngTypeName returns the stable-diffusion.cpp name for an RNG type.
 func RngTypeName(value RngType) (string, error) {
-	return callEnumName(rngTypeNameFunc, int32(value), "sd_rng_type_name")
+	return enumName(int32(value), rngNames, true)
 }
 
 // ParseRngType converts a stable-diffusion.cpp RNG type name.
 func ParseRngType(value string) (RngType, error) {
-	result, err := callParseEnum(strToRngTypeFunc, value, "str_to_rng_type")
+	result, err := parseEnum(value, rngNames)
 	return RngType(result), err
 }
 
 // SampleMethodName returns the stable-diffusion.cpp name for a sampler.
 func SampleMethodName(value SampleMethod) (string, error) {
-	return callEnumName(sampleMethodNameFunc, int32(value), "sd_sample_method_name")
+	return enumName(int32(value), sampleNames, true)
 }
 
 // ParseSampleMethod converts a stable-diffusion.cpp sampler name.
 func ParseSampleMethod(value string) (SampleMethod, error) {
-	result, err := callParseEnum(strToSampleMethodFunc, value, "str_to_sample_method")
+	result, err := parseEnum(value, sampleNames)
 	return SampleMethod(result), err
 }
 
 // SchedulerName returns the stable-diffusion.cpp name for a scheduler.
 func SchedulerName(value Scheduler) (string, error) {
-	return callEnumName(schedulerNameFunc, int32(value), "sd_scheduler_name")
+	return enumName(int32(value), schedulerNames, true)
 }
 
 // ParseScheduler converts a stable-diffusion.cpp scheduler name.
 func ParseScheduler(value string) (Scheduler, error) {
-	result, err := callParseEnum(strToSchedulerFunc, value, "str_to_scheduler")
+	if value == "normal" {
+		value = "discrete"
+	}
+	result, err := parseEnum(value, schedulerNames)
 	return Scheduler(result), err
 }
 
 // PredictionName returns the stable-diffusion.cpp name for a prediction type.
 func PredictionName(value Prediction) (string, error) {
-	return callEnumName(predictionNameFunc, int32(value), "sd_prediction_name")
+	return enumName(int32(value), predictionNames, true)
 }
 
 // ParsePrediction converts a stable-diffusion.cpp prediction name.
 func ParsePrediction(value string) (Prediction, error) {
-	result, err := callParseEnum(strToPredictionFunc, value, "str_to_prediction")
+	result, err := parseEnum(value, predictionNames)
 	return Prediction(result), err
 }
 
 // PreviewModeName returns the stable-diffusion.cpp name for a preview mode.
 func PreviewModeName(value PreviewMode) (string, error) {
-	return callEnumName(previewNameFunc, int32(value), "sd_preview_name")
+	return enumName(int32(value), previewNames, false)
 }
 
 // ParsePreviewMode converts a stable-diffusion.cpp preview mode name.
 func ParsePreviewMode(value string) (PreviewMode, error) {
-	result, err := callParseEnum(strToPreviewFunc, value, "str_to_preview")
+	result, err := parseEnum(value, previewNames)
 	return PreviewMode(result), err
 }
 
 // LoraApplyModeName returns the stable-diffusion.cpp name for a LoRA mode.
 func LoraApplyModeName(value LoraApplyMode) (string, error) {
-	return callEnumName(loraApplyModeNameFunc, int32(value), "sd_lora_apply_mode_name")
+	return enumName(int32(value), loraNames, false)
 }
 
 // ParseLoraApplyMode converts a stable-diffusion.cpp LoRA mode name.
 func ParseLoraApplyMode(value string) (LoraApplyMode, error) {
-	result, err := callParseEnum(strToLoraApplyModeFunc, value, "str_to_lora_apply_mode")
+	result, err := parseEnum(value, loraNames)
 	return LoraApplyMode(result), err
 }
 
 // HiresUpscalerName returns the stable-diffusion.cpp name for an upscaler.
 func HiresUpscalerName(value HiresUpscaler) (string, error) {
-	return callEnumName(hiresUpscalerNameFunc, int32(value), "sd_hires_upscaler_name")
+	return enumName(int32(value), hiresNames, false)
 }
 
 // ParseHiresUpscaler converts a stable-diffusion.cpp upscaler name.
 func ParseHiresUpscaler(value string) (HiresUpscaler, error) {
-	result, err := callParseEnum(strToHiresUpscalerFunc, value, "str_to_sd_hires_upscaler")
+	result, err := parseEnum(value, hiresNames)
 	return HiresUpscaler(result), err
 }
 
 // ControlTypeName returns the native name for a ControlNet Union task.
 func ControlTypeName(value ControlType) (string, error) {
-	return callEnumName(controlTypeNameFunc, int32(value), "sd_control_type_name")
+	return enumName(int32(value), controlNames, false)
 }
 
 // ParseControlType converts a task name or alias (such as lineart or hed).
 // Unknown names return ControlTypeCount.
 func ParseControlType(value string) (ControlType, error) {
-	result, err := callParseEnum(strToControlTypeFunc, value, "str_to_sd_control_type")
+	switch value {
+	case "hed", "softedge", "pidi", "ted":
+		value = "scribble"
+	case "lineart", "anime_lineart", "mlsd":
+		value = "canny"
+	case "inpaint", "outpaint":
+		value = "repaint"
+	case "seg":
+		value = "segment"
+	}
+	result, err := parseEnum(value, controlNames)
 	return ControlType(result), err
 }
 
@@ -318,31 +295,24 @@ func CancelGeneration(ctx Context, mode CancelMode) error {
 	return nil
 }
 
-// DefaultSampleMethod returns the sampler selected by a loaded context.
+// DefaultSampleMethod reports that upstream no longer exports default queries.
+// Deprecated: leave Sampler unchanged or set Options["sample.method"] to "auto";
+// read resolved values from generation metadata after generation.
 func DefaultSampleMethod(ctx Context) (SampleMethod, error) {
 	if ctx == 0 {
 		return 0, errors.New("DefaultSampleMethod: nil context")
 	}
-	if getDefaultSampleMethodFunc == (ffi.Fun{}) {
-		return 0, unsupported("sd_get_default_sample_method")
-	}
-	var result ffi.Arg
-	getDefaultSampleMethodFunc.Call(&result, unsafe.Pointer(&ctx))
-	return SampleMethod(int32(result)), nil
+	return 0, unsupported("sd_get_default_sample_method removed upstream")
 }
 
-// DefaultScheduler returns the scheduler selected for a context and sampler.
+// DefaultScheduler reports that upstream no longer exports default queries.
+// Deprecated: leave Scheduler unchanged or use Options["sample.scheduler"] =
+// "auto"; read resolved values from generation metadata after generation.
 func DefaultScheduler(ctx Context, method SampleMethod) (Scheduler, error) {
 	if ctx == 0 {
 		return 0, errors.New("DefaultScheduler: nil context")
 	}
-	if getDefaultSchedulerFunc == (ffi.Fun{}) {
-		return 0, unsupported("sd_get_default_scheduler")
-	}
-	value := int32(method)
-	var result ffi.Arg
-	getDefaultSchedulerFunc.Call(&result, unsafe.Pointer(&ctx), unsafe.Pointer(&value))
-	return Scheduler(int32(result)), nil
+	return 0, unsupported("sd_get_default_scheduler removed upstream")
 }
 
 // ModelVersionName returns the model family detected for a loaded context.
@@ -501,21 +471,30 @@ func ConvertWithComponents(params ComponentConvertParams) error {
 	return nil
 }
 
-// PreprocessCanny applies Canny edge detection to an image in place.
+// PreprocessCanny replaces image pixels with the newly allocated native Canny
+// output, copied into Go memory. The old pixel backing is not mutated.
 func PreprocessCanny(image *SDImage, params CannyParams) error {
 	if preprocessCannyFunc == (ffi.Fun{}) {
-		return unsupported("preprocess_canny")
+		return unsupported("sd_preprocess_canny")
 	}
-	var raw cImage
-	if err := bindCImage(&raw, image, "image"); err != nil {
+	tensor, err := imageTensor(image)
+	if err != nil {
 		return err
 	}
+	defer freeTensor(tensor)
 	high, low, weak, strong := params.HighThreshold, params.LowThreshold, params.Weak, params.Strong
 	inverse := boolToU8(params.Inverse)
-	if !callBool(preprocessCannyFunc, unsafe.Pointer(&raw), unsafe.Pointer(&high), unsafe.Pointer(&low), unsafe.Pointer(&weak), unsafe.Pointer(&strong), unsafe.Pointer(&inverse)) {
-		return errors.New("preprocess_canny failed")
+	var output uintptr
+	out := &output
+	if err := statusCall(preprocessCannyFunc, unsafe.Pointer(&tensor), unsafe.Pointer(&high), unsafe.Pointer(&low), unsafe.Pointer(&weak), unsafe.Pointer(&strong), unsafe.Pointer(&inverse), unsafe.Pointer(&out)); err != nil {
+		return err
 	}
-	runtime.KeepAlive(image)
+	defer freeTensor(output)
+	result, err := imageFromTensor(output)
+	if err != nil {
+		return err
+	}
+	*image = *result
 	return nil
 }
 

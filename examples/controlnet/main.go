@@ -41,6 +41,7 @@ func main() {
 	if err := sd.LoadControlNet(ctx, manifest.Files[string(download.RoleControlNet)]); err != nil {
 		log.Fatalf("load ControlNet: %v", err)
 	}
+
 	if err := sd.PreprocessCanny(control, sd.CannyParams{
 		HighThreshold: 0.08,
 		LowThreshold:  0.08,
@@ -61,9 +62,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("generate controlled image: %v", err)
 	}
+
 	if err := image.SavePNG(*outPath); err != nil {
 		log.Fatalf("save output: %v", err)
 	}
+
 	fmt.Printf("wrote %s (%dx%d)\n", *outPath, image.Width, image.Height)
 }
 

@@ -6,6 +6,7 @@ import (
 	"sync"
 	"unsafe"
 
+	"github.com/ardanlabs/malina/pkg/utils"
 	"github.com/jupiterrider/ffi"
 )
 
@@ -64,8 +65,8 @@ var (
 // stable-diffusion.cpp releases. Missing symbols do not prevent Load from
 // succeeding.
 func loadCallbacksFuncs(lib ffi.Lib) error {
-	previewFn, _ := lib.Prep("sd_set_preview_callback", &ffi.TypeVoid,
-		&ffi.TypePointer, &ffi.TypeSint32, &ffi.TypeSint32, &ffi.TypeUint8, &ffi.TypeUint8, &ffi.TypePointer)
+	previewFn, _ := lib.Prep("sd_set_preview_callback", &ffi.TypeSint32,
+		&ffi.TypePointer, &ffi.TypePointer, &ffi.TypeSint32, &ffi.TypeUint8, &ffi.TypeUint8, &ffi.TypePointer)
 	backendFn, _ := lib.Prep("sd_set_backend_eval_callback", &ffi.TypeVoid, &ffi.TypePointer, &ffi.TypePointer)
 
 	callbacksMu.Lock()
@@ -165,12 +166,18 @@ func SetPreviewCallback(callback PreviewCallback, mode PreviewMode, interval int
 		return unsupported("sd_set_preview_callback")
 	}
 
-	previewUserHandler = callback
 	var callbackCode unsafe.Pointer
 	if callback != nil {
 		callbackCode = previewCallbackCode
 	}
-	modeValue := int32(mode)
+	name, err := PreviewModeName(mode)
+	if err != nil {
+		return err
+	}
+	modeValue, err := utils.BytePtrFromString(name)
+	if err != nil {
+		return err
+	}
 	intervalValue := int32(interval)
 	denoisedValue := uint8(0)
 	if denoised {
@@ -181,8 +188,12 @@ func SetPreviewCallback(callback PreviewCallback, mode PreviewMode, interval int
 		noisyValue = 1
 	}
 	var nilData unsafe.Pointer
-	setPreviewCallbackFunc.Call(nil, unsafe.Pointer(&callbackCode), unsafe.Pointer(&modeValue), unsafe.Pointer(&intervalValue),
-		unsafe.Pointer(&denoisedValue), unsafe.Pointer(&noisyValue), unsafe.Pointer(&nilData))
+	if err := statusCall(setPreviewCallbackFunc, unsafe.Pointer(&callbackCode), unsafe.Pointer(&modeValue), unsafe.Pointer(&intervalValue),
+		unsafe.Pointer(&denoisedValue), unsafe.Pointer(&noisyValue), unsafe.Pointer(&nilData)); err != nil {
+		return err
+	}
+	previewUserHandler = callback
+	runtime.KeepAlive(modeValue)
 	runtime.KeepAlive(previewCallbackFun)
 	return nil
 }
@@ -213,7 +224,7 @@ func previewTrampoline(_ *ffi.Cif, _ unsafe.Pointer, args *unsafe.Pointer, _ uns
 	arguments := (*[5]unsafe.Pointer)(unsafe.Pointer(args))
 	step := int(*(*int32)(arguments[0]))
 	frameCount := int(*(*int32)(arguments[1]))
-	framePtr := *(**cImage)(arguments[2])
+	framePtr := *(**uintptr)(arguments[2])
 	noisy := *(*uint8)(arguments[3]) != 0
 
 	callbacksMu.Lock()
@@ -227,7 +238,10 @@ func previewTrampoline(_ *ffi.Cif, _ unsafe.Pointer, args *unsafe.Pointer, _ uns
 	if frameCount > 0 && framePtr != nil {
 		rawFrames := unsafe.Slice(framePtr, frameCount)
 		for i := range frameCount {
-			image := sdImageFromC(&rawFrames[i])
+			image, err := imageFromTensor(rawFrames[i])
+			if err != nil {
+				return 0
+			}
 			frames = append(frames, *image)
 		}
 	}
