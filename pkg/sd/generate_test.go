@@ -160,13 +160,6 @@ func TestContextTargetAPISD15Smoke(t *testing.T) {
 	if _, err := ContextSupportsVideoGeneration(ctx); err != nil {
 		t.Fatalf("ContextSupportsVideoGeneration: %v", err)
 	}
-	method, err := DefaultSampleMethod(ctx)
-	if err != nil {
-		t.Fatalf("DefaultSampleMethod: %v", err)
-	}
-	if _, err := DefaultScheduler(ctx, method); err != nil {
-		t.Fatalf("DefaultScheduler: %v", err)
-	}
 	if err := CancelGeneration(ctx, CancelReset); err != nil {
 		t.Fatalf("CancelGeneration reset: %v", err)
 	}
@@ -379,7 +372,7 @@ func TestGenerateImageSDXLSmoke(t *testing.T) {
 // TestGenerateImageImg2ImgSmoke exercises the InitImage path end-to-end:
 // hand the C library a synthesized 128x128 RGB image as InitImage with a
 // text prompt, and assert the returned buffer has the requested shape.
-// The point is to verify the cImage binding survives the FFI call and
+// The point is to verify the image tensor survives the FFI call and
 // stable-diffusion.cpp's IMG2IMG branch runs to completion; the produced
 // pixels are not validated for content quality.
 //

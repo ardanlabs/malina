@@ -5,6 +5,7 @@ package sd
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -300,6 +301,18 @@ func TestGenerateVideoAnimateDiff(t *testing.T) {
 	params.VideoFrames = 4
 	params.FPS = 0
 	params.Seed = 42
+	if _, err := GenerateVideoWithInfo(ctx, params); err == nil {
+		t.Fatal("GenerateVideoWithInfo accepted zero FPS")
+	} else {
+		var native *NativeError
+		if !errors.As(err, &native) || native.Status != StatusOutOfRange {
+			t.Fatalf("zero FPS: got %v, want StatusOutOfRange", err)
+		}
+	}
+	// Override a valid field with a different explicit value. The result and
+	// metadata must come from native output, not an echo of params.FPS.
+	params.FPS = 12
+	params.Options = Options{"fps": int32(7)}
 	result, err := GenerateVideoWithInfo(ctx, params)
 	if err != nil {
 		t.Fatalf("GenerateVideoWithInfo: %v", err)
@@ -313,10 +326,10 @@ func TestGenerateVideoAnimateDiff(t *testing.T) {
 	if err := json.Unmarshal([]byte(result.GenerationInfo), &info); err != nil {
 		t.Fatalf("video metadata: %v", err)
 	}
-	if info.Schema != "sdcpp.generation/v1" || info.Seed != "42" || info.FPS != 1 {
-		t.Errorf("video metadata: got %+v, want schema sdcpp.generation/v1, seed 42 and resolved FPS 1 (requested 0)", info)
+	if info.Schema != "sdcpp.generation/v1" || info.Seed != "42" || info.FPS != 7 {
+		t.Errorf("video metadata: got %+v, want schema sdcpp.generation/v1, seed 42 and resolved FPS 7 (field 12, override 7)", info)
 	}
-	const wantFPS = 1
+	const wantFPS = 7
 	if fps != wantFPS {
 		t.Errorf("GenerateVideoWithFPS FPS: got %d, want %d", fps, wantFPS)
 	}

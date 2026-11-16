@@ -3,14 +3,14 @@
 Performance numbers for `pkg/sd` against the locally available model bundles.
 Recorded on an Apple M5 Max with
 128 GiB RAM (macOS 27.0.1, darwin/arm64) using the Metal backend from upstream
-stable-diffusion.cpp `master-1088-32d516c` artifact
-`sd-master-32d516c-bin-Darwin-macOS-26.7.2-arm64.zip` (SHA-256
-`b6588e81e788d9f2f24498831ba398d7523152e7ec280ff282f39c2009465b77`,
-GitHub asset ID 732523972, 38,105,745 bytes).
+stable-diffusion.cpp `master-1106-532d2c1` artifact
+`sd-master-532d2c1-bin-Darwin-macOS-26.7.2-arm64.zip` (SHA-256
+`8146d6ffc75f8ff8f64b62a80fffee8fb714ab65e368e202084135fa07cc6f36`,
+GitHub asset ID 753442992, 38,331,254 bytes).
 The Go benchmarks all run against the extracted
 `./lib/libstable-diffusion.dylib` (SHA-256
-`70c9529bfcfc09e0926ba6c7fccd99ce608223c22f54343afff8b8dec216714d`).
-Recorded November 11, 2026, using Go 1.27.4, automatic operator selection,
+`81de32ea476979c40367661705c6767a6adc296cb7599f4e075f8196f93989ca`).
+Recorded November 16, 2026, for Malina 1.2.3 using Go 1.27.4, automatic operator selection,
 and Malina's Metal workaround: batched CFG is disabled at context creation.
 
 The Metal batched-CFG workaround is retained from Malina 1.1.8. The earlier
@@ -41,7 +41,7 @@ make bench BENCHTIME=1x MALINA_LIB="$PWD/lib"
   measurement), and then runs `b.N` `GenerateImage` calls reusing the
   same `Context`.
 - **Default shape**: 512x512 with 20 configured steps from
-  `sd_img_gen_params_init`. Img2img retains the
+  `ImgGenParamsInit` and the native opaque-options defaults. Img2img retains the
   20-step configuration and the default 0.75 strength, which executes a
   16-step denoising schedule. 512x512 keeps per-iteration wall time bounded
   on Metal — SDXL at its native 1024x1024 is ~30 s/iter.
@@ -66,16 +66,16 @@ and digest listed above. All measurements used
 
 | Workload       | Model/bundle  | Shape   | Steps | b.N |         ns/op | s/img |    B/op | allocs/op |
 | -------------- | ------------- | ------- | ----: | --: | ------------: | ----: | ------: | --------: |
-| text-to-image  | sd-1.5        | 512x512 |    20 |   1 | 6,577,103,166 |  6.58 | 800,144 |       266 |
-| text-to-image  | sdxl-base-1.0 | 512x512 |    20 |   1 | 7,240,571,042 |  7.24 | 800,144 |       266 |
-| image-to-image | sd-1.5        | 512x512 |    16 |   1 | 5,921,617,708 |  5.92 | 800,288 |       266 |
+| text-to-image  | sd-1.5        | 512x512 |    20 |   1 | 6,632,107,542 |  6.63 | 800,400 |       308 |
+| text-to-image  | sdxl-base-1.0 | 512x512 |    20 |   1 | 7,211,255,292 |  7.21 | 800,400 |       308 |
+| image-to-image | sd-1.5        | 512x512 |    16 |   1 | 5,968,779,500 |  5.97 | 800,912 |       328 |
 
 Actual benchmark output (`b.N=1`, after one untimed warm-up):
 
 ```text
-BenchmarkGenerateImageSD15-18                  1  6577103166 ns/op  262144 px  6.577 s/img  800144 B/op  266 allocs/op
-BenchmarkGenerateImageSDXL-18                  1  7240571042 ns/op  262144 px  7.241 s/img  800144 B/op  266 allocs/op
-BenchmarkGenerateImageImg2ImgSD15-18            1  5921617708 ns/op  262144 px  5.922 s/img  800288 B/op  266 allocs/op
+BenchmarkGenerateImageSD15-18                  1  6632107542 ns/op  262144 px  6.632 s/img  800400 B/op  308 allocs/op
+BenchmarkGenerateImageSDXL-18                  1  7211255292 ns/op  262144 px  7.211 s/img  800400 B/op  308 allocs/op
+BenchmarkGenerateImageImg2ImgSD15-18            1  5968779500 ns/op  262144 px  5.969 s/img  800912 B/op  328 allocs/op
 ```
 
 All three targets completed without skips. These one-iteration runs do not
@@ -87,7 +87,7 @@ establish a statistically reliable performance regression or speedup.
 
 Previous measurements come from `git show v1.2.0:BENCHMARKS.md`, recorded
 November 5, 2026 with stable-diffusion.cpp `master-1052-f5df5f8` and Go
-1.27.3. Current measurements above were recorded November 11 with
+1.27.3. The Malina 1.2.2 measurements were recorded November 11 with
 `master-1088-32d516c` and Go 1.27.4. Both used the same Apple M5 Max,
 128 GiB RAM, macOS 27.0.1, Metal backend, model bundles, 512x512 shapes,
 step counts, disabled batched CFG, and `BENCHTIME=1x` methodology.
@@ -115,10 +115,38 @@ sample. None of these single-iteration comparisons establishes a reliable
 speedup or regression; repeated samples are needed to distinguish a trend
 from run-to-run variation.
 
-Go allocation counts remain 266/image for all workloads. Text-to-image
+For that comparison, Go allocation counts remain 266/image for all workloads. Text-to-image
 memory rises from 800,112 to 800,144 B/op (+32). Img2img rises from
 800,224 B/op in the previous initial run or 800,240 B/op in its repeat to
 800,288 B/op (+64 or +48 respectively). These exclude native allocations.
+
+### Malina 1.2.2 → 1.2.3
+
+The baseline is the latest published tag before this upgrade, `v1.2.2`:
+`git show v1.2.2:BENCHMARKS.md`. Its measurements were recorded November 11,
+2026 with `master-1088-32d516c`; the current measurements were recorded
+November 16, 2026 with `master-1106-532d2c1`. Both use Go 1.27.4 on the same
+Apple M5 Max, 128 GiB RAM, macOS 27.0.1, Metal backend, model bundles,
+512x512 shapes, step counts, disabled batched CFG, automatic sampler/scheduler,
+and one warm-up followed by `BENCHTIME=1x`. The benchmark source and model
+fixtures are unchanged; Malina's marshalling now uses opaque native options
+and copied tensors instead of public C parameter structs. These measurements
+therefore include both the native-library and binding changes. The benchmark
+leaves the native seed default (-1, random) unchanged in both versions.
+
+| Workload | Previous s/img | Current s/img | Change, seconds | Time change | B/op, previous → current (delta) | allocs/op, previous → current (delta) |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| SD 1.5 text-to-image | 6.577103 | 6.632108 | +0.055004 | +0.84% | 800,144 → 800,400 (+256) | 266 → 308 (+42) |
+| SDXL text-to-image | 7.240571 | 7.211255 | −0.029316 | −0.40% | 800,144 → 800,400 (+256) | 266 → 308 (+42) |
+| SD 1.5 img2img | 5.921618 | 5.968780 | +0.047162 | +0.80% | 800,288 → 800,912 (+624) | 266 → 328 (+62) |
+
+Percentages use the unrounded baseline ns/op values 6,577,103,166,
+7,240,571,042, and 5,921,617,708, and the current ns/op values in the raw
+output above. Negative time change means faster; positive means slower.
+All three workloads are comparable under the methodology above. These are
+single samples, not statistically established speedups or regressions.
+No repeats or outliers have been excluded; the older comparison's two
+img2img baseline samples remain recorded above.
 
 ## Benchmark commands
 
@@ -151,10 +179,10 @@ The `B/op` and `allocs/op` columns above are Go-side only — the bulk of
 each generation's heap is in the C library, which Go's `pprof` cannot
 see. The per-call Go allocations come from:
 
-- The `cImgGenParams` value populated by `sd_img_gen_params_init` (one
-  allocation, reused only as a stack slot).
-- C string copies for `Prompt` and `NegativePrompt` (`cStringRefs`
-  holds them alive across the FFI call via `runtime.KeepAlive`).
+- Compatibility-field inspection and typed native-option setter arguments,
+  including C string copies for keys, prompts, and explicit mode values.
+- Input-tensor preparation for img2img; the native tensor constructor copies
+  the input pixels and the option object retains its storage.
 - The decoded `SDImage` struct returned by `GenerateImage`, plus the
   `[]byte` pixel buffer copied out of the C heap.
 - Each result's native `sdcpp.generation/v1` JSON copied into `GenerationInfo`.
@@ -200,10 +228,10 @@ What to expect:
   loaded `libstable-diffusion.dylib`, which pprof cannot see). The
   Go-side time is the FFI marshalling cost — useful for confirming
   no surprise hot spots have crept into `GenerateImage`'s prep
-  (string interning, `cImgGenParams` defaults round-trip, etc.).
+  (compatibility-field inspection and native-option setters, etc.).
 - **`*.mem.prof`** is small — `GenerateImage` itself does not allocate
   per denoising step; the only Go allocations per iteration are the
-  params struct copy, the `cStringRefs` C string buffers, and the
+  option setter arguments, C string buffers, and the
   decoded `SDImage` pixel buffer copied out of the C heap.
 
 The captured `*.test` binaries and `*.prof` files are gitignored.

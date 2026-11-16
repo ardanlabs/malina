@@ -33,11 +33,21 @@ $ go run ./examples/hello "a lovely cat"
 
 Sometimes there are breaking changes to stable-diffusion.cpp that require an update to malina. Here are the known compatible versions:
 
-| stable-diffusion.cpp | malina         | Linux prebuilt requirements                                        |
-| -------------------- | -------------- | ------------------------------------------------------------------ |
-| master-1088-32d516c  | 1.2.x (≥1.2.2) | CPU/Vulkan: Ubuntu 26.04 (glibc ≥2.43); ROCm archive: Ubuntu 24.04 |
-| master-1052-f5df5f8  | 1.2.0          | CPU/Vulkan: Ubuntu 26.04 (glibc ≥2.43); ROCm archive: Ubuntu 24.04 |
-| master-1017-be48649  | 1.1.x (≥1.1.9) | See upstream release assets                                        |
+| stable-diffusion.cpp | malina | Linux prebuilt requirements                                        |
+| -------------------- | ------ | ------------------------------------------------------------------ |
+| master-1106-532d2c1  | 1.2.3  | CPU/Vulkan: Ubuntu 26.04 (glibc ≥2.43); ROCm archive: Ubuntu 24.04 |
+| master-1088-32d516c  | 1.2.2  | CPU/Vulkan: Ubuntu 26.04 (glibc ≥2.43); ROCm archive: Ubuntu 24.04 |
+| master-1088-32d516c  | 1.2.1  | CPU/Vulkan: Ubuntu 26.04 (glibc ≥2.43); ROCm archive: Ubuntu 24.04 |
+| master-1052-f5df5f8  | 1.2.0  | CPU/Vulkan: Ubuntu 26.04 (glibc ≥2.43); ROCm archive: Ubuntu 24.04 |
+
+Malina 1.2.3 requires the new opaque-options/tensor/result C API. Its native
+library is not interchangeable with the struct-based API used by 1.2.2 and
+earlier. Upgrade Malina and its verified libraries together:
+
+```shell
+$ go install github.com/ardanlabs/malina@v1.2.3
+$ malina install -u -lib ./lib
+```
 
 ## Owner Information
 
@@ -89,6 +99,9 @@ If you are interested in helping in any way, please send an email to [Bill Kenne
 
 Malina calls stable-diffusion.cpp through [purego](https://github.com/ebitengine/purego)
 and [JupiterRider/ffi](https://github.com/JupiterRider/ffi), without CGo.
+Native options copy strings and arrays and retain input tensors. Malina copies
+result pixels, audio, and generation metadata into Go-owned values before
+releasing the native result with its matching library allocator.
 The Go API supports image and video generation, image editing, ControlNet,
 upscaling, and face refinement. See the [API reference](https://pkg.go.dev/github.com/ardanlabs/malina/pkg/sd)
 for integration details.

@@ -43,6 +43,7 @@ func main() {
 
 	libPath := download.DefaultLibrariesDir()
 	bundleDir := filepath.Join(download.DefaultModelsDir(), "sd-1.5")
+
 	manifest, err := download.LoadManifest(bundleDir)
 	if err != nil {
 		log.Fatalf("load model bundle from %s: %v (did you run `malina model pull sd-1.5`?)", bundleDir, err)
@@ -52,9 +53,11 @@ func main() {
 	if err := download.VerifyDefaultInstall(context.Background(), libPath); err != nil {
 		log.Fatalf("verify default libraries: %v (did you run `malina install -u`?)", err)
 	}
+
 	if err := sd.Load(libPath); err != nil {
 		log.Fatalf("sd.Load: %v", err)
 	}
+
 	sd.SetProgressCallback(func(int, int, float32) {})
 	if err := sd.Init(libPath); err != nil {
 		log.Fatalf("sd.Init: %v", err)
@@ -81,6 +84,7 @@ func main() {
 	warmParams.Width = 64
 	warmParams.Height = 64
 	warmParams.Steps = 1
+
 	for i, ctx := range contexts {
 		fmt.Printf("warming context %d\n", i)
 		if _, err := sd.GenerateImage(ctx, warmParams); err != nil {
@@ -96,17 +100,23 @@ func main() {
 	params.Seed = 42
 
 	serial, serialWall := runBatch(contexts, params, false)
+
 	parallel, parallelWall := runBatch(contexts, params, true)
 	if err := os.MkdirAll(*output, 0o755); err != nil {
 		log.Fatalf("create output directory: %v", err)
 	}
+
 	writeResults(*output, "serial", serial)
 	writeResults(*output, "parallel", parallel)
 
 	fmt.Printf("\nserial wall time:   %s\n", serialWall.Round(time.Millisecond))
+
 	printDurations(serial)
+
 	fmt.Printf("parallel wall time: %s\n", parallelWall.Round(time.Millisecond))
+
 	printDurations(parallel)
+
 	fmt.Printf("wall-time speedup:  %.2fx\n", serialWall.Seconds()/parallelWall.Seconds())
 	fmt.Println("Both independent-context calls were in flight together and completed successfully.")
 	fmt.Println("A speedup above 1x indicates the backend executed useful work concurrently; a lower speedup may indicate GPU saturation or internal serialization.")

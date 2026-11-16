@@ -3,10 +3,11 @@ package sd
 import "errors"
 
 // ErrUnsupportedAPI reports that the loaded stable-diffusion.cpp library
-// predates an optional API used by the caller.
+// does not provide an API used by the caller, including APIs removed upstream.
 var ErrUnsupportedAPI = errors.New("stable-diffusion.cpp API is not available")
 
-// ControlType selects a ControlNet Union task, matching sd_control_type_t.
+// ControlType preserves Go compatibility values mapped to native ControlNet
+// Union task option strings.
 type ControlType int32
 
 const (
@@ -22,7 +23,7 @@ const (
 	ControlTypeCount    ControlType = 9
 )
 
-// PreviewMode mirrors enum preview_t.
+// PreviewMode preserves Go compatibility values mapped to native preview strings.
 type PreviewMode int32
 
 const (
@@ -33,7 +34,7 @@ const (
 	PreviewCount PreviewMode = 4
 )
 
-// CacheMode mirrors enum sd_cache_mode_t.
+// CacheMode preserves Go compatibility values mapped to native cache option strings.
 type CacheMode int32
 
 const (
@@ -46,7 +47,7 @@ const (
 	CacheSpectrum   CacheMode = 6
 )
 
-// HiresUpscaler mirrors enum sd_hires_upscaler_t.
+// HiresUpscaler preserves Go compatibility values mapped to native hires upscaler strings.
 type HiresUpscaler int32
 
 const (
@@ -141,7 +142,7 @@ type TilingParams struct {
 	// 1 request a target tile count.
 	RelativeSizeX float32
 	RelativeSizeY float32
-	ExtraArgs     string
+	ExtraArgs     string `sd:"extra_tiling_args"`
 }
 
 // CacheParams configures diffusion-transformer inference caching.

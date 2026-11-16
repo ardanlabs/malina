@@ -169,6 +169,10 @@ func TestTrustedManifestCoversSupportedMatrix(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParsePinnedVersion(%q): %v", DefaultSDVersion, err)
 	}
+	manifest, ok := trustedManifest(tag)
+	if !ok {
+		t.Fatalf("trustedManifest(%q): got no manifest", tag)
+	}
 
 	tests := []struct {
 		name       string
@@ -197,6 +201,18 @@ func TestTrustedManifestCoversSupportedMatrix(t *testing.T) {
 			}
 			if len(releaseMetadata) != 0 {
 				t.Errorf("release metadata: got %d bytes, want none for trusted manifest", len(releaseMetadata))
+			}
+			for _, asset := range assets {
+				entry := manifest.Assets[asset.Name]
+				wantFiles := []string{LibraryName(test.os.String())}
+				if asset.Name == "cudart-sd-bin-win-cu12-x64.zip" {
+					wantFiles = []string{"cudart64_12.dll", "cublas64_12.dll", "cublasLt64_12.dll"}
+				}
+				for _, name := range wantFiles {
+					if len(entry.Files[name]) != sha256.Size*2 {
+						t.Errorf("asset %q lacks a trusted hash for required library %q", asset.Name, name)
+					}
+				}
 			}
 		})
 	}

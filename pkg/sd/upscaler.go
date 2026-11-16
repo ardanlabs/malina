@@ -2,237 +2,189 @@ package sd
 
 import (
 	"errors"
+	"fmt"
 	"runtime"
 	"unsafe"
 
 	"github.com/jupiterrider/ffi"
 )
 
-// UpscalerContext is an opaque native upscaler context.
+// UpscalerContext is an opaque native image upscaler.
 type UpscalerContext uintptr
 
-// ADetailerContext is an opaque native ADetailer context.
+// ADetailerContext is an opaque native detector.
 type ADetailerContext uintptr
 
-// cADetailerParams mirrors sd_adetailer_params_t. Size: 24 bytes.
-type cADetailerParams struct {
-	Prompt         uintptr
-	NegativePrompt uintptr
-	ExtraArgs      uintptr
-}
+var newUpscalerCtxFunc, freeUpscalerCtxFunc, upscaleFunc, getUpscaleFactorFunc, getUpscalerScaleFunc ffi.Fun
+var newADetailerCtxFunc, freeADetailerCtxFunc, adetailImageFunc ffi.Fun
 
-var (
-	newUpscalerCtxFunc   ffi.Fun
-	freeUpscalerCtxFunc  ffi.Fun
-	upscaleFunc          ffi.Fun
-	getUpscaleFactorFunc ffi.Fun
-	getUpscalerScaleFunc ffi.Fun
-
-	newADetailerCtxFunc  ffi.Fun
-	freeADetailerCtxFunc ffi.Fun
-	adetailImageFunc     ffi.Fun
-)
-
-// loadUpscalerFuncs optionally loads the upscaler and ADetailer APIs so
-// libraries that predate them remain loadable.
 func loadUpscalerFuncs(lib ffi.Lib) {
-	newUpscalerCtxFunc = prepOptional(lib, "new_upscaler_ctx", &ffi.TypePointer, &ffi.TypePointer, &ffi.TypeUint8, &ffi.TypeSint32, &ffi.TypeSint32, &ffi.TypePointer, &ffi.TypePointer)
-	freeUpscalerCtxFunc = prepOptional(lib, "free_upscaler_ctx", &ffi.TypeVoid, &ffi.TypePointer)
-	upscaleFunc = prepOptional(lib, "upscale", &ffi.TypeUint8, &ffi.TypePointer, &ffiTypeImage, &ffi.TypeUint32, &ffi.TypePointer)
-	getUpscaleFactorFunc = prepOptional(lib, "get_upscale_factor", &ffi.TypeSint32, &ffi.TypePointer)
-	getUpscalerScaleFunc = prepOptional(lib, "get_upscaler_model_scale", &ffi.TypeSint32, &ffi.TypePointer)
-
-	newADetailerCtxFunc = prepOptional(lib, "new_adetailer_ctx", &ffi.TypePointer, &ffi.TypePointer, &ffi.TypeSint32, &ffi.TypePointer, &ffi.TypePointer)
-	freeADetailerCtxFunc = prepOptional(lib, "free_adetailer_ctx", &ffi.TypeVoid, &ffi.TypePointer)
-	adetailImageFunc = prepOptional(lib, "adetail_image", &ffi.TypeUint8, &ffi.TypePointer, &ffi.TypePointer, &ffiTypeImage, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer)
+	newUpscalerCtxFunc = prepOptional(lib, "sd_upscaler_create", &ffi.TypeSint32, &ffi.TypePointer, &ffi.TypePointer)
+	freeUpscalerCtxFunc = prepOptional(lib, "sd_upscaler_free", &ffi.TypeVoid, &ffi.TypePointer)
+	upscaleFunc = prepOptional(lib, "sd_upscale", &ffi.TypeSint32, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer)
+	getUpscaleFactorFunc = prepOptional(lib, "sd_upscaler_get_scale", &ffi.TypeSint32, &ffi.TypePointer)
+	getUpscalerScaleFunc = prepOptional(lib, "sd_upscaler_probe_scale", &ffi.TypeSint32, &ffi.TypePointer)
+	newADetailerCtxFunc = prepOptional(lib, "sd_adetailer_create", &ffi.TypeSint32, &ffi.TypePointer, &ffi.TypePointer)
+	freeADetailerCtxFunc = prepOptional(lib, "sd_adetailer_free", &ffi.TypeVoid, &ffi.TypePointer)
+	adetailImageFunc = prepOptional(lib, "sd_adetail", &ffi.TypeSint32, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer)
 }
 
-// NewUpscalerContext loads an ESRGAN model and returns an upscaler context.
-func NewUpscalerContext(esrganPath string, direct bool, nThreads int32, tileSize int32, backend string, paramsBackend string) (UpscalerContext, error) {
-	if newUpscalerCtxFunc == (ffi.Fun{}) {
-		return 0, unsupported("new_upscaler_ctx")
+// NewUpscalerContext loads an RGB upscaler. Scale comes from the model.
+func NewUpscalerContext(path string, direct bool, nThreads, tileSize int32, backend, paramsBackend string) (UpscalerContext, error) {
+	values := Options{"model_path": path, "conv_direct": direct}
+	if nThreads > 0 {
+		values["n_threads"] = nThreads
 	}
-
-	var refs cStringRefs
-	path, err := refs.add(esrganPath)
-	if err != nil {
-		return 0, err
+	if tileSize != 0 {
+		values["tile_size"] = tileSize
 	}
-	backendPtr, err := refs.add(backend)
-	if err != nil {
-		return 0, err
+	if backend != "" {
+		values["backend"] = backend
 	}
-	paramsBackendPtr, err := refs.add(paramsBackend)
-	if err != nil {
-		return 0, err
+	if paramsBackend != "" {
+		values["params_backend"] = paramsBackend
 	}
-	directValue := boolToU8(direct)
-	var ctx UpscalerContext
-	newUpscalerCtxFunc.Call(unsafe.Pointer(&ctx), unsafe.Pointer(&path), unsafe.Pointer(&directValue), unsafe.Pointer(&nThreads), unsafe.Pointer(&tileSize), unsafe.Pointer(&backendPtr), unsafe.Pointer(&paramsBackendPtr))
-	runtime.KeepAlive(refs.keep)
-	if ctx == 0 {
-		return 0, errors.New("new_upscaler_ctx returned NULL")
-	}
-	return ctx, nil
+	ctx, err := createPostprocessor("upscaler", newUpscalerCtxFunc, values)
+	return UpscalerContext(ctx), err
 }
 
-// FreeUpscalerContext releases an upscaler context. A nil context is ignored.
+func createPostprocessor(purpose string, fn ffi.Fun, values Options) (uintptr, error) {
+	if fn == (ffi.Fun{}) {
+		return 0, unsupported(purpose)
+	}
+	o, err := newOptions(purpose)
+	if err != nil {
+		return 0, err
+	}
+	defer o.free()
+	if err := o.apply(values); err != nil {
+		return 0, err
+	}
+	var handle uintptr
+	out := &handle
+	if err := statusCall(fn, unsafe.Pointer(&o.ptr), unsafe.Pointer(&out)); err != nil {
+		return 0, err
+	}
+	return handle, nil
+}
+
+// FreeUpscalerContext releases an upscaler. Zero is ignored.
 func FreeUpscalerContext(ctx UpscalerContext) {
-	if ctx == 0 || freeUpscalerCtxFunc == (ffi.Fun{}) {
-		return
+	if ctx != 0 {
+		freeUpscalerCtxFunc.Call(nil, unsafe.Pointer(&ctx))
 	}
-	freeUpscalerCtxFunc.Call(nil, unsafe.Pointer(&ctx))
 }
 
-// GetUpscaleFactor returns the model's native upscale factor.
+// GetUpscaleFactor returns the loaded model's actual scale.
 func GetUpscaleFactor(ctx UpscalerContext) (int32, error) {
 	if ctx == 0 {
 		return 0, errors.New("GetUpscaleFactor: nil context")
 	}
 	if getUpscaleFactorFunc == (ffi.Fun{}) {
-		return 0, unsupported("get_upscale_factor")
+		return 0, unsupported("sd_upscaler_get_scale")
 	}
-	var factor int32
-	getUpscaleFactorFunc.Call(unsafe.Pointer(&factor), unsafe.Pointer(&ctx))
-	return factor, nil
+	var result ffi.Arg
+	getUpscaleFactorFunc.Call(&result, unsafe.Pointer(&ctx))
+	return int32(result), nil
 }
 
-// GetUpscalerModelScale reads an ESRGAN model's native scale from its
-// metadata without loading an upscaler context. It returns zero when the file
-// is not a recognized RGB ESRGAN model.
-func GetUpscalerModelScale(modelPath string) (int32, error) {
+// GetUpscalerModelScale reads scale metadata without loading model weights.
+func GetUpscalerModelScale(path string) (int32, error) {
 	if getUpscalerScaleFunc == (ffi.Fun{}) {
-		return 0, unsupported("get_upscaler_model_scale")
+		return 0, unsupported("sd_upscaler_probe_scale")
 	}
-
 	var refs cStringRefs
-	path, err := refs.add(modelPath)
+	p, err := refs.add(path)
 	if err != nil {
 		return 0, err
 	}
-
-	var scale int32
-	getUpscalerScaleFunc.Call(unsafe.Pointer(&scale), unsafe.Pointer(&path))
-	runtime.KeepAlive(refs.keep)
-	return scale, nil
+	var result ffi.Arg
+	getUpscalerScaleFunc.Call(&result, unsafe.Pointer(&p))
+	runtime.KeepAlive(refs)
+	return int32(result), nil
 }
 
-// Upscale upscales an image and returns every native result as a Go-owned copy.
-func Upscale(ctx UpscalerContext, input *SDImage, factor uint32) ([]*SDImage, error) {
-	if ctx == 0 {
-		return nil, errors.New("Upscale: nil context")
-	}
-	if upscaleFunc == (ffi.Fun{}) {
-		return nil, unsupported("upscale")
-	}
-	if input == nil {
-		return nil, errors.New("Upscale: nil input image")
-	}
-	var raw cImage
-	if err := bindCImage(&raw, input, "input"); err != nil {
+// Upscale returns Go-owned pixels and metadata. The legacy factor argument must
+// equal the model's actual scale; it is no longer silently ignored upstream.
+// Use UpscaleImage when the model should determine the scale automatically.
+func Upscale(ctx UpscalerContext, image *SDImage, factor uint32) ([]*SDImage, error) {
+	actual, err := GetUpscaleFactor(ctx)
+	if err != nil {
 		return nil, err
 	}
-	images, err := callImageArray(upscaleFunc, unsafe.Pointer(&ctx), unsafe.Pointer(&raw), unsafe.Pointer(&factor))
-	runtime.KeepAlive(input)
-	return images, err
+	if factor != uint32(actual) {
+		return nil, fmt.Errorf("upscale: requested factor %d differs from model scale %d", factor, actual)
+	}
+	return UpscaleImage(ctx, image)
 }
 
-// NewADetailerContext loads a detector model and returns an ADetailer context.
-func NewADetailerContext(detectorPath string, nThreads int32, backend string, paramsBackend string) (ADetailerContext, error) {
-	if newADetailerCtxFunc == (ffi.Fun{}) {
-		return 0, unsupported("new_adetailer_ctx")
-	}
-	var refs cStringRefs
-	path, err := refs.add(detectorPath)
-	if err != nil {
-		return 0, err
-	}
-	backendPtr, err := refs.add(backend)
-	if err != nil {
-		return 0, err
-	}
-	paramsBackendPtr, err := refs.add(paramsBackend)
-	if err != nil {
-		return 0, err
-	}
-	var ctx ADetailerContext
-	newADetailerCtxFunc.Call(unsafe.Pointer(&ctx), unsafe.Pointer(&path), unsafe.Pointer(&nThreads), unsafe.Pointer(&backendPtr), unsafe.Pointer(&paramsBackendPtr))
-	runtime.KeepAlive(refs.keep)
+// UpscaleImage upscales using the loaded model's native scale.
+func UpscaleImage(ctx UpscalerContext, image *SDImage) ([]*SDImage, error) {
 	if ctx == 0 {
-		return 0, errors.New("new_adetailer_ctx returned NULL")
+		return nil, errors.New("UpscaleImage: nil context")
 	}
-	return ctx, nil
+	if upscaleFunc == (ffi.Fun{}) {
+		return nil, unsupported("sd_upscale")
+	}
+	o, err := newOptions("upscale")
+	if err != nil {
+		return nil, err
+	}
+	defer o.free()
+	if image == nil {
+		return nil, errors.New("upscale: nil image")
+	}
+	if err := o.set("image", image); err != nil {
+		return nil, err
+	}
+	return callImageArray(upscaleFunc, unsafe.Pointer(&ctx), unsafe.Pointer(&o.ptr))
 }
 
-// FreeADetailerContext releases an ADetailer context. A nil context is ignored.
+// NewADetailerContext loads a detector model.
+func NewADetailerContext(path string, nThreads int32, backend, paramsBackend string) (ADetailerContext, error) {
+	values := Options{"model_path": path}
+	if nThreads > 0 {
+		values["n_threads"] = nThreads
+	}
+	if backend != "" {
+		values["backend"] = backend
+	}
+	if paramsBackend != "" {
+		values["params_backend"] = paramsBackend
+	}
+	ctx, err := createPostprocessor("adetailer", newADetailerCtxFunc, values)
+	return ADetailerContext(ctx), err
+}
+
+// FreeADetailerContext releases a detector. Zero is ignored.
 func FreeADetailerContext(ctx ADetailerContext) {
-	if ctx == 0 || freeADetailerCtxFunc == (ffi.Fun{}) {
-		return
+	if ctx != 0 {
+		freeADetailerCtxFunc.Call(nil, unsafe.Pointer(&ctx))
 	}
-	freeADetailerCtxFunc.Call(nil, unsafe.Pointer(&ctx))
 }
 
-// ADetailImage detects and refines image regions using the supplied inpaint parameters.
-func ADetailImage(adetailerCtx ADetailerContext, ctx Context, input *SDImage, params ADetailerParams, inpaintParams ImgGenParams) ([]*SDImage, error) {
-	if adetailerCtx == 0 {
-		return nil, errors.New("ADetailImage: nil ADetailer context")
-	}
-	if ctx == 0 {
+// ADetailImage refines detected regions. Image-only inpaint settings unsupported
+// by ADetailer produce a native applicability error instead of being ignored.
+func ADetailImage(detector ADetailerContext, ctx Context, image *SDImage, params ADetailerParams, inpaint ImgGenParams) ([]*SDImage, error) {
+	if detector == 0 || ctx == 0 {
 		return nil, errors.New("ADetailImage: nil context")
 	}
 	if adetailImageFunc == (ffi.Fun{}) {
-		return nil, unsupported("adetail_image")
+		return nil, unsupported("sd_adetail")
 	}
-	if input == nil {
-		return nil, errors.New("ADetailImage: nil input image")
+	if image == nil {
+		return nil, errors.New("ADetailImage: nil image")
 	}
-	var rawImage cImage
-	if err := bindCImage(&rawImage, input, "input"); err != nil {
-		return nil, err
-	}
-	inpaint, err := marshalImgGenParams(inpaintParams)
+	o, err := newOptions("adetail")
 	if err != nil {
 		return nil, err
 	}
-	var refs cStringRefs
-	rawParams := cADetailerParams{}
-	for _, item := range []struct {
-		dst   *uintptr
-		value string
-	}{{&rawParams.Prompt, params.Prompt}, {&rawParams.NegativePrompt, params.NegativePrompt}, {&rawParams.ExtraArgs, params.ExtraArgs}} {
-		ptr, err := refs.add(item.value)
-		if err != nil {
-			return nil, err
-		}
-		*item.dst = ptr
+	defer o.free()
+	if err := o.fields(inpaint, ImgGenParamsInit(), ""); err != nil {
+		return nil, err
 	}
-	rawParamsPtr := &rawParams
-	inpaintPtr := &inpaint.raw
-	images, err := callImageArray(adetailImageFunc, unsafe.Pointer(&adetailerCtx), unsafe.Pointer(&ctx), unsafe.Pointer(&rawImage), unsafe.Pointer(&rawParamsPtr), unsafe.Pointer(&inpaintPtr))
-	runtime.KeepAlive(input)
-	runtime.KeepAlive(inpaint)
-	runtime.KeepAlive(inpaintParams)
-	runtime.KeepAlive(refs.keep)
-	return images, err
-}
-
-func callImageArray(fn ffi.Fun, args ...any) ([]*SDImage, error) {
-	var resultPtr *cImageGenerationResult
-	resultPtrPtr := &resultPtr
-	args = append(args, unsafe.Pointer(&resultPtrPtr))
-	var result ffi.Arg
-	fn.Call(&result, args...)
-	if resultPtr != nil {
-		defer freeImageResultFunc.Call(nil, unsafe.Pointer(&resultPtr))
+	if err := o.apply(Options{"image": image, "adetail.prompt": params.Prompt, "adetail.negative_prompt": params.NegativePrompt, "adetail.args": params.ExtraArgs}); err != nil {
+		return nil, err
 	}
-	if byte(result) == 0 || resultPtr == nil || resultPtr.Count <= 0 {
-		return nil, errors.New("native image operation failed")
-	}
-	rawImages := unsafe.Slice(resultPtr.Items, int(resultPtr.Count))
-	images := make([]*SDImage, resultPtr.Count)
-	for i := range rawImages {
-		images[i] = sdImageFromC(&rawImages[i].Image)
-		images[i].GenerationInfo = cString(rawImages[i].GenerationInfo)
-	}
-	return images, nil
+	return callImageArray(adetailImageFunc, unsafe.Pointer(&detector), unsafe.Pointer(&ctx), unsafe.Pointer(&o.ptr))
 }

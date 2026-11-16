@@ -9,11 +9,11 @@ import (
 	"testing"
 )
 
-// TestBindCImageValidation locks down the input validation bindCImage
-// performs before handing pixel pointers off to stable-diffusion.cpp.
+// TestImageTensorValidation locks down input validation before copying pixels
+// into a stable-diffusion.cpp tensor.
 // These checks run entirely in Go and need neither the shared library
 // nor a model, so they always execute as part of `go test ./pkg/sd/...`.
-func TestBindCImageValidation(t *testing.T) {
+func TestImageTensorValidation(t *testing.T) {
 	cases := []struct {
 		name    string
 		img     SDImage
@@ -42,13 +42,12 @@ func TestBindCImageValidation(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			var dst cImage
-			err := bindCImage(&dst, &c.img, "InitImage")
+			err := validateImage(&c.img)
 			if err == nil {
-				t.Fatalf("bindCImage: expected error containing %q, got nil", c.wantSub)
+				t.Fatalf("validateImage: expected error containing %q, got nil", c.wantSub)
 			}
 			if !strings.Contains(err.Error(), c.wantSub) {
-				t.Errorf("bindCImage error: got %q, want substring %q", err.Error(), c.wantSub)
+				t.Errorf("validateImage error: got %q, want substring %q", err.Error(), c.wantSub)
 			}
 		})
 	}
@@ -128,10 +127,10 @@ func TestLoadImageDispatch(t *testing.T) {
 	})
 }
 
-// TestBindCImageOK verifies the happy path: dimensions are copied
-// through, Data points at the first byte of the source slice, and the
-// destination cImage is otherwise zero-initialized.
-func TestBindCImageOK(t *testing.T) {
+// TestImageTensorRoundTrip verifies that image tensor round trips preserve dimensions
+// and pixels in an independently owned copy.
+func TestImageTensorRoundTrip(t *testing.T) {
+	testSetup(t)
 	src := SDImage{
 		Width:   16,
 		Height:  8,
@@ -140,18 +139,17 @@ func TestBindCImageOK(t *testing.T) {
 	}
 	src.Data[0] = 0x42
 
-	var dst cImage
-	if err := bindCImage(&dst, &src, "InitImage"); err != nil {
-		t.Fatalf("bindCImage: %v", err)
+	tensor, err := imageTensor(&src)
+	if err != nil {
+		t.Fatal(err)
 	}
-
-	if dst.Width != src.Width || dst.Height != src.Height || dst.Channel != src.Channel {
-		t.Errorf("dims: got %dx%dx%d, want %dx%dx%d", dst.Width, dst.Height, dst.Channel, src.Width, src.Height, src.Channel)
+	defer freeTensor(tensor)
+	dst, err := imageFromTensor(tensor)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if dst.Data == nil {
-		t.Fatal("dst.Data is nil; want pointer to src.Data[0]")
-	}
-	if *dst.Data != 0x42 {
-		t.Errorf("dst.Data points at %#x, want %#x", *dst.Data, 0x42)
+	src.Data[0] = 99
+	if dst.Data[0] != 0x42 || dst.Width != 16 || dst.Height != 8 || dst.Channel != 3 {
+		t.Fatalf("copied tensor: got %#v", dst)
 	}
 }
