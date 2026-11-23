@@ -90,7 +90,11 @@ func changeOptionFields(v reflect.Value) {
 		}
 		switch f.Kind() {
 		case reflect.Struct:
-			changeOptionFields(f)
+			if f.Type() == reflect.TypeFor[SDImage]() {
+				f.Set(reflect.ValueOf(testMarshalImage(1)))
+			} else {
+				changeOptionFields(f)
+			}
 		case reflect.Bool:
 			f.SetBool(!f.Bool())
 		case reflect.String:
@@ -107,16 +111,14 @@ func changeOptionFields(v reflect.Value) {
 			}
 		case reflect.Float32:
 			f.SetFloat(.3)
-		case reflect.Pointer:
-			f.Set(reflect.ValueOf(testMarshalImage(1)))
 		case reflect.Slice:
 			switch f.Interface().(type) {
 			case []float32:
 				f.Set(reflect.ValueOf([]float32{1, .5, 0}))
 			case []int32:
 				f.Set(reflect.ValueOf([]int32{1, 3}))
-			case []*SDImage:
-				f.Set(reflect.ValueOf([]*SDImage{testMarshalImage(1), testMarshalImage(4)}))
+			case []SDImage:
+				f.Set(reflect.ValueOf([]SDImage{testMarshalImage(1), testMarshalImage(4)}))
 			case []Lora:
 				f.Set(reflect.ValueOf([]Lora{{Path: "lora", Multiplier: .25}}))
 			case []Embedding:
@@ -124,7 +126,7 @@ func changeOptionFields(v reflect.Value) {
 			case []Audio:
 				f.Set(reflect.ValueOf([]Audio{{SampleRate: 44100, Channels: 2, Data: []float32{.1, .2, .3, .4}}}))
 			case []RefVideo:
-				f.Set(reflect.ValueOf([]RefVideo{{Frames: []*SDImage{testMarshalImage(7)}, FPS: 12, Audio: &Audio{SampleRate: 24000, Channels: 1, Data: []float32{.5, .75}}}}))
+				f.Set(reflect.ValueOf([]RefVideo{{Frames: []SDImage{testMarshalImage(7)}, FPS: 12, Audio: Audio{SampleRate: 24000, Channels: 1, Data: []float32{.5, .75}}}}))
 			}
 		}
 	}

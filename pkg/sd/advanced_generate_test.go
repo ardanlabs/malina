@@ -4,10 +4,7 @@ package sd
 
 import (
 	"bytes"
-	"encoding/json"
-	"errors"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/ardanlabs/malina/pkg/download"
@@ -29,18 +26,12 @@ func TestControlNetGeneration(t *testing.T) {
 	}
 	defer FreeContext(ctx)
 
-	if err := LoadControlNet(ctx, manifest.Files[string(download.RoleControlNet)]); err != nil {
-		t.Fatalf("LoadControlNet: %v", err)
-	}
-	hasControl, err := HasControlNet(ctx)
-	if err != nil {
-		t.Fatalf("HasControlNet: %v", err)
-	}
-	if !hasControl {
-		t.Fatal("HasControlNet: got false after loading ControlNet")
+	cparams.ControlNetPath = manifest.Files[string(download.RoleControlNet)]
+	if err := SetContextModelOptions(ctx, cparams); err != nil {
+		t.Fatalf("SetContextModelOptions: %v", err)
 	}
 
-	control := &SDImage{Width: 64, Height: 64, Channel: 3, Data: make([]byte, 64*64*3)}
+	control := SDImage{Width: 64, Height: 64, Channel: 3, Data: make([]byte, 64*64*3)}
 	for y := range 64 {
 		for x := range 64 {
 			if x == 16 || x == 47 || y == 16 || y == 47 {
@@ -51,7 +42,8 @@ func TestControlNetGeneration(t *testing.T) {
 			}
 		}
 	}
-	if err := PreprocessCanny(control, CannyParams{HighThreshold: 0.08, LowThreshold: 0.08, Weak: 0.8, Strong: 1}); err != nil {
+	control, err = PreprocessCanny(control, CannyParams{HighThreshold: 0.08, LowThreshold: 0.08, Weak: 0.8, Strong: 1})
+	if err != nil {
 		t.Fatalf("PreprocessCanny: %v", err)
 	}
 	params := ImgGenParamsInit()
@@ -66,19 +58,22 @@ func TestControlNetGeneration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GenerateImage with ControlNet: %v", err)
 	}
-	if image == nil || image.Width != 64 || image.Height != 64 || len(image.Data) != 64*64*3 {
+	if image.Width != 64 || image.Height != 64 || len(image.Data) != 64*64*3 {
 		t.Fatalf("GenerateImage with ControlNet returned invalid image: %#v", image)
 	}
 
-	if err := UnloadControlNet(ctx); err != nil {
-		t.Fatalf("UnloadControlNet: %v", err)
+	cparams.ControlNetPath = ""
+	if err := SetContextModelOptions(ctx, cparams); err != nil {
+		t.Fatalf("remove ControlNet: %v", err)
 	}
-	hasControl, err = HasControlNet(ctx)
+	params.ControlImage = SDImage{}
+	params.ControlStrength = .9
+	uncontrolled, err := GenerateImage(ctx, params)
 	if err != nil {
-		t.Fatalf("HasControlNet after unload: %v", err)
+		t.Fatal(err)
 	}
-	if hasControl {
-		t.Fatal("HasControlNet: got true after unloading ControlNet")
+	if bytes.Equal(image.Data, uncontrolled.Data) {
+		t.Fatal("replacing ControlNet configuration did not change output")
 	}
 }
 
@@ -97,7 +92,7 @@ func TestControlNetUnionTask(t *testing.T) {
 	}
 	defer FreeContext(ctx)
 
-	control := &SDImage{Width: 64, Height: 64, Channel: 3, Data: make([]byte, 64*64*3)}
+	control := SDImage{Width: 64, Height: 64, Channel: 3, Data: make([]byte, 64*64*3)}
 	for y := range 64 {
 		for x := range 64 {
 			for channel := range 3 {
@@ -168,7 +163,7 @@ func TestUpscaleImage(t *testing.T) {
 	if factor != modelScale {
 		t.Fatalf("model scale %d differs from loaded context factor %d", modelScale, factor)
 	}
-	input := &SDImage{Width: 8, Height: 8, Channel: 3, Data: make([]byte, 8*8*3)}
+	input := SDImage{Width: 8, Height: 8, Channel: 3, Data: make([]byte, 8*8*3)}
 	for i := range input.Data {
 		input.Data[i] = byte(i)
 	}
@@ -176,35 +171,32 @@ func TestUpscaleImage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Upscale: %v", err)
 	}
-	if len(images) == 0 || images[0] == nil {
+	if len(images) == 0 {
 		t.Fatal("Upscale returned no image")
 	}
 	if images[0].Width != input.Width*uint32(factor) || images[0].Height != input.Height*uint32(factor) {
 		t.Errorf("upscaled dimensions: got %dx%d, want %dx%d", images[0].Width, images[0].Height, input.Width*uint32(factor), input.Height*uint32(factor))
 	}
-	var info struct {
-		Upscale struct {
-			Factor uint32 `json:"upscale_factor"`
-		} `json:"upscale"`
+	replayCtx, err := NewContext(ContextParamsInit())
+	if err != nil {
+		t.Fatal(err)
 	}
-	if err := json.Unmarshal([]byte(images[0].GenerationInfo), &info); err != nil {
-		t.Fatalf("upscale metadata: %v", err)
+	defer FreeContext(replayCtx)
+	outputs, err := RunDGL(replayCtx, images[0].GenerationInfo, map[string]SDImage{"input_image": input})
+	if err != nil {
+		t.Fatalf("replay upscale program: %v\n%s", err, images[0].GenerationInfo)
 	}
-	if info.Upscale.Factor != 4 {
-		t.Errorf("upscale metadata factor: got %d, want 4", info.Upscale.Factor)
+	replayed, err := outputs["image"].Images()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(replayed[0].Data, images[0].Data) {
+		t.Fatal("upscale replay pixels differ")
 	}
 }
 
 func TestADetailImage(t *testing.T) {
 	testSetup(t)
-	var logs []string
-	SetLogCallback(func(_ LogLevel, text string) {
-		if strings.Contains(text, "ADetailer") {
-			logs = append(logs, text)
-		}
-	})
-	t.Cleanup(func() { SetLogCallback(nil) })
-
 	bundleDir := testEnvBundleDir(t, "MALINA_ADETAILER_TEST_DIR")
 	manifest, err := download.LoadManifest(bundleDir)
 	if err != nil {
@@ -219,50 +211,118 @@ func TestADetailImage(t *testing.T) {
 	}
 	defer FreeContext(ctx)
 
-	detailer, err := NewADetailerContext(manifest.Files[string(download.RoleADetailer)], NumPhysicalCores(), "cpu", "")
-	if err != nil {
-		t.Fatalf("NewADetailerContext: %v", err)
-	}
-	defer FreeADetailerContext(detailer)
-
 	input, err := LoadPNG(filepath.Join("..", "..", "samples", "adetailer-face.png"))
 	if err != nil {
 		t.Fatalf("LoadPNG: %v", err)
 	}
 	before := append([]byte(nil), input.Data...)
-	params := ImgGenParamsInit()
+	params := FaceRefinementParamsInit()
+	params.ModelPath = cparams.ModelPath
+	params.DetectorPath = manifest.Files[string(download.RoleADetailer)]
 	params.Prompt = "a detailed portrait photo"
-	params.Width = int32(input.Width)
-	params.Height = int32(input.Height)
-	params.Steps = 1
-	params.Seed = 42
-	images, err := ADetailImage(detailer, ctx, input, ADetailerParams{
-		Prompt:    "a detailed portrait photo",
-		ExtraArgs: "input_size=640,confidence=0.3,inpaint_width=64,inpaint_height=64",
-	}, params)
+	params.NegativePrompt = "blurry \"portrait\"\nlow quality"
+	params.Steps, params.Seed = 4, 73
+	params.InpaintHeight = 128
+	params.CFGScale, params.Strength = 5.5, .5
+	image, err := RefineFaces(ctx, input, params)
 	if err != nil {
-		t.Fatalf("ADetailImage: %v", err)
+		t.Fatalf("RefineFaces: %v", err)
 	}
-	if len(images) == 0 {
-		t.Fatal("ADetailImage returned no images")
-	}
-	image := images[len(images)-1]
-	if image == nil || image.Width != input.Width || image.Height != input.Height || len(image.Data) != len(input.Data) {
+	if image.Width != input.Width || image.Height != input.Height || len(image.Data) != len(input.Data) {
 		t.Fatalf("ADetailImage returned invalid final image: %#v", image)
 	}
 	if bytes.Equal(image.Data, before) {
-		t.Fatalf("ADetailImage did not refine the detected face; logs: %v", logs)
+		t.Fatal("ADetailer DGL did not refine the detected face")
 	}
-	var info struct {
-		Inpaint struct {
-			Seed string `json:"seed"`
-		} `json:"inpaint_params"`
+	if !bytes.Equal(input.Data, before) {
+		t.Fatal("RefineFaces mutated input")
 	}
-	if err := json.Unmarshal([]byte(image.GenerationInfo), &info); err != nil {
-		t.Fatalf("ADetailer metadata: %v", err)
+	params.Seed++
+	changed, err := RefineFaces(ctx, input, params)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if info.Inpaint.Seed != "42" {
-		t.Errorf("ADetailer metadata seed: got %q, want 42", info.Inpaint.Seed)
+	if bytes.Equal(changed.Data, image.Data) {
+		t.Fatal("RefineFaces ignored seed override")
+	}
+	outputs, err := RunDGL(ctx, image.GenerationInfo, map[string]SDImage{"image": input})
+	if err != nil {
+		t.Fatal(err)
+	}
+	replayed, err := outputs["image"].Images()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(image.Data, replayed[0].Data) {
+		t.Fatal("RefineFaces source did not reproduce output")
+	}
+}
+
+func TestEditMOSSImage(t *testing.T) {
+	testSetup(t)
+	bundleDir := testEnvBundleDir(t, "MALINA_MOSS_EDIT_TEST_DIR")
+	manifest, err := download.LoadManifest(bundleDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, err := NewContext(ContextParamsInit())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { FreeContext(ctx) }()
+	params := MOSSImageEditParamsInit()
+	params.DiffusionModelPath = manifest.Files[string(download.RoleDiffusion)]
+	params.LLMPath = manifest.Files[string(download.RoleLLM)]
+	params.LLMVisionPath = manifest.Files[string(download.RoleLLMVision)]
+	params.TokenizerPath = manifest.Files[string(download.RoleTokenizer)]
+	params.VAEPath = manifest.Files[string(download.RoleVAE)]
+	params.LoraPath = manifest.Files[string(download.RoleLora)]
+	params.Prompt = "Make the image blue."
+	params.NegativePrompt = "blurry \"image\"\nlow quality"
+	params.Width, params.Height = 96, 64
+	params.Steps, params.Seed = 2, 73
+	input := makeGradient(80, 48, 37)
+	before := append([]byte(nil), input.Data...)
+	image, err := EditMOSSImage(ctx, input, params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if image.Width != 96 || image.Height != 64 || image.Channel != 3 || len(image.Data) != 96*64*3 {
+		t.Fatalf("edited image: got %dx%dx%d, %d bytes", image.Width, image.Height, image.Channel, len(image.Data))
+	}
+	if !bytes.Equal(input.Data, before) {
+		t.Fatal("EditMOSSImage mutated the reference")
+	}
+	outputs, err := RunDGL(ctx, image.GenerationInfo, map[string]SDImage{"image": input})
+	if err != nil {
+		t.Fatal(err)
+	}
+	replayed, err := outputs["result"].Images()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(image.Data, replayed[0].Data) {
+		t.Fatal("MOSS editing source did not reproduce pixels")
+	}
+	for i := range input.Data {
+		input.Data[i] = 255 - input.Data[i]
+	}
+	changed, err := EditMOSSImage(ctx, input, params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Equal(changed.Data, image.Data) {
+		t.Fatal("MOSS editing ignored the reference image")
+	}
+	FreeContext(ctx)
+	ctx = 0
+	path := filepath.Join(t.TempDir(), "moss-edit.png")
+	if err := image.SavePNG(path); err != nil {
+		t.Fatal(err)
+	}
+	roundTrip, err := LoadPNG(path)
+	if err != nil || !bytes.Equal(roundTrip.Data, image.Data) {
+		t.Fatalf("MOSS PNG round trip after context release: %v", err)
 	}
 }
 
@@ -276,72 +336,58 @@ func TestGenerateVideoAnimateDiff(t *testing.T) {
 
 	cparams := ContextParamsInit()
 	cparams.ModelPath = manifest.Files[string(download.RoleModel)]
-	cparams.MotionModulePath = manifest.Files[string(download.RoleMotionModule)]
 	ctx, err := NewContext(cparams)
 	if err != nil {
 		t.Fatalf("NewContext: %v", err)
 	}
 	defer FreeContext(ctx)
 
-	supportsVideo, err := ContextSupportsVideoGeneration(ctx)
-	if err != nil {
-		t.Fatalf("ContextSupportsVideoGeneration: %v", err)
-	}
-	if !supportsVideo {
-		t.Fatal("video fixture does not report video-generation support")
-	}
-	params, err := VideoGenParamsInit()
-	if err != nil {
-		t.Fatalf("VideoGenParamsInit: %v", err)
-	}
+	params := AnimateDiffParamsInit()
+	params.ModelPath = cparams.ModelPath
+	params.MotionModulePath = manifest.Files[string(download.RoleMotionModule)]
 	params.Prompt = "a cat walking"
-	params.Width = 128
-	params.Height = 128
-	params.Sample.Steps = 4
-	params.VideoFrames = 4
-	params.FPS = 0
-	params.Seed = 42
-	if _, err := GenerateVideoWithInfo(ctx, params); err == nil {
-		t.Fatal("GenerateVideoWithInfo accepted zero FPS")
-	} else {
-		var native *NativeError
-		if !errors.As(err, &native) || native.Status != StatusOutOfRange {
-			t.Fatalf("zero FPS: got %v, want StatusOutOfRange", err)
-		}
-	}
-	// Override a valid field with a different explicit value. The result and
-	// metadata must come from native output, not an echo of params.FPS.
-	params.FPS = 12
-	params.Options = Options{"fps": int32(7)}
-	result, err := GenerateVideoWithInfo(ctx, params)
+	params.NegativePrompt = "blurry \"cat\"\nlow quality"
+	params.Width, params.Height = 128, 64
+	params.Frames, params.Steps = 3, 2
+	params.FPS, params.Seed, params.CFGScale = 11, 73, 5.5
+	video, err := GenerateAnimateDiff(ctx, params)
 	if err != nil {
-		t.Fatalf("GenerateVideoWithInfo: %v", err)
+		t.Fatalf("GenerateAnimateDiff: %v", err)
 	}
-	frames, audio, fps := result.Frames, result.Audio, result.FPS
-	var info struct {
-		Schema string `json:"schema"`
-		FPS    int32  `json:"fps"`
-		Seed   string `json:"seed"`
+	frames := video.Frames
+	if len(frames) != 3 {
+		t.Fatalf("frames: got %d, want 3", len(frames))
 	}
-	if err := json.Unmarshal([]byte(result.GenerationInfo), &info); err != nil {
-		t.Fatalf("video metadata: %v", err)
-	}
-	if info.Schema != "sdcpp.generation/v1" || info.Seed != "42" || info.FPS != 7 {
-		t.Errorf("video metadata: got %+v, want schema sdcpp.generation/v1, seed 42 and resolved FPS 7 (field 12, override 7)", info)
-	}
-	const wantFPS = 7
-	if fps != wantFPS {
-		t.Errorf("GenerateVideoWithFPS FPS: got %d, want %d", fps, wantFPS)
-	}
-	if len(frames) != int(params.VideoFrames) {
-		t.Fatalf("GenerateVideoWithFPS returned %d frames, want %d", len(frames), params.VideoFrames)
+	if video.FPS != 11 {
+		t.Fatalf("FPS: got %d, want 11", video.FPS)
 	}
 	for i, frame := range frames {
-		if frame == nil || frame.Width != uint32(params.Width) || frame.Height != uint32(params.Height) || len(frame.Data) != int(params.Width*params.Height*3) {
+		if frame.Width != 128 || frame.Height != 64 || len(frame.Data) != 128*64*3 {
 			t.Fatalf("GenerateVideoWithFPS frame %d is invalid: %#v", i, frame)
 		}
+		if frame.GenerationInfo != video.GenerationInfo || frame.GenerationInfo == "" {
+			t.Fatalf("frame %d is missing its replayable generation source", i)
+		}
 	}
-	if audio != nil && audio.Channels > 0 && len(audio.Data)%int(audio.Channels) != 0 {
-		t.Fatalf("audio samples %d are not divisible by %d channels", len(audio.Data), audio.Channels)
+	params.Seed++
+	changed, err := GenerateAnimateDiff(ctx, params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Equal(changed.Frames[0].Data, frames[0].Data) {
+		t.Fatal("GenerateAnimateDiff ignored seed override")
+	}
+	outputs, err := RunDGL(ctx, video.GenerationInfo, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	replayed, err := outputs["video"].Images()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range frames {
+		if !bytes.Equal(frames[i].Data, replayed[i].Data) {
+			t.Fatalf("AnimateDiff source did not reproduce frame %d", i)
+		}
 	}
 }

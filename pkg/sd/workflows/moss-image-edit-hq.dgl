@@ -1,0 +1,35 @@
+# Adapted from stable-diffusion.cpp 3b12781, MIT license.
+# Parameters are supplied by EditMOSSImage. The reference is a Go-owned RGB image.
+fn encode_reference(image, vae, rng) {
+    shape = tensor::shape(image)
+    long_edge = shape[0] + shape[1] - math::min(shape[0], shape[1])
+    scale = math::min(1024, long_edge) / long_edge
+    rounded = [math::round(shape[0] * scale / 16) * 16, math::round(shape[1] * scale / 16) * 16]
+    size = tensor::maximum(tensor::vector(rounded, dtype = "i64"), tensor::full([2], 16, dtype = "i64"))
+    pixels = tensor::interpolate(image, size = size, mode = "bilinear")
+    return vae_to_dit_latents(vae, vae_encode(vae, pixels, rng = rng))
+}
+
+fn main(image) {
+    base_model = load_dit(%[1]s, family = "moss_image", params_backend = "cpu")
+    model = apply_lora(base_model, load_lora(%[6]s), weight = %[7]g, mode = "auto")
+    text = load_text_encoder(%[2]s, family = "moss_image", tokenizer = %[4]s,
+        vision_path = %[3]s, params_backend = "cpu")
+    vae = load_vae(%[5]s, family = "moss_image", params_backend = "cpu")
+    encode_rng = make_rng("cuda", seed = %[14]d)
+    images = [image::to_f32(image, channels = 3)]
+    references = map(images, process = encode_reference, vae = vae, rng = encode_rng)
+    base = tensor::zeros(latent_shape(vae, width = %[10]d, height = %[11]d))
+    positive = encode_prompt(text, %[8]s, width = %[10]d, height = %[11]d, media = images)
+    negative = encode_prompt(text, %[9]s, width = %[10]d, height = %[11]d, media = images)
+    pos = predictor(model, positive, ref_latents = references,
+        ref_index_mode = "increase", ref_rope_anchor = "image_start", force_ref_timestep_zero = true)
+    neg = predictor(model, negative, ref_latents = references,
+        ref_index_mode = "increase", ref_rope_anchor = "image_start", force_ref_timestep_zero = true, skip_layers = [22])
+    guided = cfg(pos, neg, scale = %[13]g)
+    sigmas = make_sigmas(guided, latent = base, steps = %[12]d, scheduler = "discrete")
+    rng = make_rng("cuda", seed = %[14]d)
+    start = add_noise(guided, base, tensor::randn_like(base, rng = rng), sigma = sigmas[0])
+    latent = sample(start, sigmas, predict = guided, method = "euler", rng = rng)
+    return image::to_u8(vae_decode(vae, dit_to_vae_latents(vae, latent)))
+}

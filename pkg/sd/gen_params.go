@@ -37,29 +37,21 @@ type ImgGenParams struct {
 	CircularX         bool
 	CircularY         bool
 	Strength          float32
-	InitImage         *SDImage
-	RefImages         []*SDImage
-	RefImageArgs      string
-	MaskImage         *SDImage
+	InitImage         SDImage
+	RefImages         []SDImage
+	MaskImage         SDImage
 	ImageCFG          float32   `sd:"sample.guidance.img_cfg"`
 	DistilledGuidance float32   `sd:"sample.guidance.distilled_guidance"`
-	SLG               SLGParams `sd:"sample.guidance.slg"`
 	Eta               float32   `sd:"sample.eta"`
-	ShiftedTimestep   int32     `sd:"sample.shifted_timestep"`
 	CustomSigmas      []float32 `sd:"sample.sigmas"`
 	FlowShift         float32   `sd:"sample.flow_shift"`
 	ExtraSampleArgs   string    `sd:"sample.args"`
-	ControlImage      *SDImage
+	ControlImage      SDImage
 	ControlStrength   float32
-	IPAdapterImage    *SDImage
-	IPAdapterStrength float32
-	PhotoMaker        PhotoMakerParams `sd:"photomaker"`
-	PuLID             PuLIDParams      `sd:"pulid"`
-	VAETiling         TilingParams     `sd:"vae_tiling"`
+	VAETiling         TilingParams `sd:"vae_tiling"`
 	Cache             CacheParams
 	Hires             HiresParams
 	QwenImageLayers   int32
-	ImagePreprocess   ImagePreprocessParams
 	ControlType       ControlType
 	Options           Options
 }
@@ -79,13 +71,13 @@ func loadGenFuncs(lib ffi.Lib) error {
 // by leaving unchanged fields unset.
 func ImgGenParamsInit() ImgGenParams {
 	s := SampleParamsInit()
-	return ImgGenParams{ClipSkip: -1, Width: 512, Height: 512, Steps: s.Steps, CFGScale: s.Guidance.TextCFG, Sampler: s.Method, Scheduler: s.Scheduler, Seed: -1, BatchCount: 1, Strength: .75, ImageCFG: s.Guidance.ImageCFG, DistilledGuidance: s.Guidance.DistilledGuidance, SLG: s.Guidance.SLG, Eta: s.Eta, FlowShift: s.FlowShift, ControlStrength: .9, IPAdapterStrength: 1, PhotoMaker: PhotoMakerParams{StyleStrength: 20}, PuLID: PuLIDParams{IDWeight: 1}, VAETiling: TilingParams{TargetOverlap: .5}, Cache: CacheParamsInit(), Hires: HiresParamsInit(), QwenImageLayers: 3}
+	return ImgGenParams{ClipSkip: -1, Width: 512, Height: 512, Steps: s.Steps, CFGScale: s.Guidance.TextCFG, Sampler: s.Method, Scheduler: s.Scheduler, Seed: -1, BatchCount: 1, Strength: .75, ImageCFG: s.Guidance.ImageCFG, DistilledGuidance: s.Guidance.DistilledGuidance, Eta: s.Eta, FlowShift: s.FlowShift, ControlStrength: .9, VAETiling: TilingParams{TargetOverlap: .5}, Cache: CacheParamsInit(), Hires: HiresParamsInit(), QwenImageLayers: 3}
 }
 
 // SampleParamsInit returns compatibility sampling defaults. Positive infinity
 // represents native automatic selection for eta, flow shift and image CFG.
 func SampleParamsInit() SampleParams {
-	return SampleParams{Guidance: GuidanceParams{TextCFG: 7, ImageCFG: float32(math.Inf(1)), DistilledGuidance: 3.5, SLG: SLGParams{LayerStart: .01, LayerEnd: .2}}, Scheduler: SchedulerCount, Method: SampleMethodCount, Steps: 20, Eta: float32(math.Inf(1)), FlowShift: float32(math.Inf(1))}
+	return SampleParams{Guidance: GuidanceParams{TextCFG: 7, ImageCFG: float32(math.Inf(1)), DistilledGuidance: 3.5}, Scheduler: SchedulerCount, Method: SampleMethodCount, Steps: 20, Eta: float32(math.Inf(1)), FlowShift: float32(math.Inf(1))}
 }
 
 // CacheParamsInit returns compatibility cache defaults.
@@ -100,19 +92,19 @@ func HiresParamsInit() HiresParams {
 
 // GenerateImage returns the first image in the generated batch. Use
 // GenerateImages to consume all outputs. Pixels and metadata are Go-owned.
-func GenerateImage(ctx Context, params ImgGenParams) (*SDImage, error) {
+func GenerateImage(ctx Context, params ImgGenParams) (SDImage, error) {
 	images, err := GenerateImages(ctx, params)
 	if err != nil {
-		return nil, err
+		return SDImage{}, err
 	}
 	if len(images) == 0 {
-		return nil, errors.New("generate image: empty native result")
+		return SDImage{}, errors.New("generate image: empty native result")
 	}
 	return images[0], nil
 }
 
 // GenerateImages returns every image and its native generation metadata.
-func GenerateImages(ctx Context, params ImgGenParams) ([]*SDImage, error) {
+func GenerateImages(ctx Context, params ImgGenParams) ([]SDImage, error) {
 	if ctx == 0 {
 		return nil, errors.New("GenerateImages: nil context")
 	}

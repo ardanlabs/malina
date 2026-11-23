@@ -76,7 +76,7 @@ func runSDEncode(c *cli.Context) error {
 		return fmt.Errorf("encode: no .png files found in %s", inputDir)
 	}
 
-	frames := make([]*sd.SDImage, 0, len(pngs))
+	frames := make([]sd.SDImage, 0, len(pngs))
 	for _, p := range pngs {
 		img, err := sd.LoadPNG(p)
 		if err != nil {

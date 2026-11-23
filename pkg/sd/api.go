@@ -28,7 +28,6 @@ var (
 	addRPCServersFunc     ffi.Fun
 	convertFunc           ffi.Fun
 	convertComponentsFunc ffi.Fun
-	preprocessCannyFunc   ffi.Fun
 	loadImatrixFunc       ffi.Fun
 	saveImatrixFunc       ffi.Fun
 	enableImatrixFunc     ffi.Fun
@@ -52,7 +51,6 @@ func loadExtendedFuncs(lib ffi.Lib) {
 	addRPCServersFunc = prepOptional(lib, "sd_add_rpc_servers", &ffi.TypeUint8, &ffi.TypePointer)
 	convertFunc = prepOptional(lib, "convert", &ffi.TypeUint8, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypeSint32, &ffi.TypePointer, &ffi.TypeUint8)
 	convertComponentsFunc = prepOptional(lib, "convert_with_components", &ffi.TypeUint8, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypeSint32, &ffi.TypePointer, &ffi.TypeUint8, &ffi.TypeSint32, &ffi.TypePointer, &ffi.TypeSint32)
-	preprocessCannyFunc = prepOptional(lib, "sd_preprocess_canny", &ffi.TypeSint32, &ffi.TypePointer, &ffi.TypeFloat, &ffi.TypeFloat, &ffi.TypeFloat, &ffi.TypeFloat, &ffi.TypeUint8, &ffi.TypePointer)
 	loadImatrixFunc = prepOptional(lib, "load_imatrix", &ffi.TypeUint8, &ffi.TypePointer)
 	saveImatrixFunc = prepOptional(lib, "save_imatrix", &ffi.TypeVoid, &ffi.TypePointer)
 	enableImatrixFunc = prepOptional(lib, "enable_imatrix_collection", &ffi.TypeVoid)
@@ -239,6 +237,7 @@ func ContextSupportsVideoGeneration(ctx Context) (bool, error) {
 }
 
 // LoadControlNet hot-swaps a ControlNet model onto a context.
+// Deprecated: removed upstream. Use SetContextModelOptions with ControlNetPath.
 func LoadControlNet(ctx Context, path string) error {
 	if ctx == 0 {
 		return errors.New("LoadControlNet: nil context")
@@ -258,6 +257,7 @@ func LoadControlNet(ctx Context, path string) error {
 }
 
 // UnloadControlNet removes the hot-swapped ControlNet model from a context.
+// Deprecated: removed upstream. Replace the model options without ControlNetPath.
 func UnloadControlNet(ctx Context) error {
 	if ctx == 0 {
 		return errors.New("UnloadControlNet: nil context")
@@ -272,6 +272,7 @@ func UnloadControlNet(ctx Context) error {
 }
 
 // HasControlNet reports whether a context currently has a ControlNet model.
+// Deprecated: removed upstream. Track the configured ControlNetPath instead.
 func HasControlNet(ctx Context) (bool, error) {
 	if ctx == 0 {
 		return false, errors.New("HasControlNet: nil context")
@@ -471,31 +472,27 @@ func ConvertWithComponents(params ComponentConvertParams) error {
 	return nil
 }
 
-// PreprocessCanny replaces image pixels with the newly allocated native Canny
-// output, copied into Go memory. The old pixel backing is not mutated.
-func PreprocessCanny(image *SDImage, params CannyParams) error {
-	if preprocessCannyFunc == (ffi.Fun{}) {
-		return unsupported("sd_preprocess_canny")
+// PreprocessCanny returns native Canny output copied into Go memory.
+// The input image and its pixel backing are not mutated.
+func PreprocessCanny(image SDImage, params CannyParams) (SDImage, error) {
+	if err := validateImage(image); err != nil {
+		return SDImage{}, err
 	}
-	tensor, err := imageTensor(image)
+	ctx, err := NewContext(ContextParamsInit())
 	if err != nil {
-		return err
+		return SDImage{}, err
 	}
-	defer freeTensor(tensor)
-	high, low, weak, strong := params.HighThreshold, params.LowThreshold, params.Weak, params.Strong
-	inverse := boolToU8(params.Inverse)
-	var output uintptr
-	out := &output
-	if err := statusCall(preprocessCannyFunc, unsafe.Pointer(&tensor), unsafe.Pointer(&high), unsafe.Pointer(&low), unsafe.Pointer(&weak), unsafe.Pointer(&strong), unsafe.Pointer(&inverse), unsafe.Pointer(&out)); err != nil {
-		return err
-	}
-	defer freeTensor(output)
-	result, err := imageFromTensor(output)
+	defer FreeContext(ctx)
+	source := fmt.Sprintf("fn main(image) { return image::canny(image, high_threshold=%g, low_threshold=%g, weak=%g, strong=%g, invert=%t) }", params.HighThreshold, params.LowThreshold, params.Weak, params.Strong, params.Inverse)
+	outputs, err := RunDGL(ctx, source, map[string]SDImage{"image": image})
 	if err != nil {
-		return err
+		return SDImage{}, err
 	}
-	*image = *result
-	return nil
+	images, err := outputs["result"].Images()
+	if err != nil {
+		return SDImage{}, err
+	}
+	return images[0], nil
 }
 
 // LoadImatrix loads an importance matrix file.

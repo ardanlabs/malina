@@ -15,41 +15,41 @@ import (
 // channels (RGB). The decoder is selected from the filename extension
 // (.png / .jpg / .jpeg, case-insensitive). The alpha channel of the
 // source image, if any, is discarded.
-func LoadImage(filename string) (*SDImage, error) {
+func LoadImage(filename string) (SDImage, error) {
 	switch ext := strings.ToLower(filepath.Ext(filename)); ext {
 	case ".png":
 		return LoadPNG(filename)
 	case ".jpg", ".jpeg":
 		return LoadJPEG(filename)
 	default:
-		return nil, fmt.Errorf("LoadImage: unsupported extension %q (want .png, .jpg, .jpeg)", ext)
+		return SDImage{}, fmt.Errorf("LoadImage: unsupported extension %q (want .png, .jpg, .jpeg)", ext)
 	}
 }
 
 // LoadPNG decodes a PNG file from disk into an SDImage with 3 channels (RGB).
 // The alpha channel of the source PNG, if any, is discarded.
-func LoadPNG(filename string) (*SDImage, error) {
+func LoadPNG(filename string) (SDImage, error) {
 	return loadImageWith(filename, "LoadPNG", png.Decode)
 }
 
 // LoadJPEG decodes a JPEG file from disk into an SDImage with 3 channels (RGB).
-func LoadJPEG(filename string) (*SDImage, error) {
+func LoadJPEG(filename string) (SDImage, error) {
 	return loadImageWith(filename, "LoadJPEG", jpeg.Decode)
 }
 
 // loadImageWith opens filename, runs decode on it, and converts the
 // resulting image.Image to a 3-channel RGB SDImage. fnName labels error
 // messages so callers see "LoadPNG: ..." vs "LoadJPEG: ..." consistently.
-func loadImageWith(filename string, fnName string, decode func(io.Reader) (imgpkg.Image, error)) (*SDImage, error) {
+func loadImageWith(filename string, fnName string, decode func(io.Reader) (imgpkg.Image, error)) (SDImage, error) {
 	f, err := os.Open(filename)
 	if err != nil {
-		return nil, fmt.Errorf("%s: %w", fnName, err)
+		return SDImage{}, fmt.Errorf("%s: %w", fnName, err)
 	}
 	defer f.Close()
 
 	img, err := decode(f)
 	if err != nil {
-		return nil, fmt.Errorf("%s: decode %s: %w", fnName, filename, err)
+		return SDImage{}, fmt.Errorf("%s: decode %s: %w", fnName, filename, err)
 	}
 
 	b := img.Bounds()
@@ -72,30 +72,30 @@ func loadImageWith(filename string, fnName string, decode func(io.Reader) (imgpk
 		}
 	}
 
-	return &out, nil
+	return out, nil
 }
 
 // SDImage is a Go-side representation of a generated image. Data holds raw
 // pixel bytes in row-major order with Channel bytes per pixel (typically 3
 // for RGB output from stable-diffusion.cpp).
 //
-// SDImage owns its Data slice (it is copied out of the C heap by
-// GenerateImage), so callers may use it after FreeContext / FreeImage are
-// called.
+// Generated pixels are copied out of the C heap and remain valid after
+// FreeContext. Copying an SDImage value shares its pixel backing array.
+// A zero SDImage represents an absent optional image input.
 type SDImage struct {
 	Width   uint32
 	Height  uint32
 	Channel uint32
 	Data    []byte
-	// GenerationInfo is Go-owned sdcpp.generation/v1 JSON from the native
-	// result. It records resolved parameters, including the per-image seed.
+	// GenerationInfo is the Go-owned DGL program executed by the native
+	// result, not JSON. GenerationMetadata infers image parameters from it.
 	// Loading or saving PNG/JPEG pixels does not restore or embed this record.
 	GenerationInfo string
 }
 
 // SavePNG writes the image to filename as a PNG. Grayscale (1-channel) and
 // RGB (3-channel) inputs are encoded as 8-bit RGBA.
-func (img *SDImage) SavePNG(filename string) error {
+func (img SDImage) SavePNG(filename string) error {
 	rect := imgpkg.Rect(0, 0, int(img.Width), int(img.Height))
 	rgba := imgpkg.NewRGBA(rect)
 

@@ -86,46 +86,23 @@ type Lora struct {
 	Path        string
 }
 
-// SLGParams configures skip-layer guidance.
-type SLGParams struct {
-	Layers     []int32
-	LayerStart float32
-	LayerEnd   float32
-	Scale      float32
-}
-
-// GuidanceParams configures text, image, distilled, and skip-layer guidance.
+// GuidanceParams configures text, image and distilled guidance.
 type GuidanceParams struct {
 	TextCFG           float32
 	ImageCFG          float32
 	DistilledGuidance float32
-	SLG               SLGParams
 }
 
 // SampleParams configures one diffusion sampling stage.
 type SampleParams struct {
-	Guidance        GuidanceParams
-	Scheduler       Scheduler
-	Method          SampleMethod
-	Steps           int32
-	Eta             float32
-	ShiftedTimestep int32
-	CustomSigmas    []float32
-	FlowShift       float32
-	ExtraArgs       string
-}
-
-// PhotoMakerParams configures PhotoMaker identity conditioning.
-type PhotoMakerParams struct {
-	IDImages      []*SDImage
-	IDEmbedPath   string
-	StyleStrength float32
-}
-
-// PuLIDParams configures PuLID identity conditioning.
-type PuLIDParams struct {
-	IDEmbeddingPath string
-	IDWeight        float32
+	Guidance     GuidanceParams
+	Scheduler    Scheduler
+	Method       SampleMethod
+	Steps        int32
+	Eta          float32
+	CustomSigmas []float32
+	FlowShift    float32
+	ExtraArgs    string
 }
 
 // TilingParams configures VAE spatial and temporal tiling.
@@ -187,15 +164,9 @@ type HiresParams struct {
 	CustomSigmas      []float32
 }
 
-// ImagePreprocessParams configures upstream image preprocessing using
-// semicolon-separated target=...,key=value rules. Empty preserves the model
-// defaults.
-type ImagePreprocessParams struct {
-	Rules string
-}
-
 // Audio is interleaved, frame-major PCM audio. Data contains
-// SampleCount()*Channels float samples.
+// SampleCount()*Channels float samples. A zero Audio represents absent optional
+// audio. Copying an Audio value shares its sample backing array.
 type Audio struct {
 	SampleRate uint32
 	Channels   uint32
@@ -211,10 +182,11 @@ func (a Audio) SampleCount() uint64 {
 }
 
 // RefVideo supplies reference frames, playback metadata, and optional audio.
+// A zero Audio means no reference audio.
 type RefVideo struct {
-	Frames []*SDImage
+	Frames []SDImage
 	FPS    int32
-	Audio  *Audio
+	Audio  Audio
 }
 
 // Device identifies one ggml backend device accepted by ContextParams.

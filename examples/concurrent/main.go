@@ -24,7 +24,7 @@ import (
 )
 
 type generation struct {
-	image   *sd.SDImage
+	image   sd.SDImage
 	elapsed time.Duration
 	err     error
 }

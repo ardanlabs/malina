@@ -1,6 +1,7 @@
 package sd
 
 import (
+	"errors"
 	"runtime"
 	"strings"
 	"unsafe"
@@ -30,11 +31,7 @@ type ContextParams struct {
 	AudioEncoderPath            string
 	TAESDPath                   string
 	ControlNetPath              string
-	IPAdapterPath               string
-	MotionModulePath            string
 	Embeddings                  []Embedding
-	PhotoMakerPath              string
-	PulidWeightsPath            string
 	TensorTypeRules             string
 	NThreads                    int32
 	Wtype                       SDType
@@ -51,6 +48,7 @@ type ContextParams struct {
 	ForceSDXLVAEConvScale       bool
 	VaeFormat                   SDVaeFormat
 	MaxVram                     string
+	MaxRAM                      string
 	DisablePrefetch             bool
 	EagerLoad                   bool
 	DisableSegmentedCompute     bool
@@ -76,7 +74,7 @@ type ContextParams struct {
 // cEmbedding mirrors the live sd_embedding_t descriptor.
 type cEmbedding struct{ Name, Path uintptr }
 
-var newSDCtxFunc, freeSDCtxFunc ffi.Fun
+var newSDCtxFunc, freeSDCtxFunc, setModelOptionsFunc ffi.Fun
 
 func loadContextFuncs(lib ffi.Lib) error {
 	var err error
@@ -89,6 +87,9 @@ func loadContextFuncs(lib ffi.Lib) error {
 	if freeSDCtxFunc, err = lib.Prep("sd_ctx_free", &ffi.TypeVoid, &ffi.TypePointer); err != nil {
 		return loadError("sd_ctx_free", err)
 	}
+	if setModelOptionsFunc, err = lib.Prep("sd_ctx_set_model_options", &ffi.TypeSint32, &ffi.TypePointer, &ffi.TypePointer); err != nil {
+		return loadError("sd_ctx_set_model_options", err)
+	}
 	return nil
 }
 
@@ -98,7 +99,9 @@ func ContextParamsInit() ContextParams {
 	return ContextParams{NThreads: NumPhysicalCores(), Wtype: SDTypeCount, RngType: RngCuda, SamplerRngType: RngTypeCount, Prediction: PredictionCount, VaeFormat: SDVaeFormatAuto, AutoFit: true, ConditioningCacheSize: 4, BatchedCFG: true}
 }
 
-// NewContext loads configured models. Release the returned handle with FreeContext.
+// NewContext retains model configuration; weights load on first generation.
+// Model errors may surface during capability queries or generation.
+// Release the returned handle with FreeContext.
 func NewContext(params ContextParams) (Context, error) {
 	clearLastLog()
 	o, err := newOptions("ctx")
@@ -153,6 +156,24 @@ func metalDiffusionBackend(assignment string) bool {
 	default:
 		return strings.HasPrefix(diffusion, "metal") || strings.HasPrefix(diffusion, "mtl")
 	}
+}
+
+// SetContextModelOptions replaces an idle context's complete model configuration,
+// including ControlNetPath. Execution settings, callbacks and cached components
+// stay with the existing context. Model validity is checked lazily on use.
+func SetContextModelOptions(ctx Context, params ContextParams) error {
+	if ctx == 0 {
+		return errors.New("SetContextModelOptions: nil context")
+	}
+	o, err := newOptions("ctx")
+	if err != nil {
+		return err
+	}
+	defer o.free()
+	if err := o.fields(params, ContextParamsInit(), ""); err != nil {
+		return err
+	}
+	return statusCall(setModelOptionsFunc, unsafe.Pointer(&ctx), unsafe.Pointer(&o.ptr))
 }
 
 // FreeContext releases a context. Zero is ignored.

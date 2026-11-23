@@ -1,0 +1,60 @@
+# Adapted from stable-diffusion.cpp 3b12781 docs/dgl/adetailer/adetailer-existing-image.dgl (MIT).
+# Parameters are supplied by RefineFaces. Input image is bound by Go.
+var {
+    weights = %[1]s
+    model_path = %[2]s
+    detail_prompt = %[3]s
+    settings = {size = [%[5]d, %[6]d], steps = %[7]d, strength = %[8]g, cfg_scale = %[9]g, mask_blur = %[15]g, negative_prompt = %[4]s}
+}
+
+fn latent_mask(mask, like) {
+    shape = tensor::shape(like)
+    resized = tensor::interpolate(image::to_f32(mask), size = [shape[0], shape[1]], mode = "nearest")
+    return tensor::broadcast_to(resized, [shape[0], shape[1], 1, shape[3]])
+}
+
+fn inpaint_patch(image, mask, unet, text, vae, prompt, seed, settings) {
+    encode_rng = make_rng("cuda", seed = seed)
+    base = vae_to_unet_latents(vae, vae_encode(vae, image::to_f32(image), rng = encode_rng))
+    latent_region = latent_mask(mask, like = base)
+    rng = make_rng("cuda", seed = seed)
+    pos = predictor(unet, encode_prompt(text, prompt), prediction = "eps")
+    neg = predictor(unet, encode_prompt(text, settings.negative_prompt), prediction = "eps")
+    guided = cfg(pos, neg, scale = settings.cfg_scale)
+    full = make_sigmas(guided, latent = base, scheduler = "karras", steps = settings.steps)
+    sigmas = full[settings.steps - math::floor(settings.steps * settings.strength):]
+    start = add_noise(guided, base, tensor::randn_like(base, rng = rng), sigma = sigmas[0])
+    denoise_mask = tensor::max_pool2d(latent_region, kernel = [3, 3], padding_before = [1, 1])
+    latent = sample(start, sigmas, predict = guided, method = "euler", base = base, denoise_mask = denoise_mask, rng = rng)
+    return vae_decode(vae, unet_to_vae_latents(vae, latent))
+}
+
+fn refine_region(canvas, region, unet, text, vae, prompt, settings) {
+    origin = region.box[:2]
+    extent = region.box[2:4]
+    crop = tensor::crop(canvas, axes = [1, 2], start = origin, size = extent)
+    mask_crop = tensor::crop(region.mask, axes = [1, 2], start = origin, size = extent)
+    image = tensor::interpolate(crop, size = settings.size, axes = [1, 2], mode = "bilinear")
+    mask = tensor::interpolate(mask_crop, size = settings.size, axes = [1, 2], mode = "nearest_exact")
+    patch = inpaint_patch(image, mask, unet, text, vae, prompt, %[10]d + region.index, settings)
+    feather = tensor::gaussian_blur(region.mask, sigma = settings.mask_blur, radius = 10, axes = [1, 2])
+    foreground = tensor::interpolate(patch, size = extent, axes = [1, 2], mode = "bilinear")
+    weight = tensor::affine(tensor::cast(tensor::crop(feather, axes = [1, 2], start = origin, size = extent), "f32"), scale = 0.00392156862745098)
+    blended = tensor::lerp(crop, foreground, weight)
+    rows = tensor::crop(canvas, axes = [2], start = [origin[1]], size = [extent[1]])
+    band = tensor::replace_slice(rows, blended, axis = 1, start = origin[0])
+    return tensor::replace_slice(canvas, band, axis = 2, start = origin[1])
+}
+
+fn main(image) {
+    unet = load_unet(weights)
+    text = load_text_encoder(weights)
+    vae = load_vae(weights)
+    detector = load_detector(model_path, backend = "cpu")
+    found = detections::detect(detector, image, confidence = %[11]g, input_size = %[12]d)
+    selected = detections::filter(image, found, top_k = %[13]d)
+    masks = detections::box_masks(image, selected)
+    regions = regions::plan_mask_crops(masks, aspect = settings.size, padding = %[14]d)
+    refined = fold(regions, image, process = refine_region, unet = unet, text = text, vae = vae, prompt = detail_prompt, settings = settings)
+    return {image = image::to_u8(refined), scores = selected.scores}
+}

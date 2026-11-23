@@ -35,19 +35,76 @@ Sometimes there are breaking changes to stable-diffusion.cpp that require an upd
 
 | stable-diffusion.cpp | malina | Linux prebuilt requirements                                        |
 | -------------------- | ------ | ------------------------------------------------------------------ |
+| master-1122-3b12781  | 1.2.4  | CPU/Vulkan: Ubuntu 26.04 (glibc ≥2.43); ROCm archive: Ubuntu 24.04 |
 | master-1106-532d2c1  | 1.2.3  | CPU/Vulkan: Ubuntu 26.04 (glibc ≥2.43); ROCm archive: Ubuntu 24.04 |
 | master-1088-32d516c  | 1.2.2  | CPU/Vulkan: Ubuntu 26.04 (glibc ≥2.43); ROCm archive: Ubuntu 24.04 |
-| master-1088-32d516c  | 1.2.1  | CPU/Vulkan: Ubuntu 26.04 (glibc ≥2.43); ROCm archive: Ubuntu 24.04 |
-| master-1052-f5df5f8  | 1.2.0  | CPU/Vulkan: Ubuntu 26.04 (glibc ≥2.43); ROCm archive: Ubuntu 24.04 |
 
-Malina 1.2.3 requires the new opaque-options/tensor/result C API. Its native
-library is not interchangeable with the struct-based API used by 1.2.2 and
-earlier. Upgrade Malina and its verified libraries together:
+Malina 1.2.4 requires the DGL-backed opaque-options/tensor/result C API.
+Its native library is not interchangeable with 1.2.3 or earlier. Upgrade
+Malina and its verified libraries together:
 
 ```shell
-$ go install github.com/ardanlabs/malina@v1.2.3
+$ go install github.com/ardanlabs/malina@v1.2.4
 $ malina install -u -lib ./lib
 ```
+
+### Migrating from 1.2.3
+
+- `GenerationInfo` now contains the **exact executed DGL program**, not JSON.
+  Call `sd.GenerationMetadata(source)` for best-effort inferred image parameters
+  and WebUI infotext as JSON. Video/upscale programs can return `{}`.
+- `NewContext` retains configuration and loads weights lazily. Model errors
+  can surface during capability queries or generation, not just construction.
+- Configure `ControlNetPath` at creation, or replace the complete model
+  configuration with `SetContextModelOptions`. The old `LoadControlNet`,
+  `UnloadControlNet` and `HasControlNet` APIs return `ErrUnsupportedAPI`.
+- ADetailer and AnimateDiff use library-owned, embedded DGL workflows through
+  `sd.RefineFaces` and `sd.GenerateAnimateDiff`. Callers do not need DGL files.
+  Start with `FaceRefinementParamsInit` or `AnimateDiffParamsInit`, then set
+  model paths and request parameters. The old ADetailer handle functions return
+  `ErrUnsupportedAPI`; `RunDGL` remains available for custom workflows.
+- `SDImage`, `Audio` and `VideoGenerationResult` use value semantics throughout
+  parameters, returns, callbacks and collections (`[]SDImage`, not `[]*SDImage`).
+  Zero-valued optional images/audio mean “not supplied”; check errors rather
+  than comparing returned structs to `nil`. Copying these structs shares their
+  slice backing arrays; it does not deep-copy pixels or samples.
+  `PreprocessCanny` returns a new image without mutating its input:
+  `edges, err := sd.PreprocessCanny(image, params)`. Assign that result to any
+  generation parameter that should use the processed image.
+- Removed unsupported context fields: `IPAdapterPath`, `MotionModulePath`,
+  `PhotoMakerPath`, `PulidWeightsPath`. Removed image fields: `RefImageArgs`,
+  `SLG`, `ShiftedTimestep`, `IPAdapterImage`, `IPAdapterStrength`, `PhotoMaker`,
+  `PuLID`, `ImagePreprocess`. Video also removes `RefImageArgs` and
+  `ImagePreprocess`; sampling removes SLG/timestep overrides and independent
+  high-noise settings other than `Steps`. These workflows require DGL rather
+  than silently ignored parameters. `MaxRam` adds native host-weight budgeting.
+- `RunDGL` returns Go-owned flat tensors; `DGLTensor.Images()` decodes image
+  or video pixels. It accepts named RGB image inputs. Nested non-tensor values
+  and encoded bytes are not exposed by this flat API. Only run trusted source:
+  DGL has file access with the host process's permissions and is not sandboxed.
+
+### Bundled advanced workflows
+
+Malina owns the templates under [`pkg/sd/workflows`](pkg/sd/workflows) and
+embeds the directory as a read-only `embed.FS` in the library. They are not downloaded model assets or runtime
+files. The [ADetailer example](examples/adetailer/main.go) calls `RefineFaces`;
+the [AnimateDiff example](examples/animatediff/main.go) calls `GenerateAnimateDiff`.
+
+- `FaceRefinementParamsInit` defaults to 20 steps, CFG 7, strength 0.75,
+  random seed, confidence 0.3, detector input size 640, 64×64 inpainting,
+  at most four regions, 32-pixel padding, and mask blur 4.
+- `AnimateDiffParamsInit` defaults to 128×128, four frames, four steps,
+  CFG 7, random seed, and 1 FPS. FPS controls playback, not denoising.
+- Both accept prompts, negative prompts, explicit seeds and typed overrides.
+  Supply a complete SD 1.5 checkpoint plus a detector or motion module.
+  Pixel/inpainting dimensions must be positive multiples of 64.
+  The existing context supplies execution settings and the component cache;
+  model paths come from the workflow parameters, not the context's model options.
+- Results own their pixels and retain the executed source in `GenerationInfo`.
+  These are synchronous `RunDGL` workflows, not a revival of the removed native
+  handles. Standalone DGL progress/cancellation wiring and AnimateDiff image/audio
+  conditioning are not provided by these wrappers. Do not run context calls
+  concurrently; use custom `RunDGL` programs for workflows outside this scope.
 
 ## Owner Information
 
@@ -103,7 +160,8 @@ Native options copy strings and arrays and retain input tensors. Malina copies
 result pixels, audio, and generation metadata into Go-owned values before
 releasing the native result with its matching library allocator.
 The Go API supports image and video generation, image editing, ControlNet,
-upscaling, and face refinement. See the [API reference](https://pkg.go.dev/github.com/ardanlabs/malina/pkg/sd)
+upscaling, and explicit DGL workflows for face refinement and AnimateDiff.
+See the [API reference](https://pkg.go.dev/github.com/ardanlabs/malina/pkg/sd)
 for integration details.
 
 ## Models
@@ -119,7 +177,10 @@ do not represent runtime memory requirements.
 | `controlnet-union-sdxl`          | SDXL base with multi-task ControlNet Union; set `ImgGenParams.ControlType` |   9.5 GB |
 | `z-image-turbo`                  | Fast text-to-image generation                                              |   6.7 GB |
 | `moss-image-sft`                 | Text-to-image generation with MOSS-Image                                   |   9.4 GB |
+| `moss-image-edit-hq`             | Instruction-based MOSS SFT image editing with armV5 LoRA and vision         |  10.8 GB |
 | `llada-image-turbo`              | Text-to-image generation and image editing                                 |  20.2 GB |
+| `qwen-image-2.1`                 | Generation and reference-image editing; research/evaluation license         |  11.2 GB |
+| `flux2-klein-base-4b`            | Undistilled FLUX generation and reference-image editing; Apache-2.0         |   5.3 GB |
 | `flux2-klein-4b`                 | Compact FLUX image generation; license-gated                               |   5.3 GB |
 | `flux2-klein-9b`                 | Larger FLUX image generation; license-gated                                |    16 GB |
 | `controlnet-canny-sd1.5`         | Guide image generation with Canny edges                                    |   2.3 GB |
@@ -139,7 +200,29 @@ $ malina model pull sd-1.5
 Bundles are stored under `~/.kronk/malina-models/<bundle>/`. Review the
 license shown by `malina model list` before use. For license-gated bundles,
 accept the upstream Hugging Face terms and set `HF_TOKEN` before downloading.
-The FLUX Klein bundles carry non-commercial license terms.
+Download gating and license restrictions are separate: the new
+`flux2-klein-base-4b` and `qwen-image-2.1` bundles are both ungated, but only
+the former is Apache-2.0. Qwen Image 2.1's [Qwen Research license](https://huggingface.co/Qwen/Qwen-Image-2.1/blob/main/LICENSE)
+permits research/evaluation only; commercial use requires a separate license.
+The existing `flux2-klein-9b` model carries non-commercial terms.
+
+Both new bundles pin every component to an immutable Hugging Face revision
+and are opt-in (not included in `make download-models`):
+
+```shell
+$ malina model pull flux2-klein-base-4b
+$ malina model pull qwen-image-2.1
+```
+
+Load each manifest's `diffusion`, `llm`, and `vae` files into the matching
+`sd.ContextParams` paths. For Qwen editing, also set `LLMVisionPath` from
+`llm_vision`; the bundle includes the vision projector. Pass reference images
+through `sd.ImgGenParams.RefImages` rather than `InitImage` for instruction-based
+editing. Start with 20 steps and CFG 4 for Klein Base (not the distilled
+model's 4-step settings), or 20 Euler steps and CFG 6 for Qwen Image 2.1.
+Qwen output dimensions must be divisible by 32, and its dedicated 2.1 VAE
+cannot be replaced with the older Qwen Image VAE. These bundles use the existing
+generation API; they do not add new embedded DGL workflows or example programs.
 
 You can also supply your own `.safetensors` or `.gguf` models and their
 required components through the Go API. Supported families include Stable
@@ -205,6 +288,33 @@ $ malina model pull controlnet-canny-sd1.5
 $ make example-controlnet
 ```
 
+[MOSS IMAGE EDIT HQ](examples/moss-image-edit/main.go) — edit a reference PNG/JPEG
+with an instruction. The bundle includes all six pinned files (Apache-2.0,
+ungated); no external DGL file or LoRA prompt tag is needed.
+
+```shell
+$ malina model pull moss-image-edit-hq
+$ make example-moss-image-edit
+$ go run ./examples/moss-image-edit -in photo.png -out edited.png -prompt "Make the sky orange."
+```
+
+The Go API is `sd.EditMOSSImage(ctx, image, params)`, starting with
+`sd.MOSSImageEditParamsInit()`. Defaults are 512×512, 20 Euler steps, CFG 3,
+LoRA weight 1, and a random seed. Supply the six component paths from the bundle
+manifest, including `download.RoleLora` and `download.RoleLLMVision`. Output
+dimensions must be positive multiples of 16. The reference latent is resized
+to a maximum 1024-pixel long edge and aligned to multiples of 16; input pixels
+are not changed. This wrapper accepts one reference and retains replayable
+source in `GenerationInfo`. It has the same synchronous DGL progress/cancellation
+limitations as the other bundled workflows. Download size is not runtime RAM.
+
+The large bundle is opt-in, not part of `make download-models`. To run its
+model-backed regression test after downloading:
+
+```shell
+$ MALINA_LIB="$PWD/lib" MALINA_MOSS_EDIT_TEST_DIR="$HOME/.kronk/malina-models/moss-image-edit-hq" go test -count=1 -tags=malina_model_tests ./pkg/sd -run '^TestEditMOSSImage$'
+```
+
 [UPSCALE](examples/upscale/main.go) — enlarge an image 4× with the compact Real-ESRGAN anime model.
 
 ```shell
@@ -212,14 +322,14 @@ $ malina model pull realesrgan-x4-anime
 $ make example-upscale
 ```
 
-[ADETAILER](examples/adetailer/main.go) — detect faces with YOLOv8n and refine each detected region with Stable Diffusion inpainting.
+[ADETAILER](examples/adetailer/main.go) — detect faces with YOLOv8n and refine each detected region with an explicit DGL inpainting program.
 
 ```shell
 $ malina model pull adetailer-face-yolov8n
 $ make example-adetailer
 ```
 
-[ANIMATEDIFF](examples/animatediff/main.go) — generate a temporally conditioned sequence with an AnimateDiff motion module and save it as an AVI.
+[ANIMATEDIFF](examples/animatediff/main.go) — run an explicit DGL program with an AnimateDiff motion module and save its temporally conditioned frames as an AVI.
 
 ```shell
 $ malina model pull animatediff-sd1.5

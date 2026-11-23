@@ -42,7 +42,7 @@ func TestImageTensorValidation(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			err := validateImage(&c.img)
+			err := validateImage(c.img)
 			if err == nil {
 				t.Fatalf("validateImage: expected error containing %q, got nil", c.wantSub)
 			}
@@ -139,7 +139,7 @@ func TestImageTensorRoundTrip(t *testing.T) {
 	}
 	src.Data[0] = 0x42
 
-	tensor, err := imageTensor(&src)
+	tensor, err := imageTensor(src)
 	if err != nil {
 		t.Fatal(err)
 	}

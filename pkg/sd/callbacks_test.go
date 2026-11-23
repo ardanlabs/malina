@@ -8,7 +8,7 @@ import (
 func TestPreviewTrampolineCopiesFrames(t *testing.T) {
 	testSetup(t)
 	pixels := []byte{1, 2, 3, 4, 5, 6}
-	tensor, err := imageTensor(&SDImage{Width: 2, Height: 1, Channel: 3, Data: pixels})
+	tensor, err := imageTensor(SDImage{Width: 2, Height: 1, Channel: 3, Data: pixels})
 	if err != nil {
 		t.Fatal(err)
 	}

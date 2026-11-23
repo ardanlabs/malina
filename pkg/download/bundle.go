@@ -24,14 +24,15 @@ const (
 	RoleTokenizer      FileRole = "tokenizer"       // Tokenizer
 	RoleControlNet     FileRole = "control_net"     // ControlNetPath
 	RoleTAESD          FileRole = "taesd"           // TAESDPath
-	RolePhotoMaker     FileRole = "photo_maker"     // PhotoMakerPath
+	RolePhotoMaker     FileRole = "photo_maker"     // DGL photomaker::load
 	RoleClipVision     FileRole = "clip_vision"     // ClipVisionPath
 	RoleHighNoise      FileRole = "high_noise"      // HighNoiseDiffusionModelPath
 	RoleEmbeddingsConn FileRole = "embeddings_conn" // EmbeddingsConnectorsPath
-	RoleMotionModule   FileRole = "motion_module"   // MotionModulePath
+	RoleMotionModule   FileRole = "motion_module"   // DGL animatediff::load
 	RoleUpscaler       FileRole = "upscaler"        // NewUpscalerContext
-	RoleADetailer      FileRole = "adetailer"       // NewADetailerContext
+	RoleADetailer      FileRole = "adetailer"       // DGL load_detector
 	RoleAudioEncoder   FileRole = "audio_encoder"   // AudioEncoderPath
+	RoleLora           FileRole = "lora"            // DGL load_lora
 )
 
 // BundleFile describes a single file inside a bundle.
@@ -59,7 +60,7 @@ type Bundle struct {
 //
 // The catalog covers image generation, ControlNet, upscaling, ADetailer,
 // AnimateDiff and audio-conditioned video generation, SDXL, LLaDA-Image, and
-// multi-file MOSS-Image, Z-Image and FLUX.2 pipelines.
+// multi-file MOSS-Image, Qwen Image, Z-Image and FLUX.2 pipelines.
 func Catalog() []Bundle {
 	return []Bundle{
 		{
@@ -302,6 +303,49 @@ func Catalog() []Bundle {
 			},
 		},
 		{
+			Name:        "moss-image-edit-hq",
+			Description: "MOSS-Image Edit HQ — SFT image editing with the armV5 LoRA and Qwen3.5 vision projector. Six files (~10.8 GB total).",
+			License:     "Apache-2.0",
+			Files: []BundleFile{
+				{
+					Role:     RoleDiffusion,
+					Filename: "MOSS-Image-SFT-Q4_0.gguf",
+					URL:      "https://huggingface.co/leejet/MOSS-Image-SFT-GGUF/resolve/238daf423f0de65316207453591f275407aac9a7/MOSS-Image-SFT-Q4_0.gguf",
+					Size:     "3.3 GB",
+				},
+				{
+					Role:     RoleLLM,
+					Filename: "Qwen3.5-9B-Q4_K_M.gguf",
+					URL:      "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/3885219b6810b007914f3a7950a8d1b469d598a5/Qwen3.5-9B-Q4_K_M.gguf",
+					Size:     "5.7 GB",
+				},
+				{
+					Role:     RoleVAE,
+					Filename: "flux2-vae.safetensors",
+					URL:      "https://huggingface.co/Comfy-Org/MOSS-Image/resolve/530a4c94f92c35ef6818b1b035a983fe9dcf5f54/vae/flux2-vae.safetensors",
+					Size:     "336 MB",
+				},
+				{
+					Role:     RoleTokenizer,
+					Filename: "tokenizer.json",
+					URL:      "https://huggingface.co/OpenMOSS-Team/MOSS-Image-Base/resolve/85975793d8b3d432f1b6e27f352abaa4c2a4c0d3/tokenizer/tokenizer.json",
+					Size:     "20 MB",
+				},
+				{
+					Role:     RoleLLMVision,
+					Filename: "mmproj-BF16.gguf",
+					URL:      "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/3885219b6810b007914f3a7950a8d1b469d598a5/mmproj-BF16.gguf",
+					Size:     "922 MB",
+				},
+				{
+					Role:     RoleLora,
+					Filename: "armV5-moss-edit-lora.safetensors",
+					URL:      "https://huggingface.co/akhaliq/MOSS-Image-Edit-HQ/resolve/ee1493ba577437e70b88bc4499b85cc7aa4594ca/armV5-moss-edit-lora.safetensors",
+					Size:     "496 MB",
+				},
+			},
+		},
+		{
 			Name:        "z-image-turbo-controlnet-union",
 			Description: "Z-Image-Turbo with Union 2.1 ControlNet (2601) for supplied control maps. Four files (~13.4 GB total); disable VAE encode tiling.",
 			License:     "Apache-2.0",
@@ -329,6 +373,62 @@ func Catalog() []Bundle {
 					Filename: "Z-Image-Turbo-Fun-Controlnet-Union-2.1-2601-8steps.safetensors",
 					URL:      "https://huggingface.co/alibaba-pai/Z-Image-Turbo-Fun-Controlnet-Union-2.1/resolve/5155fc56d17821007d6f62ac192c09e0f0e72016/Z-Image-Turbo-Fun-Controlnet-Union-2.1-2601-8steps.safetensors",
 					Size:     "6.7 GB",
+				},
+			},
+		},
+		{
+			Name:        "qwen-image-2.1",
+			Description: "Qwen Image 2.1 — generation and reference-image editing with Q4_K_M diffusion, Qwen3-VL-8B text and vision encoders, and matching VAE. Four files (~11.2 GB total); research/evaluation only without a commercial license.",
+			License:     "Qwen Research (research/evaluation only; commercial license required for commercial use)",
+			Files: []BundleFile{
+				{
+					Role:     RoleDiffusion,
+					Filename: "qwen-image-2.1-Q4_K_M.gguf",
+					URL:      "https://huggingface.co/unsloth/Qwen-Image-2.1-GGUF/resolve/2c31ccd392b367a6637841a143813320a02dff55/qwen-image-2.1-Q4_K_M.gguf",
+					Size:     "4.2 GB",
+				},
+				{
+					Role:     RoleLLM,
+					Filename: "Qwen3-VL-8B-Instruct-UD-Q4_K_XL.gguf",
+					URL:      "https://huggingface.co/unsloth/Qwen3-VL-8B-Instruct-GGUF/resolve/b93a7ee713758252c555be4210c00540df954dc2/Qwen3-VL-8B-Instruct-UD-Q4_K_XL.gguf",
+					Size:     "5.1 GB",
+				},
+				{
+					Role:     RoleLLMVision,
+					Filename: "mmproj-BF16.gguf",
+					URL:      "https://huggingface.co/unsloth/Qwen3-VL-8B-Instruct-GGUF/resolve/b93a7ee713758252c555be4210c00540df954dc2/mmproj-BF16.gguf",
+					Size:     "1.2 GB",
+				},
+				{
+					Role:     RoleVAE,
+					Filename: "qwen_image_2.1_vae_bf16.safetensors",
+					URL:      "https://huggingface.co/unsloth/Qwen-Image-2.1-FP8/resolve/bb21a8ba7f0371c19ad1f72c82a5e8fc10f39939/vae/qwen_image_2.1_vae_bf16.safetensors",
+					Size:     "676 MB",
+				},
+			},
+		},
+		{
+			Name:        "flux2-klein-base-4b",
+			Description: "FLUX.2 [klein] Base 4B — undistilled generation and reference-image editing with Qwen3-4B text encoder and FLUX.2 VAE. Three files (~5.3 GB total); start with 20 steps and CFG 4.",
+			License:     "Apache-2.0",
+			Files: []BundleFile{
+				{
+					Role:     RoleDiffusion,
+					Filename: "flux-2-klein-base-4b-Q4_0.gguf",
+					URL:      "https://huggingface.co/leejet/FLUX.2-klein-base-4B-GGUF/resolve/d12671125306ca6b5f6db1b33ed4c80c8511a53f/flux-2-klein-base-4b-Q4_0.gguf",
+					Size:     "2.5 GB",
+				},
+				{
+					Role:     RoleVAE,
+					Filename: "flux2-vae.safetensors",
+					URL:      "https://huggingface.co/Comfy-Org/Flux-2-Klein-4B/resolve/5b3abca5c0dc1ecd4eaf3340868d09063fc1c965/split_files/vae/flux2-vae.safetensors",
+					Size:     "336 MB",
+				},
+				{
+					Role:     RoleLLM,
+					Filename: "Qwen3-4B-Q4_K_M.gguf",
+					URL:      "https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/22c9fc8a8c7700b76a1789366280a6a5a1ad1120/Qwen3-4B-Q4_K_M.gguf",
+					Size:     "2.5 GB",
 				},
 			},
 		},

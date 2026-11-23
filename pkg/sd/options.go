@@ -16,7 +16,8 @@ import (
 
 // Options explicitly sets native keys after compatibility fields. Values accept
 // bool, signed integers, float32/64, string, []float32, []int32, []Lora,
-// []Embedding, *SDImage, []*SDImage, []Audio and []RefVideo. Nil unsets a key.
+// []Embedding, SDImage, []SDImage, []Audio and []RefVideo. Nil or a zero SDImage
+// unsets a key. Zero-valued optional image fields are omitted.
 // Keys, types and applicability are validated by the native API, not ignored.
 type Options map[string]any
 
@@ -56,7 +57,7 @@ var optionFreeFunc, lastErrorFunc ffi.Fun
 func loadOptionFuncs(lib ffi.Lib) error {
 	optionConstructors = make(map[string]ffi.Fun)
 	optionSetters = make(map[string]ffi.Fun)
-	for _, purpose := range []string{"ctx", "img_gen", "vid_gen", "upscaler", "upscale", "adetailer", "adetail"} {
+	for _, purpose := range []string{"ctx", "img_gen", "vid_gen", "upscaler", "upscale"} {
 		name := "sd_" + purpose + "_opt_create"
 		fn, err := lib.Prep(name, &ffi.TypePointer)
 		if err != nil {
@@ -179,8 +180,8 @@ func (o *nativeOptions) set(key string, value any) error {
 	case float64:
 		kind = "float"
 		args = append(args, unsafe.Pointer(&v))
-	case *SDImage:
-		if v == nil {
+	case SDImage:
+		if reflect.ValueOf(v).IsZero() {
 			kind = "unset"
 			break
 		}
@@ -191,7 +192,7 @@ func (o *nativeOptions) set(key string, value any) error {
 		tensors = append(tensors, t)
 		kind = "tensor"
 		args = append(args, unsafe.Pointer(&t))
-	case []*SDImage:
+	case []SDImage:
 		if key == "control_frames" || key == "frames" {
 			t, err := framesTensor(v)
 			if err != nil {
@@ -246,7 +247,7 @@ func (o *nativeOptions) set(key string, value any) error {
 	case []Audio:
 		items := make([]cAudio, len(v))
 		for i := range v {
-			a, err := audioToC(&v[i], key)
+			a, err := audioToC(v[i], key)
 			if err != nil {
 				return err
 			}
@@ -264,7 +265,7 @@ func (o *nativeOptions) set(key string, value any) error {
 			}
 			tensors = append(tensors, t)
 			items[i] = cVideo{Data: t, FPS: video.FPS}
-			if video.Audio != nil {
+			if !reflect.ValueOf(video.Audio).IsZero() {
 				a, err := audioToC(video.Audio, key)
 				if err != nil {
 					return err
@@ -316,7 +317,7 @@ func (o *nativeOptions) fields(value, defaults any, prefix string) error {
 		if prefix != "" {
 			key = prefix + "." + key
 		}
-		if x.Kind() == reflect.Struct {
+		if x.Kind() == reflect.Struct && x.Type() != reflect.TypeFor[SDImage]() {
 			if err := o.fields(x.Interface(), def.Interface(), key); err != nil {
 				return err
 			}
@@ -342,8 +343,6 @@ func (o *nativeOptions) fields(value, defaults any, prefix string) error {
 // optionKey handles Go initialisms and the few upstream names that differ.
 func optionKey(name string) string {
 	switch name {
-	case "PhotoMakerPath":
-		return "photo_maker_path"
 	case "ForceSDXLVAEConvScale":
 		return "force_sdxl_vae_conv_scale"
 	case "T5XXLPath":

@@ -1,0 +1,18 @@
+# Adapted from stable-diffusion.cpp 3b12781, MIT license.
+# Parameters are supplied by GenerateAnimateDiff, not by callers as DGL source.
+fn main() {
+    base_unet = load_unet(%[1]s, params_backend = "cpu")
+    motion = animatediff::load(%[2]s, params_backend = "cpu")
+    unet = animatediff::apply(base_unet, motion)
+    text = load_text_encoder(%[1]s, params_backend = "cpu")
+    vae = load_vae(%[1]s, params_backend = "cpu")
+    base = tensor::zeros(latent_shape(vae, width = %[4]d, height = %[5]d, batch = %[6]d))
+    rng = make_rng("cuda", seed = %[9]d)
+    pos = predictor(unet, encode_prompt(text, %[3]s), prediction = "eps")
+    neg = predictor(unet, encode_prompt(text, %[8]s), prediction = "eps")
+    guided = cfg(pos, neg, scale = %[10]g)
+    sigmas = make_sigmas(guided, latent = base, scheduler = "discrete", steps = %[7]d)
+    start = add_noise(guided, base, tensor::randn_like(base, rng = rng), sigma = sigmas[0])
+    latent = sample(start, sigmas, predict = guided, method = "euler", rng = rng)
+    return {video = image::to_u8(vae_decode(vae, unet_to_vae_latents(vae, latent))), fps = %[11]d}
+}

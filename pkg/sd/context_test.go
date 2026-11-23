@@ -6,13 +6,17 @@ import (
 	"testing"
 )
 
-func TestNewContextEmptyFails(t *testing.T) {
+func TestEmptyContextGenerationFails(t *testing.T) {
 	testSetup(t)
 	ctx, err := NewContext(ContextParamsInit())
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer FreeContext(ctx)
+	_, err = GenerateImage(ctx, ImgGenParamsInit())
 	var native *NativeError
-	if !errors.As(err, &native) || native.Message == "" || ctx != 0 {
-		t.Fatalf("NewContext: got %d, %v, want zero handle and diagnostic NativeError", ctx, err)
+	if !errors.As(err, &native) || native.Message == "" {
+		t.Fatalf("GenerateImage: got %v, want diagnostic NativeError", err)
 	}
 }
 

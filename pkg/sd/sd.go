@@ -257,6 +257,9 @@ func Load(path string) error {
 	if err := loadGenFuncs(lib); err != nil {
 		return err
 	}
+	if err := loadDGLFuncs(lib); err != nil {
+		return err
+	}
 	loadExtendedFuncs(lib)
 	loadVideoFuncs(lib)
 	loadUpscalerFuncs(lib)

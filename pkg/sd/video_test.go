@@ -9,7 +9,7 @@ import (
 
 // makeGradient builds an SDImage filled with a deterministic RGB gradient so
 // tests don't depend on the stable-diffusion library being loaded.
-func makeGradient(w, h int, base byte) *SDImage {
+func makeGradient(w, h int, base byte) SDImage {
 	out := SDImage{
 		Width:   uint32(w),
 		Height:  uint32(h),
@@ -24,7 +24,7 @@ func makeGradient(w, h int, base byte) *SDImage {
 			out.Data[i+2] = base
 		}
 	}
-	return &out
+	return out
 }
 
 func TestSaveAVI(t *testing.T) {
@@ -35,7 +35,7 @@ func TestSaveAVI(t *testing.T) {
 		fps    = 8
 	)
 
-	imgs := make([]*SDImage, frames)
+	imgs := make([]SDImage, frames)
 	for i := range imgs {
 		imgs[i] = makeGradient(width, height, byte(i*16))
 	}
@@ -65,11 +65,11 @@ func TestSaveAVI(t *testing.T) {
 
 func TestSaveAVIErrors(t *testing.T) {
 	tmp := t.TempDir()
-	good := []*SDImage{makeGradient(8, 8, 0)}
+	good := []SDImage{makeGradient(8, 8, 0)}
 
 	cases := []struct {
 		name    string
-		frames  []*SDImage
+		frames  []SDImage
 		fps     int
 		quality int
 		wantErr bool
@@ -78,7 +78,7 @@ func TestSaveAVIErrors(t *testing.T) {
 		{"zero fps", good, 0, 90, true},
 		{"quality 0", good, 8, 0, true},
 		{"quality 101", good, 8, 101, true},
-		{"mismatched size", []*SDImage{makeGradient(8, 8, 0), makeGradient(16, 8, 0)}, 8, 90, true},
+		{"mismatched size", []SDImage{makeGradient(8, 8, 0), makeGradient(16, 8, 0)}, 8, 90, true},
 		{"ok", good, 8, 90, false},
 	}
 	for _, c := range cases {

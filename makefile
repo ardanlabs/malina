@@ -343,6 +343,10 @@ example-adetailer:
 example-animatediff:
 	go run ./examples/animatediff
 
+# Opt-in: the MOSS editing bundle is ~10.8 GB, so it is not in download-models.
+example-moss-image-edit:
+	go run ./examples/moss-image-edit -lib $(MALINA_LIB)
+
 # example-sd-encode demonstrates encoding a directory of PNG frames into a
 # Motion-JPEG AVI. No model is loaded; this is a pure-Go encoder. Override
 # FRAMES_DIR / FPS / OUT to point at your own frames.

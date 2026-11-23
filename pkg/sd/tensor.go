@@ -54,10 +54,7 @@ func freeTensor(t uintptr) {
 	}
 }
 
-func validateImage(image *SDImage) error {
-	if image == nil {
-		return errors.New("nil image")
-	}
+func validateImage(image SDImage) error {
 	if image.Width == 0 || image.Height == 0 {
 		return errors.New("image: zero dimension")
 	}
@@ -71,7 +68,7 @@ func validateImage(image *SDImage) error {
 	return nil
 }
 
-func imageTensor(image *SDImage) (uintptr, error) {
+func imageTensor(image SDImage) (uintptr, error) {
 	if err := validateImage(image); err != nil {
 		return 0, err
 	}
@@ -80,7 +77,7 @@ func imageTensor(image *SDImage) (uintptr, error) {
 	return t, err
 }
 
-func framesTensor(frames []*SDImage) (uintptr, error) {
+func framesTensor(frames []SDImage) (uintptr, error) {
 	if len(frames) == 0 {
 		return 0, errors.New("video: no frames")
 	}
@@ -142,20 +139,20 @@ func tensorBytes(t uintptr) ([]byte, error) {
 	return append([]byte(nil), unsafe.Slice(data, int(size))...), nil
 }
 
-func imageFromTensor(t uintptr) (*SDImage, error) {
+func imageFromTensor(t uintptr) (SDImage, error) {
 	shape, err := tensorShape(t, 1, 3)
 	if err != nil {
-		return nil, err
+		return SDImage{}, err
 	}
 	for _, n := range shape {
 		if n > 1<<32-1 {
-			return nil, errors.New("image: dimension overflow")
+			return SDImage{}, errors.New("image: dimension overflow")
 		}
 	}
 	data, err := tensorBytes(t)
 	if err != nil {
-		return nil, err
+		return SDImage{}, err
 	}
 	out := SDImage{Channel: uint32(shape[0]), Width: uint32(shape[1]), Height: uint32(shape[2]), Data: data}
-	return &out, nil
+	return out, nil
 }
