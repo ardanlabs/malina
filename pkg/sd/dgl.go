@@ -51,6 +51,7 @@ func (t DGLTensor) Images() ([]SDImage, error) {
 type cDGLInput struct{ Name, Tensor uintptr }
 
 var ctxDGLFunc, dglRunFunc, dglFreeFunc, dglCountFunc, dglNameFunc, dglTensorFunc, generationMetadataFunc ffi.Fun
+var dglProgressFunc, dglCancelFunc ffi.Fun
 
 func loadDGLFuncs(lib ffi.Lib) error {
 	for _, s := range []struct {
@@ -60,6 +61,8 @@ func loadDGLFuncs(lib ffi.Lib) error {
 		args   []*ffi.Type
 	}{
 		{"sd_ctx_get_dgl_ctx", &ctxDGLFunc, &ffi.TypePointer, []*ffi.Type{&ffi.TypePointer}},
+		{"sd_dgl_ctx_set_progress_callback", &dglProgressFunc, &ffi.TypeSint32, []*ffi.Type{&ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer}},
+		{"sd_dgl_ctx_cancel", &dglCancelFunc, &ffi.TypeSint32, []*ffi.Type{&ffi.TypePointer}},
 		{"sd_dgl_run", &dglRunFunc, &ffi.TypeSint32, []*ffi.Type{&ffi.TypePointer, &ffi.TypePointer, &ffi.TypePointer, &ffi.TypeUint64, &ffi.TypePointer}},
 		{"sd_dgl_result_free", &dglFreeFunc, &ffi.TypeVoid, []*ffi.Type{&ffi.TypePointer}},
 		{"sd_dgl_result_count", &dglCountFunc, &ffi.TypeUint64, []*ffi.Type{&ffi.TypePointer}},
@@ -74,6 +77,20 @@ func loadDGLFuncs(lib ffi.Lib) error {
 		*s.dst = fn
 	}
 	return nil
+}
+
+// contextDGL borrows the execution context owned by ctx. The caller must keep
+// ctx alive until every use of the returned handle has finished.
+func contextDGL(ctx Context) (uintptr, error) {
+	if ctxDGLFunc == (ffi.Fun{}) {
+		return 0, unsupported("sd_ctx_get_dgl_ctx")
+	}
+	var dgl uintptr
+	ctxDGLFunc.Call(unsafe.Pointer(&dgl), unsafe.Pointer(&ctx))
+	if dgl == 0 {
+		return 0, errors.New("DGL execution context is unavailable")
+	}
+	return dgl, nil
 }
 
 // GenerationMetadata returns Go-owned JSON inferred from executed DGL source.
@@ -106,6 +123,9 @@ func GenerationMetadata(source string) (string, error) {
 // release. Structured/opaque/bytes values are not returned by this flat API.
 // Programs can read and write files with the process's permissions; this is not
 // a sandbox. Use explicit DGL for ADetailer, AnimateDiff and custom preprocessing.
+// SetGenerationProgressCallback reports this run's progress. CancelGeneration
+// with CancelAll requests cooperative cancellation from another goroutine or
+// a progress callback. Keep ctx alive until both execution and cancellation return.
 func RunDGL(ctx Context, source string, inputs map[string]SDImage) (map[string]DGLTensor, error) {
 	if ctx == 0 {
 		return nil, errors.New("RunDGL: nil context")
@@ -134,11 +154,10 @@ func RunDGL(ctx Context, source string, inputs map[string]SDImage) (map[string]D
 	}
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
-	if ctxDGLFunc == (ffi.Fun{}) {
-		return nil, unsupported("sd_ctx_get_dgl_ctx")
+	dgl, err := contextDGL(ctx)
+	if err != nil {
+		return nil, err
 	}
-	var dgl uintptr
-	ctxDGLFunc.Call(unsafe.Pointer(&dgl), unsafe.Pointer(&ctx))
 	var result uintptr
 	out, data, count := &result, unsafe.SliceData(bindings), uint64(len(bindings))
 	err = statusCall(dglRunFunc, unsafe.Pointer(&dgl), unsafe.Pointer(&p), unsafe.Pointer(&data), unsafe.Pointer(&count), unsafe.Pointer(&out))

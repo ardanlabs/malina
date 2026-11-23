@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -163,5 +165,63 @@ func TestRunDGL(t *testing.T) {
 	}
 	if metadata, err := GenerationMetadata("fn main() { return 7 }"); err != nil || metadata != "{}" {
 		t.Errorf("non-image metadata: got %q, %v", metadata, err)
+	}
+}
+
+func TestRunDGLProgressAndCancellation(t *testing.T) {
+	testSetup(t)
+	for _, asynchronous := range []bool{false, true} {
+		t.Run(fmt.Sprintf("other_goroutine=%t", asynchronous), func(t *testing.T) {
+			ctx, err := NewContext(ContextParamsInit())
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer FreeContext(ctx)
+			other, err := NewContext(ContextParamsInit())
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer FreeContext(other)
+			var events []GenerationProgress
+			var cancelErr error
+			if err := SetGenerationProgressCallback(ctx, func(event GenerationProgress) {
+				events = append(events, event)
+				if !asynchronous {
+					cancelErr = CancelGeneration(ctx, CancelAll)
+					return
+				}
+				done := make(chan error, 1)
+				go func() { done <- CancelGeneration(ctx, CancelAll) }()
+				cancelErr = <-done
+			}); err != nil {
+				t.Fatal(err)
+			}
+			const source = "fn main() { return 7 }"
+			if _, err := RunDGL(other, source, nil); err != nil || len(events) != 0 {
+				t.Fatalf("independent context: got %v, %d events, want nil and 0", err, len(events))
+			}
+			outputs, err := RunDGL(ctx, source, nil)
+			if native, ok := errors.AsType[*NativeError](err); !ok || native.Status != StatusCancelled || outputs != nil {
+				t.Fatalf("canceled run: got %v, %v, want no outputs and StatusCancelled", outputs, err)
+			}
+			if cancelErr != nil || len(events) != 1 || events[0].Stage != "executing" {
+				t.Fatalf("progress cancellation: got %v, %+v, want nil and executing event", cancelErr, events)
+			}
+			if err := SetGenerationProgressCallback(ctx, nil); err != nil {
+				t.Fatal(err)
+			}
+			if err := CancelGeneration(ctx, CancelAll); err != nil {
+				t.Fatal(err)
+			}
+			outputs, err = RunDGL(ctx, source, nil)
+			if err != nil || len(events) != 1 || len(outputs) != 1 {
+				t.Fatalf("reuse after clearing callback and idle cancellation: got %v, %v, %+v", outputs, err, events)
+			}
+			for _, result := range outputs {
+				if result.Type != 3 || len(result.Data) != 8 || binary.LittleEndian.Uint64(result.Data) != 7 {
+					t.Errorf("reused result: got %+v, want I64 7", result)
+				}
+			}
+		})
 	}
 }
