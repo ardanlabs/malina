@@ -15,7 +15,7 @@ import (
 type ProgressCallback func(step int, steps int, secondsPerStep float32)
 
 // GenerationProgress is a Go-owned copy of a context-local native event.
-// Total == 0 means unknown. SamplePass counts from one since registration.
+// Total == 0 means unknown. SamplePass counts from one in each generation or DGL run.
 type GenerationProgress struct {
 	Stage      string
 	Detail     string
@@ -26,7 +26,8 @@ type GenerationProgress struct {
 }
 
 // GenerationProgressCallback receives synchronous generation events, separate
-// from previews and legacy progress. It must not panic or reenter the context.
+// from previews and legacy progress. It must not panic or reenter the context,
+// except to request cancellation through CancelGeneration.
 type GenerationProgressCallback func(GenerationProgress)
 
 // cGenerationProgress mirrors sd_generation_progress_t (LP64/LLP64: 48 bytes).
@@ -181,7 +182,8 @@ func progressTrampoline(_ *ffi.Cif, _ unsafe.Pointer, args *unsafe.Pointer, _ un
 	return 0
 }
 
-// SetGenerationProgressCallback installs a context-local generation callback.
+// SetGenerationProgressCallback installs a context-local callback for generic
+// generation and RunDGL, including the bundled advanced workflows.
 // Register or clear it only while ctx is idle. Pass nil to clear it; FreeContext
 // also releases the Go handler. Different contexts can report concurrently.
 func SetGenerationProgressCallback(ctx Context, callback GenerationProgressCallback) error {
@@ -193,7 +195,19 @@ func SetGenerationProgressCallback(ctx Context, callback GenerationProgressCallb
 	if setGenerationProgressFunc == (ffi.Fun{}) {
 		return unsupported("sd_set_generation_progress_callback")
 	}
+	dgl, err := contextDGL(ctx)
+	if err != nil {
+		return err
+	}
 	var code unsafe.Pointer
+	if callback != nil {
+		code = generationProgressCode
+	}
+	// The opaque native context address is the lookup key, not a Go pointer.
+	data := uintptr(ctx)
+	if err := statusCall(dglProgressFunc, unsafe.Pointer(&dgl), unsafe.Pointer(&code), unsafe.Pointer(&data)); err != nil {
+		return err
+	}
 	if callback == nil {
 		delete(generationProgressHandlers, ctx)
 	} else {
@@ -201,10 +215,7 @@ func SetGenerationProgressCallback(ctx Context, callback GenerationProgressCallb
 			generationProgressHandlers = make(map[Context]GenerationProgressCallback)
 		}
 		generationProgressHandlers[ctx] = callback
-		code = generationProgressCode
 	}
-	// The opaque native context address is the lookup key, not a Go pointer.
-	data := uintptr(ctx)
 	setGenerationProgressFunc.Call(nil, unsafe.Pointer(&ctx), unsafe.Pointer(&code), unsafe.Pointer(&data))
 	runtime.KeepAlive(generationProgressFun)
 	return nil

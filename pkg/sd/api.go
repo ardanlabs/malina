@@ -283,7 +283,11 @@ func HasControlNet(ctx Context) (bool, error) {
 	return callBool(ctxHasControlFunc, unsafe.Pointer(&ctx)), nil
 }
 
-// CancelGeneration updates the cancellation state for a context.
+// CancelGeneration requests cooperative cancellation of active work on ctx.
+// CancelAll covers generic generation and standalone RunDGL workflows, including
+// compilation. Idle cancellation does not carry over to the next run. CancelReset
+// and CancelNewLatents apply only to generic generation; DGL cancellation ends
+// with the active run and needs no reset. Keep ctx alive until this call returns.
 func CancelGeneration(ctx Context, mode CancelMode) error {
 	if ctx == 0 {
 		return errors.New("CancelGeneration: nil context")
@@ -293,6 +297,13 @@ func CancelGeneration(ctx Context, mode CancelMode) error {
 	}
 	value := int32(mode)
 	cancelGenerationFunc.Call(nil, unsafe.Pointer(&ctx), unsafe.Pointer(&value))
+	if mode == CancelAll {
+		dgl, err := contextDGL(ctx)
+		if err != nil {
+			return err
+		}
+		return statusCall(dglCancelFunc, unsafe.Pointer(&dgl))
+	}
 	return nil
 }
 
