@@ -18,7 +18,7 @@ import (
 // The produced .avi plays in QuickTime, VLC, mpv and Windows Media Player.
 // MJPEG is intra-frame only (every frame is a standalone JPEG), so files are
 // larger than equivalent H.264 output but the muxer stays pure-Go.
-func SaveAVI(filename string, frames []*SDImage, fps, quality int) error {
+func SaveAVI(filename string, frames []SDImage, fps, quality int) error {
 	if len(frames) == 0 {
 		return errors.New("SaveAVI: no frames")
 	}
@@ -66,7 +66,7 @@ func SaveAVI(filename string, frames []*SDImage, fps, quality int) error {
 // encodeJPEG converts the SDImage's raw pixel buffer into a JPEG byte slice
 // at the requested quality. Supports 1-channel (gray), 3-channel (RGB) and
 // 4-channel (RGBA, alpha discarded) inputs.
-func (img *SDImage) encodeJPEG(quality int) ([]byte, error) {
+func (img SDImage) encodeJPEG(quality int) ([]byte, error) {
 	rect := imgpkg.Rect(0, 0, int(img.Width), int(img.Height))
 
 	var src imgpkg.Image

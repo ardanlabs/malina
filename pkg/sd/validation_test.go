@@ -19,6 +19,8 @@ func TestContextAPIsRejectNilContext(t *testing.T) {
 		{"DefaultScheduler", func() error { _, err := DefaultScheduler(0, SampleEuler); return err }},
 		{"GenerateVideo", func() error { _, _, err := GenerateVideo(0, VideoGenParams{}); return err }},
 		{"GenerateVideoWithFPS", func() error { _, _, _, err := GenerateVideoWithFPS(0, VideoGenParams{}); return err }},
+		{"GenerateAnimateDiff", func() error { _, err := GenerateAnimateDiff(0, AnimateDiffParamsInit()); return err }},
+		{"RefineFaces", func() error { _, err := RefineFaces(0, testMarshalImage(1), FaceRefinementParamsInit()); return err }},
 		{"GetUpscaleFactor", func() error { _, err := GetUpscaleFactor(0); return err }},
 		{"Upscale", func() error { _, err := Upscale(0, testMarshalImage(1), 2); return err }},
 		{"ADetailImage ADetailer", func() error {
@@ -39,17 +41,20 @@ func TestContextAPIsRejectNilContext(t *testing.T) {
 	}
 }
 
-func TestImageAPIsRejectNilInput(t *testing.T) {
+func TestImageAPIsRejectEmptyInput(t *testing.T) {
 	testSetup(t)
 
-	if _, err := UpscaleImage(1, nil); err == nil {
-		t.Fatal("Upscale nil input: got nil error")
+	if _, err := UpscaleImage(1, SDImage{}); err == nil {
+		t.Fatal("Upscale empty input: got nil error")
 	}
-	if _, err := ADetailImage(1, 1, nil, ADetailerParams{}, ImgGenParams{}); err == nil {
-		t.Fatal("ADetailImage nil input: got nil error")
+	if _, err := ADetailImage(1, 1, SDImage{}, ADetailerParams{}, ImgGenParams{}); err == nil {
+		t.Fatal("ADetailImage empty input: got nil error")
 	}
-	if err := PreprocessCanny(nil, CannyParams{}); err == nil {
-		t.Fatal("PreprocessCanny nil input: got nil error")
+	if _, err := PreprocessCanny(SDImage{}, CannyParams{}); err == nil {
+		t.Fatal("PreprocessCanny empty input: got nil error")
+	}
+	if _, err := RefineFaces(1, SDImage{}, FaceRefinementParamsInit()); err == nil {
+		t.Fatal("RefineFaces empty input: got nil error")
 	}
 }
 

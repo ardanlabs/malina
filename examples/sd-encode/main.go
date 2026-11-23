@@ -160,7 +160,7 @@ func main() {
 	holdFrames := max(round(*holdSecs*float64(*fps)), 1)
 	transFrames := max(round(*xfadeSecs*float64(*fps)), 0)
 
-	var frames []*sd.SDImage
+	var frames []sd.SDImage
 	if *transMode == transKenBurns {
 		frames = buildKenBurns(srcs, targetW, targetH, holdFrames)
 	} else {
@@ -298,12 +298,12 @@ func coverSize(srcW, srcH, dstW, dstH int) (int, int) {
 // buildTransitions returns the output frame sequence for the given
 // already-fitted frames, inserting transFrames intermediate frames between
 // each pair according to mode (other than cut which inserts none).
-func buildTransitions(fitted []*image.RGBA, holdFrames, transFrames int, mode string) []*sd.SDImage {
+func buildTransitions(fitted []*image.RGBA, holdFrames, transFrames int, mode string) []sd.SDImage {
 	if mode == transCut {
 		transFrames = 0
 	}
 
-	out := make([]*sd.SDImage, 0,
+	out := make([]sd.SDImage, 0,
 		len(fitted)*holdFrames+(len(fitted)-1)*transFrames)
 
 	for i, a := range fitted {
@@ -325,7 +325,7 @@ func buildTransitions(fitted []*image.RGBA, holdFrames, transFrames int, mode st
 // transitionFrame returns a new RGBA frame interpolated between a and b
 // at progress t (0 < t < 1) using the chosen transition mode. a and b
 // must have identical dimensions.
-func transitionFrame(a, b *image.RGBA, t float64, mode string) *sd.SDImage {
+func transitionFrame(a, b *image.RGBA, t float64, mode string) sd.SDImage {
 	w, h := a.Bounds().Dx(), a.Bounds().Dy()
 	dst := image.NewRGBA(image.Rect(0, 0, w, h))
 
@@ -391,8 +391,8 @@ func fadeFromColor(dst, src []byte, c color.RGBA, t float64) {
 // progressively-shrinking sub-rectangle (matching target aspect) of the
 // source and scaling it to (targetW, targetH). Cuts between images are
 // abrupt (no inter-image transition).
-func buildKenBurns(srcs []image.Image, targetW, targetH, holdFrames int) []*sd.SDImage {
-	out := make([]*sd.SDImage, 0, len(srcs)*holdFrames)
+func buildKenBurns(srcs []image.Image, targetW, targetH, holdFrames int) []sd.SDImage {
+	out := make([]sd.SDImage, 0, len(srcs)*holdFrames)
 
 	const startZoom = 1.00
 	const endZoom = 0.70
@@ -460,9 +460,9 @@ func buildKenBurns(srcs []image.Image, targetW, targetH, holdFrames int) []*sd.S
 
 // rgbaToSDImage builds an SDImage (3-channel RGB) from an RGBA image.
 // Alpha is discarded.
-func rgbaToSDImage(rgba *image.RGBA) *sd.SDImage {
+func rgbaToSDImage(rgba *image.RGBA) sd.SDImage {
 	w, h := rgba.Bounds().Dx(), rgba.Bounds().Dy()
-	out := &sd.SDImage{
+	out := sd.SDImage{
 		Width:   uint32(w),
 		Height:  uint32(h),
 		Channel: 3,

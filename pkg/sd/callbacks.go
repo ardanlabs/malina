@@ -242,7 +242,7 @@ func previewTrampoline(_ *ffi.Cif, _ unsafe.Pointer, args *unsafe.Pointer, _ uns
 			if err != nil {
 				return 0
 			}
-			frames = append(frames, *image)
+			frames = append(frames, image)
 		}
 	}
 	handler(step, frames, noisy)

@@ -32,22 +32,21 @@ func main() {
 
 	cparams := sd.ContextParamsInit()
 	cparams.ModelPath = manifest.Files[string(download.RoleModel)]
+	cparams.ControlNetPath = manifest.Files[string(download.RoleControlNet)]
+
 	ctx, err := sd.NewContext(cparams)
 	if err != nil {
 		log.Fatalf("create context: %v", err)
 	}
 	defer sd.FreeContext(ctx)
 
-	if err := sd.LoadControlNet(ctx, manifest.Files[string(download.RoleControlNet)]); err != nil {
-		log.Fatalf("load ControlNet: %v", err)
-	}
-
-	if err := sd.PreprocessCanny(control, sd.CannyParams{
+	control, err = sd.PreprocessCanny(control, sd.CannyParams{
 		HighThreshold: 0.08,
 		LowThreshold:  0.08,
 		Weak:          0.8,
 		Strong:        1,
-	}); err != nil {
+	})
+	if err != nil {
 		log.Fatalf("preprocess Canny edges: %v", err)
 	}
 

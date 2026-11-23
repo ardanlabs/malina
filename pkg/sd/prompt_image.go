@@ -10,10 +10,10 @@ import (
 	"github.com/jupiterrider/ffi"
 )
 
-// PromptImageCallback resolves an <image:source> marker. Return nil for an
+// PromptImageCallback resolves an <image:source> marker. Return SDImage{} for an
 // unresolved source. Pixels are copied before returning to native code. The
 // callback must not panic and must not mutate its context or registration.
-type PromptImageCallback func(source string) *SDImage
+type PromptImageCallback func(source string) SDImage
 
 type promptImageState struct {
 	handler PromptImageCallback
@@ -101,9 +101,6 @@ func promptImageTrampoline(_ *ffi.Cif, ret unsafe.Pointer, args *unsafe.Pointer,
 	freeTensor(state.tensor)
 	state.tensor = 0
 	image := state.handler(source)
-	if image == nil {
-		return 0
-	}
 	tensor, err := imageTensor(image)
 	if err != nil {
 		return 0

@@ -29,6 +29,7 @@ func main() {
 	}
 
 	libDir := download.DefaultLibrariesDir()
+
 	if err := download.VerifyDefaultInstall(context.Background(), libDir); err != nil {
 		log.Fatalf("verify default libraries: %v (did you run `malina install -u`?)", err)
 	}
@@ -43,7 +44,6 @@ func main() {
 
 	cparams := sd.ContextParamsInit()
 	cparams.ModelPath = manifest.Files[string(download.RoleModel)]
-	cparams.MotionModulePath = manifest.Files[string(download.RoleMotionModule)]
 
 	ctx, err := sd.NewContext(cparams)
 	if err != nil {
@@ -51,26 +51,19 @@ func main() {
 	}
 	defer sd.FreeContext(ctx)
 
-	params, err := sd.VideoGenParamsInit()
-	if err != nil {
-		log.Fatalf("initialize video parameters: %v", err)
-	}
-
+	params := sd.AnimateDiffParamsInit()
+	params.ModelPath = cparams.ModelPath
+	params.MotionModulePath = manifest.Files[string(download.RoleMotionModule)]
 	params.Prompt = *prompt
-	params.Width = 128
-	params.Height = 128
-	params.Sample.Steps = 4
-	params.VideoFrames = 4
-	params.FPS = 1
 
-	frames, _, fps, err := sd.GenerateVideoWithFPS(ctx, params)
+	video, err := sd.GenerateAnimateDiff(ctx, params)
 	if err != nil {
 		log.Fatalf("generate video: %v", err)
 	}
 
-	if err := sd.SaveAVI(*outPath, frames, int(fps), 90); err != nil {
+	if err := sd.SaveAVI(*outPath, video.Frames, int(video.FPS), 90); err != nil {
 		log.Fatalf("save AVI: %v", err)
 	}
 
-	fmt.Printf("wrote %s (%d frames, %dx%d @ %d fps)\n", *outPath, len(frames), params.Width, params.Height, fps)
+	fmt.Printf("wrote %s (%d frames, %dx%d @ %d fps)\n", *outPath, len(video.Frames), params.Width, params.Height, video.FPS)
 }

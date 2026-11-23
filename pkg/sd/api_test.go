@@ -23,6 +23,7 @@ func TestLiveStructLayouts(t *testing.T) {
 		{"lora size", unsafe.Sizeof(cLora{}), 16}, {"lora multiplier", unsafe.Offsetof(cLora{}.Multiplier), 4}, {"lora path", unsafe.Offsetof(cLora{}.Path), 8},
 		{"progress size", unsafe.Sizeof(cGenerationProgress{}), 48}, {"progress completed", unsafe.Offsetof(cGenerationProgress{}.Completed), 32},
 		{"preview size", unsafe.Sizeof(PreviewInfo{}), 8},
+		{"DGL input size", unsafe.Sizeof(cDGLInput{}), 16}, {"DGL input tensor", unsafe.Offsetof(cDGLInput{}.Tensor), 8},
 	} {
 		if tc.got != tc.want {
 			t.Errorf("%s: got %d, want %d", tc.name, tc.got, tc.want)
@@ -35,7 +36,8 @@ func TestPreprocessCannyTargetAPI(t *testing.T) {
 	image := makeGradient(17, 11, 50)
 	before := append([]byte(nil), image.Data...)
 	backing := image.Data
-	if err := PreprocessCanny(image, CannyParams{HighThreshold: .08, LowThreshold: .08, Weak: .8, Strong: 1}); err != nil {
+	image, err := PreprocessCanny(image, CannyParams{HighThreshold: .08, LowThreshold: .08, Weak: .8, Strong: 1})
+	if err != nil {
 		t.Fatal(err)
 	}
 	if image.Width != 17 || image.Height != 11 || image.Channel != 3 {
@@ -115,6 +117,51 @@ func writeTestSafetensors(t *testing.T, path, header string, weights []float32) 
 	}
 }
 
-func testMarshalImage(value byte) *SDImage {
-	return &SDImage{Width: 1, Height: 1, Channel: 3, Data: []byte{value, value + 1, value + 2}}
+func testMarshalImage(value byte) SDImage {
+	return SDImage{Width: 1, Height: 1, Channel: 3, Data: []byte{value, value + 1, value + 2}}
+}
+
+func TestRunDGL(t *testing.T) {
+	testSetup(t)
+	ctx, err := NewContext(ContextParamsInit())
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := makeGradient(17, 11, 37)
+	source := `fn main(image) { return {cropped = tensor::crop(image, axes=[1,2], start=[3,2], size=[5,4]), count=7} }`
+	outputs, err := RunDGL(ctx, source, map[string]SDImage{"image": input})
+	if err != nil {
+		FreeContext(ctx)
+		t.Fatal(err)
+	}
+	if _, err := RunDGL(ctx, "fn main(image) { return image }", nil); err == nil {
+		t.Error("missing input accepted")
+	}
+	if _, err := RunDGL(ctx, "not valid DGL", nil); err == nil {
+		t.Error("invalid source accepted")
+	}
+	FreeContext(ctx)
+	images, err := outputs["cropped"].Images()
+	if err != nil {
+		t.Fatal(err)
+	}
+	image := images[0]
+	if image.Width != 5 || image.Height != 4 || image.Channel != 3 {
+		t.Fatalf("crop dimensions: got %+v", image)
+	}
+	for y := range 4 {
+		for x := range 5 {
+			got := image.Data[(y*5+x)*3 : (y*5+x+1)*3]
+			want := input.Data[((y+2)*17+x+3)*3 : ((y+2)*17+x+4)*3]
+			if !bytes.Equal(got, want) {
+				t.Fatalf("crop (%d,%d): got %v, want %v", x, y, got, want)
+			}
+		}
+	}
+	if got := outputs["count"]; got.Type != 3 || len(got.Data) != 8 || binary.LittleEndian.Uint64(got.Data) != 7 {
+		t.Errorf("count: got %+v, want I64 7", got)
+	}
+	if metadata, err := GenerationMetadata("fn main() { return 7 }"); err != nil || metadata != "{}" {
+		t.Errorf("non-image metadata: got %q, %v", metadata, err)
+	}
 }

@@ -3,14 +3,14 @@
 Performance numbers for `pkg/sd` against the locally available model bundles.
 Recorded on an Apple M5 Max with
 128 GiB RAM (macOS 27.0.1, darwin/arm64) using the Metal backend from upstream
-stable-diffusion.cpp `master-1106-532d2c1` artifact
-`sd-master-532d2c1-bin-Darwin-macOS-26.7.2-arm64.zip` (SHA-256
-`8146d6ffc75f8ff8f64b62a80fffee8fb714ab65e368e202084135fa07cc6f36`,
-GitHub asset ID 753442992, 38,331,254 bytes).
+stable-diffusion.cpp `master-1122-3b12781` artifact
+`sd-master-3b12781-bin-Darwin-macOS-26.7.2-arm64.zip` (SHA-256
+`efb501ec271393e43b08d25eed37ab26c154134fa495501923a5c17417b8782a`,
+GitHub asset ID 783945796, 39,644,163 bytes).
 The Go benchmarks all run against the extracted
 `./lib/libstable-diffusion.dylib` (SHA-256
-`81de32ea476979c40367661705c6767a6adc296cb7599f4e075f8196f93989ca`).
-Recorded November 16, 2026, for Malina 1.2.3 using Go 1.27.4, automatic operator selection,
+`77f9aeaaac78ae5fd428a14bc9851bbce72cd7318a5f2ee4f70ebf179bbad16f`).
+Recorded November 23, 2026, for Malina 1.2.4 using Go 1.27.4, automatic operator selection,
 and Malina's Metal workaround: batched CFG is disabled at context creation.
 
 The Metal batched-CFG workaround is retained from Malina 1.1.8. The earlier
@@ -66,16 +66,16 @@ and digest listed above. All measurements used
 
 | Workload       | Model/bundle  | Shape   | Steps | b.N |         ns/op | s/img |    B/op | allocs/op |
 | -------------- | ------------- | ------- | ----: | --: | ------------: | ----: | ------: | --------: |
-| text-to-image  | sd-1.5        | 512x512 |    20 |   1 | 6,632,107,542 |  6.63 | 800,400 |       308 |
-| text-to-image  | sdxl-base-1.0 | 512x512 |    20 |   1 | 7,211,255,292 |  7.21 | 800,400 |       308 |
-| image-to-image | sd-1.5        | 512x512 |    16 |   1 | 5,968,779,500 |  5.97 | 800,912 |       328 |
+| text-to-image  | sd-1.5        | 512x512 |    20 |   1 | 7,569,664,916 |  7.57 | 806,368 |       326 |
+| text-to-image  | sdxl-base-1.0 | 512x512 |    20 |   1 | 7,205,716,250 |  7.21 | 806,512 |       326 |
+| image-to-image | sd-1.5        | 512x512 |    16 |   1 | 5,957,050,041 |  5.96 | 806,744 |       342 |
 
 Actual benchmark output (`b.N=1`, after one untimed warm-up):
 
 ```text
-BenchmarkGenerateImageSD15-18                  1  6632107542 ns/op  262144 px  6.632 s/img  800400 B/op  308 allocs/op
-BenchmarkGenerateImageSDXL-18                  1  7211255292 ns/op  262144 px  7.211 s/img  800400 B/op  308 allocs/op
-BenchmarkGenerateImageImg2ImgSD15-18            1  5968779500 ns/op  262144 px  5.969 s/img  800912 B/op  328 allocs/op
+BenchmarkGenerateImageSD15-18                  1  7569664916 ns/op  262144 px  7.570 s/img  806368 B/op  326 allocs/op
+BenchmarkGenerateImageSDXL-18                  1  7205716250 ns/op  262144 px  7.206 s/img  806512 B/op  326 allocs/op
+BenchmarkGenerateImageImg2ImgSD15-18            1  5957050041 ns/op  262144 px  5.957 s/img  806744 B/op  342 allocs/op
 ```
 
 All three targets completed without skips. These one-iteration runs do not
@@ -141,12 +141,40 @@ leaves the native seed default (-1, random) unchanged in both versions.
 | SD 1.5 img2img | 5.921618 | 5.968780 | +0.047162 | +0.80% | 800,288 → 800,912 (+624) | 266 → 328 (+62) |
 
 Percentages use the unrounded baseline ns/op values 6,577,103,166,
-7,240,571,042, and 5,921,617,708, and the current ns/op values in the raw
-output above. Negative time change means faster; positive means slower.
+7,240,571,042, and 5,921,617,708, and the then-current ns/op values
+6,632,107,542, 7,211,255,292, and 5,968,779,500. Negative time change means faster; positive means slower.
 All three workloads are comparable under the methodology above. These are
 single samples, not statistically established speedups or regressions.
 No repeats or outliers have been excluded; the older comparison's two
 img2img baseline samples remain recorded above.
+
+### Malina 1.2.3 → 1.2.4
+
+The baseline is the latest published release before this work, `v1.2.3`:
+`git show v1.2.3:BENCHMARKS.md`, recorded November 16, 2026 with native
+`master-1106-532d2c1`. The new measurements were recorded November 23, 2026
+with native `master-1122-3b12781`. Both use the same Apple M5 Max, 128 GiB RAM,
+macOS 27.0.1, Go 1.27.4, Metal, model bundles, 512x512 shapes, 20 configured
+steps (16 effective img2img steps), disabled batched CFG, automatic
+sampler/scheduler, random seed, and one warm-up followed by `BENCHTIME=1x`.
+The benchmark source is unchanged. The target executes DGL internally and
+returns DGL source instead of the previous JSON metadata, so the comparison
+includes those native and binding changes, not just sampling performance.
+
+| Workload | Previous s/img | Current s/img | Change, seconds | Time change | B/op, previous → current (delta) | allocs/op, previous → current (delta) |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| SD 1.5 text-to-image | 6.632108 | 7.569665 | +0.937557 | +14.14% | 800,400 → 806,368 (+5,968) | 308 → 326 (+18) |
+| SDXL text-to-image | 7.211255 | 7.205716 | −0.005539 | −0.08% | 800,400 → 806,512 (+6,112) | 308 → 326 (+18) |
+| SD 1.5 img2img | 5.968780 | 5.957050 | −0.011729 | −0.20% | 800,912 → 806,744 (+5,832) | 328 → 342 (+14) |
+
+Percentages use unrounded previous ns/op 6,632,107,542, 7,211,255,292,
+5,968,779,500 and current ns/op 7,569,664,916, 7,205,716,250,
+5,957,050,041. Negative is faster; positive is slower. All three workloads
+are comparable; there are no unmatched or skipped workloads. SD 1.5 took
+longer in this sample; SDXL and img2img were nearly unchanged. These are
+single-sample observations, not statistically established regressions or
+speedups. No repeats or outliers were discarded; earlier comparison history
+and its initial/repeated img2img samples are preserved above.
 
 ## Benchmark commands
 
@@ -185,7 +213,7 @@ see. The per-call Go allocations come from:
   the input pixels and the option object retains its storage.
 - The decoded `SDImage` struct returned by `GenerateImage`, plus the
   `[]byte` pixel buffer copied out of the C heap.
-- Each result's native `sdcpp.generation/v1` JSON copied into `GenerationInfo`.
+- Each result's exact executed DGL source copied into `GenerationInfo`.
 
 The numbers are essentially constant across `b.N` for a given bundle,
 which confirms the Go marshalling path is not allocating per pixel or

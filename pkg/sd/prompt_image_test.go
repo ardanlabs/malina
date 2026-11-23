@@ -34,15 +34,15 @@ func TestPromptImageCallbackFFIRoundTrip(t *testing.T) {
 	setPromptImageFunc = ffi.Fun{Addr: uintptr(code), Cif: &registration}
 	defer func() { setPromptImageFunc = previous }()
 	image := makeGradient(7, 3, 12)
-	if err := SetPromptImageCallback(101, func(source string) *SDImage {
+	if err := SetPromptImageCallback(101, func(source string) SDImage {
 		if source != "first" {
-			return nil
+			return SDImage{}
 		}
 		return image
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := SetPromptImageCallback(202, func(string) *SDImage { return testMarshalImage(91) }); err != nil {
+	if err := SetPromptImageCallback(202, func(string) SDImage { return testMarshalImage(91) }); err != nil {
 		t.Fatal(err)
 	}
 	defer clearPromptImage(101)

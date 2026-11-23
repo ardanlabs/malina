@@ -50,7 +50,7 @@ func callResult(fn ffi.Fun, args ...any) (uintptr, error) {
 	return result, nil
 }
 
-func resultImages(result uintptr) ([]*SDImage, error) {
+func resultImages(result uintptr) ([]SDImage, error) {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 	var count ffi.Arg
@@ -58,7 +58,7 @@ func resultImages(result uintptr) ([]*SDImage, error) {
 	if count == 0 {
 		return nil, fmt.Errorf("reading native result: empty result: %s", nativeDiagnostic())
 	}
-	images := make([]*SDImage, int(count))
+	images := make([]SDImage, int(count))
 	for i := range images {
 		index := uint64(i)
 		var tensor uintptr
@@ -81,7 +81,7 @@ func resultImages(result uintptr) ([]*SDImage, error) {
 	return images, nil
 }
 
-func callImageArray(fn ffi.Fun, args ...any) ([]*SDImage, error) {
+func callImageArray(fn ffi.Fun, args ...any) ([]SDImage, error) {
 	result, err := callResult(fn, args...)
 	if err != nil {
 		return nil, err

@@ -24,13 +24,13 @@ const (
 	RoleTokenizer      FileRole = "tokenizer"       // Tokenizer
 	RoleControlNet     FileRole = "control_net"     // ControlNetPath
 	RoleTAESD          FileRole = "taesd"           // TAESDPath
-	RolePhotoMaker     FileRole = "photo_maker"     // PhotoMakerPath
+	RolePhotoMaker     FileRole = "photo_maker"     // DGL photomaker::load
 	RoleClipVision     FileRole = "clip_vision"     // ClipVisionPath
 	RoleHighNoise      FileRole = "high_noise"      // HighNoiseDiffusionModelPath
 	RoleEmbeddingsConn FileRole = "embeddings_conn" // EmbeddingsConnectorsPath
-	RoleMotionModule   FileRole = "motion_module"   // MotionModulePath
+	RoleMotionModule   FileRole = "motion_module"   // DGL animatediff::load
 	RoleUpscaler       FileRole = "upscaler"        // NewUpscalerContext
-	RoleADetailer      FileRole = "adetailer"       // NewADetailerContext
+	RoleADetailer      FileRole = "adetailer"       // DGL load_detector
 	RoleAudioEncoder   FileRole = "audio_encoder"   // AudioEncoderPath
 )
 

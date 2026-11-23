@@ -77,7 +77,7 @@ func BenchmarkGenerateImageImg2ImgSD15(b *testing.B) {
 // benchSyntheticImage returns a 3-channel RGB SDImage with every pixel
 // set to neutral grey. Used as the InitImage for the img2img benchmark
 // so the bench has no file I/O dependency.
-func benchSyntheticImage(width, height int) *SDImage {
+func benchSyntheticImage(width, height int) SDImage {
 	img := SDImage{
 		Width:   uint32(width),
 		Height:  uint32(height),
@@ -87,7 +87,7 @@ func benchSyntheticImage(width, height int) *SDImage {
 	for i := range img.Data {
 		img.Data[i] = 128
 	}
-	return &img
+	return img
 }
 
 // runGenerateBench is the shared body the per-bundle benchmarks delegate

@@ -107,7 +107,7 @@ func GetUpscalerModelScale(path string) (int32, error) {
 // Upscale returns Go-owned pixels and metadata. The legacy factor argument must
 // equal the model's actual scale; it is no longer silently ignored upstream.
 // Use UpscaleImage when the model should determine the scale automatically.
-func Upscale(ctx UpscalerContext, image *SDImage, factor uint32) ([]*SDImage, error) {
+func Upscale(ctx UpscalerContext, image SDImage, factor uint32) ([]SDImage, error) {
 	actual, err := GetUpscaleFactor(ctx)
 	if err != nil {
 		return nil, err
@@ -119,7 +119,7 @@ func Upscale(ctx UpscalerContext, image *SDImage, factor uint32) ([]*SDImage, er
 }
 
 // UpscaleImage upscales using the loaded model's native scale.
-func UpscaleImage(ctx UpscalerContext, image *SDImage) ([]*SDImage, error) {
+func UpscaleImage(ctx UpscalerContext, image SDImage) ([]SDImage, error) {
 	if ctx == 0 {
 		return nil, errors.New("UpscaleImage: nil context")
 	}
@@ -131,8 +131,8 @@ func UpscaleImage(ctx UpscalerContext, image *SDImage) ([]*SDImage, error) {
 		return nil, err
 	}
 	defer o.free()
-	if image == nil {
-		return nil, errors.New("upscale: nil image")
+	if err := validateImage(image); err != nil {
+		return nil, err
 	}
 	if err := o.set("image", image); err != nil {
 		return nil, err
@@ -141,6 +141,7 @@ func UpscaleImage(ctx UpscalerContext, image *SDImage) ([]*SDImage, error) {
 }
 
 // NewADetailerContext loads a detector model.
+// Deprecated: removed upstream. Use RefineFaces with FaceRefinementParams.
 func NewADetailerContext(path string, nThreads int32, backend, paramsBackend string) (ADetailerContext, error) {
 	values := Options{"model_path": path}
 	if nThreads > 0 {
@@ -165,15 +166,16 @@ func FreeADetailerContext(ctx ADetailerContext) {
 
 // ADetailImage refines detected regions. Image-only inpaint settings unsupported
 // by ADetailer produce a native applicability error instead of being ignored.
-func ADetailImage(detector ADetailerContext, ctx Context, image *SDImage, params ADetailerParams, inpaint ImgGenParams) ([]*SDImage, error) {
+// Deprecated: removed upstream. Use RefineFaces with FaceRefinementParams.
+func ADetailImage(detector ADetailerContext, ctx Context, image SDImage, params ADetailerParams, inpaint ImgGenParams) ([]SDImage, error) {
 	if detector == 0 || ctx == 0 {
 		return nil, errors.New("ADetailImage: nil context")
 	}
 	if adetailImageFunc == (ffi.Fun{}) {
 		return nil, unsupported("sd_adetail")
 	}
-	if image == nil {
-		return nil, errors.New("ADetailImage: nil image")
+	if err := validateImage(image); err != nil {
+		return nil, err
 	}
 	o, err := newOptions("adetail")
 	if err != nil {

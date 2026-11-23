@@ -117,21 +117,24 @@ func TestGenerateImagesSD15BatchSmoke(t *testing.T) {
 			t.Fatalf("GenerateImages call %d returned %d images, want 2", call, len(images))
 		}
 		for i, image := range images {
-			if image == nil || len(image.Data) != 64*64*3 {
+			if len(image.Data) != 64*64*3 {
 				t.Fatalf("call %d image %d is invalid: %#v", call, i, image)
 			}
 			var info struct {
-				Schema string `json:"schema"`
-				Seed   string `json:"seed"`
+				Seed json.Number `json:"seed"`
 			}
-			if err := json.Unmarshal([]byte(image.GenerationInfo), &info); err != nil {
+			metadata, err := GenerationMetadata(image.GenerationInfo)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := json.Unmarshal([]byte(metadata), &info); err != nil {
 				t.Fatalf("image %d generation metadata: %v", i, err)
 			}
 			// The second image must report the incremented native seed,
 			// not merely echo the request's starting seed.
 			wantSeed := []string{"42", "43"}[i]
-			if info.Schema != "sdcpp.generation/v1" || info.Seed != wantSeed {
-				t.Errorf("image %d metadata: got %+v, want schema sdcpp.generation/v1 and seed %s", i, info, wantSeed)
+			if info.Seed.String() != wantSeed {
+				t.Errorf("image %d metadata: got %s, want seed %s", i, metadata, wantSeed)
 			}
 		}
 		images[0].Data[0] ^= 0xff
@@ -391,7 +394,7 @@ func TestGenerateImageImg2ImgSmoke(t *testing.T) {
 	defer FreeContext(ctx)
 
 	const dim = 128
-	initImg := &SDImage{
+	initImg := SDImage{
 		Width:   dim,
 		Height:  dim,
 		Channel: 3,
@@ -413,9 +416,6 @@ func TestGenerateImageImg2ImgSmoke(t *testing.T) {
 	img, err := GenerateImage(ctx, params)
 	if err != nil {
 		t.Fatalf("GenerateImage (img2img): %v", err)
-	}
-	if img == nil {
-		t.Fatal("GenerateImage (img2img) returned nil image with nil error")
 	}
 	if img.Width != uint32(params.Width) || img.Height != uint32(params.Height) {
 		t.Errorf("dims: got %dx%d, want %dx%d", img.Width, img.Height, params.Width, params.Height)
@@ -444,7 +444,7 @@ func TestImagePreprocessRulesSD15(t *testing.T) {
 	defer FreeContext(ctx)
 
 	const dim = 64
-	initImage := &SDImage{Width: dim, Height: dim, Channel: 3, Data: make([]byte, dim*dim*3)}
+	initImage := SDImage{Width: dim, Height: dim, Channel: 3, Data: make([]byte, dim*dim*3)}
 	for y := range dim {
 		for x := range dim {
 			offset := (y*dim + x) * 3
@@ -467,7 +467,10 @@ func TestImagePreprocessRulesSD15(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GenerateImage baseline: %v", err)
 	}
-	params.ImagePreprocess.Rules = "target=init,mode=none,canny=true"
+	params.InitImage, err = PreprocessCanny(initImage, CannyParams{HighThreshold: .08, LowThreshold: .04, Weak: .5, Strong: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
 	processed, err := GenerateImage(ctx, params)
 	if err != nil {
 		t.Fatalf("GenerateImage with preprocessing: %v", err)
@@ -542,9 +545,6 @@ func TestGenerateImageImg2ImgFromJPEGSmoke(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GenerateImage (img2img from JPEG): %v", err)
 	}
-	if img == nil {
-		t.Fatal("GenerateImage returned nil image with nil error")
-	}
 	if img.Width != uint32(params.Width) || img.Height != uint32(params.Height) || img.Channel != 3 {
 		t.Errorf("output dims: got %dx%dx%d, want %dx%dx3", img.Width, img.Height, img.Channel, params.Width, params.Height)
 	}
@@ -599,9 +599,6 @@ func assertGenerateSmoke(t *testing.T, cparams ContextParams, params ImgGenParam
 	img, err := GenerateImage(ctx, params)
 	if err != nil {
 		t.Fatalf("GenerateImage: %v", err)
-	}
-	if img == nil {
-		t.Fatal("GenerateImage returned nil image with nil error")
 	}
 
 	if img.Width != uint32(params.Width) {
