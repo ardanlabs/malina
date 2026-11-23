@@ -177,7 +177,10 @@ do not represent runtime memory requirements.
 | `controlnet-union-sdxl`          | SDXL base with multi-task ControlNet Union; set `ImgGenParams.ControlType` |   9.5 GB |
 | `z-image-turbo`                  | Fast text-to-image generation                                              |   6.7 GB |
 | `moss-image-sft`                 | Text-to-image generation with MOSS-Image                                   |   9.4 GB |
+| `moss-image-edit-hq`             | Instruction-based MOSS SFT image editing with armV5 LoRA and vision         |  10.8 GB |
 | `llada-image-turbo`              | Text-to-image generation and image editing                                 |  20.2 GB |
+| `qwen-image-2.1`                 | Generation and reference-image editing; research/evaluation license         |  11.2 GB |
+| `flux2-klein-base-4b`            | Undistilled FLUX generation and reference-image editing; Apache-2.0         |   5.3 GB |
 | `flux2-klein-4b`                 | Compact FLUX image generation; license-gated                               |   5.3 GB |
 | `flux2-klein-9b`                 | Larger FLUX image generation; license-gated                                |    16 GB |
 | `controlnet-canny-sd1.5`         | Guide image generation with Canny edges                                    |   2.3 GB |
@@ -197,7 +200,29 @@ $ malina model pull sd-1.5
 Bundles are stored under `~/.kronk/malina-models/<bundle>/`. Review the
 license shown by `malina model list` before use. For license-gated bundles,
 accept the upstream Hugging Face terms and set `HF_TOKEN` before downloading.
-The FLUX Klein bundles carry non-commercial license terms.
+Download gating and license restrictions are separate: the new
+`flux2-klein-base-4b` and `qwen-image-2.1` bundles are both ungated, but only
+the former is Apache-2.0. Qwen Image 2.1's [Qwen Research license](https://huggingface.co/Qwen/Qwen-Image-2.1/blob/main/LICENSE)
+permits research/evaluation only; commercial use requires a separate license.
+The existing `flux2-klein-9b` model carries non-commercial terms.
+
+Both new bundles pin every component to an immutable Hugging Face revision
+and are opt-in (not included in `make download-models`):
+
+```shell
+$ malina model pull flux2-klein-base-4b
+$ malina model pull qwen-image-2.1
+```
+
+Load each manifest's `diffusion`, `llm`, and `vae` files into the matching
+`sd.ContextParams` paths. For Qwen editing, also set `LLMVisionPath` from
+`llm_vision`; the bundle includes the vision projector. Pass reference images
+through `sd.ImgGenParams.RefImages` rather than `InitImage` for instruction-based
+editing. Start with 20 steps and CFG 4 for Klein Base (not the distilled
+model's 4-step settings), or 20 Euler steps and CFG 6 for Qwen Image 2.1.
+Qwen output dimensions must be divisible by 32, and its dedicated 2.1 VAE
+cannot be replaced with the older Qwen Image VAE. These bundles use the existing
+generation API; they do not add new embedded DGL workflows or example programs.
 
 You can also supply your own `.safetensors` or `.gguf` models and their
 required components through the Go API. Supported families include Stable
@@ -261,6 +286,33 @@ $ make example-img2img     # writes img2img.png in oil-painting style
 ```shell
 $ malina model pull controlnet-canny-sd1.5
 $ make example-controlnet
+```
+
+[MOSS IMAGE EDIT HQ](examples/moss-image-edit/main.go) — edit a reference PNG/JPEG
+with an instruction. The bundle includes all six pinned files (Apache-2.0,
+ungated); no external DGL file or LoRA prompt tag is needed.
+
+```shell
+$ malina model pull moss-image-edit-hq
+$ make example-moss-image-edit
+$ go run ./examples/moss-image-edit -in photo.png -out edited.png -prompt "Make the sky orange."
+```
+
+The Go API is `sd.EditMOSSImage(ctx, image, params)`, starting with
+`sd.MOSSImageEditParamsInit()`. Defaults are 512×512, 20 Euler steps, CFG 3,
+LoRA weight 1, and a random seed. Supply the six component paths from the bundle
+manifest, including `download.RoleLora` and `download.RoleLLMVision`. Output
+dimensions must be positive multiples of 16. The reference latent is resized
+to a maximum 1024-pixel long edge and aligned to multiples of 16; input pixels
+are not changed. This wrapper accepts one reference and retains replayable
+source in `GenerationInfo`. It has the same synchronous DGL progress/cancellation
+limitations as the other bundled workflows. Download size is not runtime RAM.
+
+The large bundle is opt-in, not part of `make download-models`. To run its
+model-backed regression test after downloading:
+
+```shell
+$ MALINA_LIB="$PWD/lib" MALINA_MOSS_EDIT_TEST_DIR="$HOME/.kronk/malina-models/moss-image-edit-hq" go test -count=1 -tags=malina_model_tests ./pkg/sd -run '^TestEditMOSSImage$'
 ```
 
 [UPSCALE](examples/upscale/main.go) — enlarge an image 4× with the compact Real-ESRGAN anime model.

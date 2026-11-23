@@ -26,7 +26,10 @@ func TestBundleByName(t *testing.T) {
 		{"llada-image-turbo", true},
 		{"z-image-turbo", true},
 		{"moss-image-sft", true},
+		{"moss-image-edit-hq", true},
 		{"z-image-turbo-controlnet-union", true},
+		{"qwen-image-2.1", true},
+		{"flux2-klein-base-4b", true},
 		{"flux2-klein-4b", true},
 		{"flux2-klein-9b", true},
 		{"  Flux2-Klein-4B  ", true},
@@ -45,7 +48,7 @@ func TestBundleByName(t *testing.T) {
 
 func TestBundleNames(t *testing.T) {
 	got := BundleNames()
-	want := []string{"adetailer-face-yolov8n", "animatediff-sd1.5", "controlnet-canny-sd1.5", "controlnet-union-sdxl", "flux2-klein-4b", "flux2-klein-9b", "llada-image-turbo", "moss-image-sft", "realesrgan-x4-anime", "sd-1.5", "sdxl-base-1.0", "wan2.2-s2v-14b", "z-image-turbo", "z-image-turbo-controlnet-union"}
+	want := []string{"adetailer-face-yolov8n", "animatediff-sd1.5", "controlnet-canny-sd1.5", "controlnet-union-sdxl", "flux2-klein-4b", "flux2-klein-9b", "flux2-klein-base-4b", "llada-image-turbo", "moss-image-edit-hq", "moss-image-sft", "qwen-image-2.1", "realesrgan-x4-anime", "sd-1.5", "sdxl-base-1.0", "wan2.2-s2v-14b", "z-image-turbo", "z-image-turbo-controlnet-union"}
 	if len(got) != len(want) {
 		t.Fatalf("BundleNames: got %v, want %v", got, want)
 	}
@@ -66,9 +69,10 @@ func TestBundleShapes(t *testing.T) {
 		filename string
 	}
 	tests := []struct {
-		name  string
-		gated bool
-		files []wantFile
+		name    string
+		gated   bool
+		license string
+		files   []wantFile
 	}{
 		{
 			name:  "sd-1.5",
@@ -163,6 +167,17 @@ func TestBundleShapes(t *testing.T) {
 			},
 		},
 		{
+			name: "moss-image-edit-hq",
+			files: []wantFile{
+				{RoleDiffusion, "MOSS-Image-SFT-Q4_0.gguf"},
+				{RoleLLM, "Qwen3.5-9B-Q4_K_M.gguf"},
+				{RoleVAE, "flux2-vae.safetensors"},
+				{RoleTokenizer, "tokenizer.json"},
+				{RoleLLMVision, "mmproj-BF16.gguf"},
+				{RoleLora, "armV5-moss-edit-lora.safetensors"},
+			},
+		},
+		{
 			name:  "z-image-turbo-controlnet-union",
 			gated: false,
 			files: []wantFile{
@@ -170,6 +185,25 @@ func TestBundleShapes(t *testing.T) {
 				{RoleLLM, "Qwen3-4B-Instruct-2507-Q4_K_M.gguf"},
 				{RoleVAE, "ae.safetensors"},
 				{RoleControlNet, "Z-Image-Turbo-Fun-Controlnet-Union-2.1-2601-8steps.safetensors"},
+			},
+		},
+		{
+			name:    "qwen-image-2.1",
+			license: "Qwen Research (research/evaluation only; commercial license required for commercial use)",
+			files: []wantFile{
+				{RoleDiffusion, "qwen-image-2.1-Q4_K_M.gguf"},
+				{RoleLLM, "Qwen3-VL-8B-Instruct-UD-Q4_K_XL.gguf"},
+				{RoleLLMVision, "mmproj-BF16.gguf"},
+				{RoleVAE, "qwen_image_2.1_vae_bf16.safetensors"},
+			},
+		},
+		{
+			name:    "flux2-klein-base-4b",
+			license: "Apache-2.0",
+			files: []wantFile{
+				{RoleDiffusion, "flux-2-klein-base-4b-Q4_0.gguf"},
+				{RoleVAE, "flux2-vae.safetensors"},
+				{RoleLLM, "Qwen3-4B-Q4_K_M.gguf"},
 			},
 		},
 		{
@@ -200,6 +234,9 @@ func TestBundleShapes(t *testing.T) {
 			}
 			if b.License == "" {
 				t.Errorf("%s: License is empty", tt.name)
+			}
+			if tt.license != "" && b.License != tt.license {
+				t.Errorf("%s: License = %q, want %q", tt.name, b.License, tt.license)
 			}
 			if b.Gated != tt.gated {
 				t.Errorf("%s: Gated = %v, want %v", tt.name, b.Gated, tt.gated)

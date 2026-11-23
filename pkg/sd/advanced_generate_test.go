@@ -258,6 +258,74 @@ func TestADetailImage(t *testing.T) {
 	}
 }
 
+func TestEditMOSSImage(t *testing.T) {
+	testSetup(t)
+	bundleDir := testEnvBundleDir(t, "MALINA_MOSS_EDIT_TEST_DIR")
+	manifest, err := download.LoadManifest(bundleDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, err := NewContext(ContextParamsInit())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { FreeContext(ctx) }()
+	params := MOSSImageEditParamsInit()
+	params.DiffusionModelPath = manifest.Files[string(download.RoleDiffusion)]
+	params.LLMPath = manifest.Files[string(download.RoleLLM)]
+	params.LLMVisionPath = manifest.Files[string(download.RoleLLMVision)]
+	params.TokenizerPath = manifest.Files[string(download.RoleTokenizer)]
+	params.VAEPath = manifest.Files[string(download.RoleVAE)]
+	params.LoraPath = manifest.Files[string(download.RoleLora)]
+	params.Prompt = "Make the image blue."
+	params.NegativePrompt = "blurry \"image\"\nlow quality"
+	params.Width, params.Height = 96, 64
+	params.Steps, params.Seed = 2, 73
+	input := makeGradient(80, 48, 37)
+	before := append([]byte(nil), input.Data...)
+	image, err := EditMOSSImage(ctx, input, params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if image.Width != 96 || image.Height != 64 || image.Channel != 3 || len(image.Data) != 96*64*3 {
+		t.Fatalf("edited image: got %dx%dx%d, %d bytes", image.Width, image.Height, image.Channel, len(image.Data))
+	}
+	if !bytes.Equal(input.Data, before) {
+		t.Fatal("EditMOSSImage mutated the reference")
+	}
+	outputs, err := RunDGL(ctx, image.GenerationInfo, map[string]SDImage{"image": input})
+	if err != nil {
+		t.Fatal(err)
+	}
+	replayed, err := outputs["result"].Images()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(image.Data, replayed[0].Data) {
+		t.Fatal("MOSS editing source did not reproduce pixels")
+	}
+	for i := range input.Data {
+		input.Data[i] = 255 - input.Data[i]
+	}
+	changed, err := EditMOSSImage(ctx, input, params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Equal(changed.Data, image.Data) {
+		t.Fatal("MOSS editing ignored the reference image")
+	}
+	FreeContext(ctx)
+	ctx = 0
+	path := filepath.Join(t.TempDir(), "moss-edit.png")
+	if err := image.SavePNG(path); err != nil {
+		t.Fatal(err)
+	}
+	roundTrip, err := LoadPNG(path)
+	if err != nil || !bytes.Equal(roundTrip.Data, image.Data) {
+		t.Fatalf("MOSS PNG round trip after context release: %v", err)
+	}
+}
+
 func TestGenerateVideoAnimateDiff(t *testing.T) {
 	testSetup(t)
 	bundleDir := testEnvBundleDir(t, "MALINA_VIDEO_TEST_DIR")

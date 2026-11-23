@@ -21,6 +21,7 @@ func TestContextAPIsRejectNilContext(t *testing.T) {
 		{"GenerateVideoWithFPS", func() error { _, _, _, err := GenerateVideoWithFPS(0, VideoGenParams{}); return err }},
 		{"GenerateAnimateDiff", func() error { _, err := GenerateAnimateDiff(0, AnimateDiffParamsInit()); return err }},
 		{"RefineFaces", func() error { _, err := RefineFaces(0, testMarshalImage(1), FaceRefinementParamsInit()); return err }},
+		{"EditMOSSImage", func() error { _, err := EditMOSSImage(0, testMarshalImage(1), MOSSImageEditParamsInit()); return err }},
 		{"GetUpscaleFactor", func() error { _, err := GetUpscaleFactor(0); return err }},
 		{"Upscale", func() error { _, err := Upscale(0, testMarshalImage(1), 2); return err }},
 		{"ADetailImage ADetailer", func() error {
@@ -55,6 +56,9 @@ func TestImageAPIsRejectEmptyInput(t *testing.T) {
 	}
 	if _, err := RefineFaces(1, SDImage{}, FaceRefinementParamsInit()); err == nil {
 		t.Fatal("RefineFaces empty input: got nil error")
+	}
+	if _, err := EditMOSSImage(1, SDImage{}, MOSSImageEditParamsInit()); err == nil {
+		t.Fatal("EditMOSSImage empty input: got nil error")
 	}
 }
 

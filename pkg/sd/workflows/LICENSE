@@ -1,4 +1,4 @@
-The DGL workflows in adetailer.dgl and animatediff.dgl are
+The DGL workflows in adetailer.dgl, animatediff.dgl and moss-image-edit-hq.dgl are
 adapted from leejet/stable-diffusion.cpp commit 3b12781fac1a22eda27ad0f08d0884ef816f24d7.
 
 MIT License
